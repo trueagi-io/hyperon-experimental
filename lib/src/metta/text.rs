@@ -285,13 +285,13 @@ type CharReaderItem = (usize, io::Result<char>);
 pub struct CharReader<R: Iterator<Item=io::Result<char>>> {
     chars: R,
     idx: usize,
-    next: Option<CharReaderItem>,
+    next: (Option<CharReaderItem>, usize),
 }
 
 impl<R: Iterator<Item=io::Result<char>>> CharReader<R> {
     /// Construct new instance from char reading iterator
     pub fn new(chars: R) -> Self {
-        let mut s = Self{ chars, idx: 0, next: None };
+        let mut s = Self{ chars, idx: 0, next: (None, 0) };
         s.next = s.next_internal();
         s
     }
@@ -301,25 +301,21 @@ impl<R: Iterator<Item=io::Result<char>>> CharReader<R> {
     }
 
     pub fn peek(&mut self) -> Option<&CharReaderItem> {
-        self.next.as_ref()
+        self.next.0.as_ref()
     }
 
     pub fn next(&mut self) -> Option<CharReaderItem> {
+        self.idx += self.next.1;
         let next = self.next_internal();
-        let next = std::mem::replace(&mut self.next, next);
-        next
+        std::mem::replace(&mut self.next, next).0
     }
 
-    pub fn next_internal(&mut self) -> Option<CharReaderItem> {
+    pub fn next_internal(&mut self) -> (Option<CharReaderItem>, usize) {
         let c = self.chars.next();
         match c {
-            Some(r @ Ok(c)) => {
-                let idx = self.idx;
-                self.idx += c.len_utf8();
-                Some((idx, r))
-            },
-            Some(Err(e)) => Some((self.idx, Err(e))),
-            None => None,
+            Some(r @ Ok(c)) => (Some((self.idx, r)), c.len_utf8()),
+            Some(Err(e)) => (Some((self.idx, Err(e))), 0),
+            None => (None, 0),
         }
     }
 }
@@ -363,13 +359,12 @@ impl<'a> From<&'a String> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(
 /// of MeTTa source code.
 pub struct SExprParser<R: Iterator<Item=io::Result<char>>> {
     it: CharReader<R>,
-    last_idx: usize,
 }
 
 impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     pub fn new<I: Into<CharReader<R>>>(chars: I) -> Self {
-        Self{ it: chars.into(), last_idx: 0 }
+        Self{ it: chars.into() }
     }
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
@@ -397,23 +392,14 @@ impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     fn next(&mut self) -> Result<Option<(usize, char)>, String> {
         match self.it.next() {
-            Some((idx, Ok(c))) => {
-                self.last_idx = idx;
-                Ok(Some((idx, c)))
-            },
+            Some((idx, Ok(c))) => Ok(Some((idx, c))),
             None => Ok(None),
-            Some((idx, Err(err))) => {
-                self.last_idx = idx;
-                Err(format!("Input read error at position {}: {}", idx, err))
-            },
+            Some((idx, Err(err))) => Err(format!("Input read error at position {}: {}", idx, err)),
         }
     }
 
     fn skip_next(&mut self) {
-        match self.it.next() {
-            Some((idx, _)) => self.last_idx = idx,
-            _ => {},
-        }
+        self.it.next();
     }
 
     pub fn parse_to_syntax_tree(&mut self) -> Result<Option<SyntaxNode>, String> {
@@ -450,11 +436,7 @@ impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     ///WARNING: may be (often is) == to text.len(), and thus can't be used as an index to read a char
     fn cur_idx(&mut self) -> usize {
-        if let Some(&(idx, _)) = self.it.peek() {
-            idx
-        } else {
-            self.it.last_idx()
-        }
+        self.it.last_idx()
     }
 
     /// Parse to the next `\n` newline
