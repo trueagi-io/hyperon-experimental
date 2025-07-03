@@ -47,7 +47,7 @@
     (@param "Atom to be evaluated, can be reduced via equality expression (= ...) or by calling a grounded function")
     (@param "Space to evaluate atom in its context")))
   (@return "Result of evaluation"))
-(: evalc (-> Atom Grounded Atom))
+(: evalc (-> Atom SpaceType Atom))
 
 (@doc chain
   (@desc "Evaluates first argument, binds it to the variable (second argument) and then evaluates third argument which contains (or not) mentioned variable")
@@ -554,7 +554,7 @@
     (@param "Atomspace to add atom into")
     (@param "Atom to add")))
   (@return "Unit atom"))
-(: add-reduct (-> Grounded %Undefined% (->)))
+(: add-reduct (-> SpaceType %Undefined% (->)))
 (= (add-reduct $dst $atom) (add-atom $dst $atom))
 
 (@doc car-atom
@@ -658,7 +658,7 @@
     (@param "Space")
     (@param "Expression")))
   (@return "Unit atom"))
-(: add-reducts (-> Grounded %Undefined% (->)))
+(: add-reducts (-> SpaceType %Undefined% (->)))
 (= (add-reducts $space $tuple)
     (foldl-atom $tuple () $a $b (add-atom $space $b)))
 
@@ -668,7 +668,7 @@
     (@param "Space")
     (@param "Expression")))
   (@return "Unit atom"))
-(: add-atoms (-> Grounded Expression (->)))
+(: add-atoms (-> SpaceType Expression (->)))
 (= (add-atoms $space $tuple)
     (foldl-atom $tuple () $a $b (add-atom $space $b)))
 
