@@ -32,3 +32,20 @@
 !(assertEqualToResult
    (assertIncludes (superpose (41 42 43)) (A))
    ((Error (assertIncludes (superpose (41 42 43)) (A)) (assertIncludes error: (A) not included in result: (41 42 43)))))
+
+!(assertEqualToResult
+   (= (f) (+ 1 2))
+   ((= (f) 3)))
+!(assertEqualToResult
+   (noeval (= (f) (+ 1 2)))
+   ((= (f) (+ 1 2))))
+!(assertEqualToResult
+   (quote (= (f) (+ 1 2)))
+   ((quote (= (f) (+ 1 2)))))
+
+!(assertEqualToResult
+   (noeval (+ 1 2))
+   ((+ 1 2)))
+!(assertEqualToResult
+   (id (noeval (+ 1 2)))
+   (3))

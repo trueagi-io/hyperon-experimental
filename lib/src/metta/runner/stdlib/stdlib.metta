@@ -32,14 +32,14 @@
   (@params (
     (@param "Atom to be evaluated")))
   (@return "Result of atom's evaluation"))
-(: function (-> Atom %Undefined%))
+(: function (-> Atom Atom))
 
 (@doc eval
   (@desc "Evaluates input atom, makes one step of the evaluation")
   (@params (
     (@param "Atom to be evaluated, can be reduced via equality expression (= ...) or by calling a grounded function")))
   (@return "Result of evaluation"))
-(: eval (-> Atom %Undefined%))
+(: eval (-> Atom Atom))
 
 (@doc evalc
   (@desc "Evaluates input atom, makes one step of the evaluation")
@@ -47,7 +47,7 @@
     (@param "Atom to be evaluated, can be reduced via equality expression (= ...) or by calling a grounded function")
     (@param "Space to evaluate atom in its context")))
   (@return "Result of evaluation"))
-(: evalc (-> Atom Grounded %Undefined%))
+(: evalc (-> Atom Grounded Atom))
 
 (@doc chain
   (@desc "Evaluates first argument, binds it to the variable (second argument) and then evaluates third argument which contains (or not) mentioned variable")
@@ -240,8 +240,16 @@
   (@params (
     (@param "Input argument")))
   (@return "Input argument"))
-(: id (-> Atom Atom))
+(: id (-> $t $t))
 (= (id $x) $x)
+
+(@doc noeval
+  (@desc "Returns its argument")
+  (@params (
+    (@param "Input argument")))
+  (@return "Input argument"))
+(: noeval (-> Atom Atom))
+(= (noeval $x) $x)
 
 (@doc atom-subst
   (@desc "Substitutes variable passed as a second argument in the third argument by the first argument")
@@ -252,7 +260,7 @@
   (@return "Template with substituted variable"))
 (: atom-subst (-> Atom Variable Atom Atom))
 (= (atom-subst $atom $var $templ)
-  (function (chain (eval (id $atom)) $var (return $templ))) )
+  (function (chain (eval (noeval $atom)) $var (return $templ))) )
 
 (@doc if-decons-expr
   (@desc "Checks if first argument is non empty expression. If so gets tail and head from the first argument and returns forth argument using head and tail values. Returns fifth argument otherwise.")
@@ -534,9 +542,11 @@
   (@return "Second argument or Empty"))
 (: let* (-> Expression Atom %Undefined%))
 (= (let* $pairs $template)
-  (eval (if-decons-expr $pairs ($pattern $atom) $tail
-    (let $pattern $atom (let* $tail $template))
-    $template )))
+  (if-decons-expr $pairs $head $tail
+    (unify ($pattern $atom) $head
+      (let $pattern $atom (let* $tail $template))
+      (Error (let* $pairs $template) "List of (<pattern> <atom>) pairs is expected as a second argument"))
+    $template ))
 
 (@doc add-reduct
   (@desc "Reduces atom (second argument) and adds it into the atomspace (first argument)")
@@ -554,9 +564,9 @@
   (@return "First atom of an expression"))
 (: car-atom (-> Expression %Undefined%))
 (= (car-atom $atom)
-  (eval (if-decons-expr $atom $head $_
+  (if-decons-expr $atom $head $_
     $head
-    (Error (car-atom $atom) "car-atom expects a non-empty expression as an argument") )))
+    (Error (car-atom $atom) "car-atom expects a non-empty expression as an argument") ))
 
 (@doc cdr-atom
   (@desc "Extracts the tail of an expression (all except first atom)")
@@ -565,9 +575,9 @@
   (@return "Tail of an expression"))
 (: cdr-atom (-> Expression Expression))
 (= (cdr-atom $atom)
-  (eval (if-decons-expr $atom $_ $tail
+  (if-decons-expr $atom $_ $tail
     $tail
-    (Error (cdr-atom $atom) "cdr-atom expects a non-empty expression as an argument") )))
+    (Error (cdr-atom $atom) "cdr-atom expects a non-empty expression as an argument") ))
 
 (@doc quote
   (@desc "Prevents atom from being reduced")

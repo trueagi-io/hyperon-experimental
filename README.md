@@ -142,7 +142,7 @@ RUST_LOG=hyperon=debug cargo test
 
 Running benchmarks requires nightly toolchain so they can be run using:
 ```
-cargo +nightly bench
+cargo +nightly bench --features benchmark
 ```
 
 Generate docs:

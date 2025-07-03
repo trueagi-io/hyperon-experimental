@@ -201,7 +201,7 @@ impl From<String> for ImmutableString {
 
 #[derive(Debug, Clone)]
 pub enum CowArray<T: 'static> {
-    Allocated(Box<[T]>),
+    Allocated(Vec<T>),
     Literal(&'static [T]),
 }
 
@@ -218,12 +218,12 @@ impl<T: 'static> CowArray<T> {
         }
     }
 
-    pub fn as_slice_mut(&mut self) -> &mut [T] where T: Clone {
+    pub fn as_vec_mut(&mut self) -> &mut Vec<T> where T: Clone {
         match self {
-            Self::Allocated(array) => &mut *array,
+            Self::Allocated(array) => array,
             Self::Literal(array) => {
                 *self = Self::Allocated((*array).into());
-                self.as_slice_mut()
+                self.as_vec_mut()
             }
         }
     }
@@ -264,13 +264,13 @@ impl<T: 'static> From<&'static [T]> for CowArray<T> {
 
 impl<T, const N: usize> From<[T; N]> for CowArray<T> {
     fn from(a: [T; N]) -> Self {
-        CowArray::Allocated(Box::new(a))
+        CowArray::Allocated(a.into())
     }
 }
 
 impl<T> From<Vec<T>> for CowArray<T> {
     fn from(v: Vec<T>) -> Self {
-        CowArray::Allocated(v.into_boxed_slice())
+        CowArray::Allocated(v)
     }
 }
 

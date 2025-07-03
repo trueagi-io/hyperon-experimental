@@ -4,8 +4,6 @@ use hyperon_atom::*;
 use hyperon_atom::gnd::*;
 
 use core::ops::Range;
-use std::iter::Peekable;
-use std::iter::Enumerate;
 use regex::Regex;
 use std::rc::Rc;
 use unicode_reader::CodePoints;
@@ -279,55 +277,79 @@ impl Parser for &mut (dyn Parser + '_) {
     }
 }
 
+type CharReaderItem = (usize, io::Result<char>);
+
 /// Proxy type to allow constructing [SExprParser] from different types
 /// automatically. CharReader implements [From] for different types, while
 /// [SExprParser::new] inputs `Into<CharReader<R>>` argument.
-pub struct CharReader<R: Iterator<Item=io::Result<char>>>(R);
+pub struct CharReader<R: Iterator<Item=io::Result<char>>> {
+    chars: R,
+    idx: usize,
+    next: (Option<CharReaderItem>, usize),
+}
 
 impl<R: Iterator<Item=io::Result<char>>> CharReader<R> {
     /// Construct new instance from char reading iterator
     pub fn new(chars: R) -> Self {
-        Self(chars)
+        let mut s = Self{ chars, idx: 0, next: (None, 0) };
+        s.next = s.next_internal();
+        s
     }
-}
 
-impl<R: Iterator<Item=io::Result<char>>> Iterator for CharReader<R> {
-    type Item = io::Result<char>;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
+    pub fn last_idx(&self)  -> usize {
+        self.idx
+    }
+
+    pub fn peek(&mut self) -> Option<&CharReaderItem> {
+        self.next.0.as_ref()
+    }
+
+    pub fn next(&mut self) -> Option<CharReaderItem> {
+        self.idx += self.next.1;
+        let next = self.next_internal();
+        std::mem::replace(&mut self.next, next).0
+    }
+
+    pub fn next_internal(&mut self) -> (Option<CharReaderItem>, usize) {
+        let c = self.chars.next();
+        match c {
+            Some(r @ Ok(c)) => (Some((self.idx, r)), c.len_utf8()),
+            Some(Err(e)) => (Some((self.idx, Err(e))), 0),
+            None => (None, 0),
+        }
     }
 }
 
 impl<R: Read> From<R> for CharReader<CodePoints<std::io::Bytes<R>>> {
     fn from(input: R) -> Self {
         let chars: CodePoints<_> = input.bytes().into();
-        Self(chars)
+        Self::new(chars)
     }
 }
 
 impl<R: Iterator<Item=io::Result<u8>>> From<R> for CharReader<CodePoints<R>> {
     fn from(input: R) -> Self {
         let chars: CodePoints<_> = input.into();
-        Self(chars)
+        Self::new(chars)
     }
 }
 
 impl<'a> From<&'a str> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
     fn from(text: &'a str) -> Self {
-        Self(text.chars().map(Ok))
+        Self::new(text.chars().map(Ok))
     }
 }
 
 impl From<String> for CharReader<std::iter::Map<std::vec::IntoIter<char>, fn(char) -> io::Result<char>>> {
     fn from(text: String) -> Self {
         let chars: Vec<char> = text.chars().collect();
-        Self(chars.into_iter().map(Ok))
+        Self::new(chars.into_iter().map(Ok))
     }
 }
 
 impl<'a> From<&'a String> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
     fn from(text: &'a String) -> Self {
-        Self(text.chars().map(Ok))
+        Self::new(text.chars().map(Ok))
     }
 }
 
@@ -336,14 +358,13 @@ impl<'a> From<&'a String> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(
 /// NOTE: The SExprParser type is short-lived, and can be created cheaply to evaluate a specific block
 /// of MeTTa source code.
 pub struct SExprParser<R: Iterator<Item=io::Result<char>>> {
-    it: Peekable<Enumerate<CharReader<R>>>,
-    last_idx: usize,
+    it: CharReader<R>,
 }
 
 impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     pub fn new<I: Into<CharReader<R>>>(chars: I) -> Self {
-        Self{ it: chars.into().enumerate().peekable(), last_idx: 0 }
+        Self{ it: chars.into() }
     }
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
@@ -371,23 +392,14 @@ impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     fn next(&mut self) -> Result<Option<(usize, char)>, String> {
         match self.it.next() {
-            Some((idx, Ok(c))) => {
-                self.last_idx = idx;
-                Ok(Some((idx, c)))
-            },
+            Some((idx, Ok(c))) => Ok(Some((idx, c))),
             None => Ok(None),
-            Some((idx, Err(err))) => {
-                self.last_idx = idx;
-                Err(format!("Input read error at position {}: {}", idx, err))
-            },
+            Some((idx, Err(err))) => Err(format!("Input read error at position {}: {}", idx, err)),
         }
     }
 
     fn skip_next(&mut self) {
-        match self.it.next() {
-            Some((idx, _)) => self.last_idx = idx,
-            _ => {},
-        }
+        self.it.next();
     }
 
     pub fn parse_to_syntax_tree(&mut self) -> Result<Option<SyntaxNode>, String> {
@@ -424,11 +436,7 @@ impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     ///WARNING: may be (often is) == to text.len(), and thus can't be used as an index to read a char
     fn cur_idx(&mut self) -> usize {
-        if let Some(&(idx, _)) = self.it.peek() {
-            idx
-        } else {
-            self.last_idx + 1
-        }
+        self.it.last_idx()
     }
 
     /// Parse to the next `\n` newline
@@ -777,6 +785,27 @@ mod tests {
     }
 
     #[test]
+    fn test_non_ascii() {
+        let text = "ж)";
+        let mut parser = SExprParser::new(text);
+        let node = parser.parse_token().unwrap().unwrap();
+        assert_eq!("ж".to_string(), text[node.src_range]);
+        assert_eq!(Ok(Some((2, ')'))), parser.next());
+
+        let text = "⟮;Some comments.";
+        let mut parser = SExprParser::new(text);
+        let node = parser.parse_token().unwrap().unwrap();
+        assert_eq!("⟮".to_string(), text[node.src_range]);
+        assert_eq!(Ok(Some((3, ';'))), parser.next());
+
+        let text = "⟮";
+        let mut parser = SExprParser::new(text);
+        let node = parser.parse_token().unwrap().unwrap();
+        assert_eq!("⟮".to_string(), text[node.src_range]);
+        assert_eq!(Ok(None), parser.next());
+    }
+
+    #[test]
     fn test_parse_unicode() {
         let mut parser = SExprParser::new("\"\\u{0123}\"");
         assert_eq!(Ok(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..10, "\"\u{0123}\"".into())), parser.parse_string());
@@ -925,5 +954,4 @@ mod tests {
         let res = parse_atoms(program);
         assert_eq!(res, expected);
     }
-
 }
