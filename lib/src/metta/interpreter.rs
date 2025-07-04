@@ -788,7 +788,8 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 
     let matches: Vec<Bindings> = match_atoms(&atom, &pattern).collect();
     let result = |bindings| {
-        let stack = Stack::finished(prev.clone(), then.clone());
+        let then = apply_bindings_to_atom_move(then.clone(), &bindings);
+        let stack = Stack::finished(prev.clone(), then);
         InterpretedAtom(stack, bindings)
     };
     let bindings_ref = &bindings;
@@ -2033,5 +2034,21 @@ mod tests {
 
         let result = interpret(space.clone(), &Atom::expr([CONTEXT_SPACE_SYMBOL]));
         assert_eq!(result, Ok(vec![Atom::gnd(space)]));
+    }
+
+    #[test]
+    fn interpret_variable_substitution() {
+        let space = space("
+            (: unify (-> Atom Atom Atom Atom %Undefined%))
+            (= (foo) (bar))
+            (= (bar) a)
+        ");
+        let result = interpret(space.clone(), 
+            &Atom::expr([METTA_SYMBOL, 
+                Atom::expr([UNIFY_SYMBOL, Atom::gnd(space.clone()), Atom::expr([EQUAL_SYMBOL, Atom::expr([Atom::sym("foo")]), Atom::var("x")]), Atom::var("x"), EMPTY_SYMBOL]),
+                ATOM_TYPE_UNDEFINED,
+                Atom::gnd(space)]));
+
+        assert_eq!(result, Ok(vec![metta_atom("a")]));
     }
 }
