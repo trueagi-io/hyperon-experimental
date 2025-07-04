@@ -109,7 +109,11 @@ impl Stack {
 
     fn add_vars_it<'a, I: 'a + Iterator<Item=&'a VariableAtom>>(prev: &Option<Rc<RefCell<Self>>>, vars: I) -> Variables {
         match prev {
-            Some(prev) => prev.borrow().vars.clone().insert_all(vars),
+            Some(prev) => {
+                let mut next = prev.borrow().vars.clone();
+                next.insert_all(vars);
+                next
+            },
             None => vars.cloned().collect(),
         }
     }
@@ -327,9 +331,11 @@ impl Variables {
     fn insert(&mut self, var: VariableAtom) -> Option<VariableAtom> {
         self.0.insert(var)
     }
-    fn insert_all<'a, I: 'a + Iterator<Item=&'a VariableAtom>>(mut self, it: I) -> Self {
+    fn insert_all<'a, I: 'a + Iterator<Item=&'a VariableAtom>>(&mut self, it: I) {
         it.for_each(|var| { self.insert(var.clone()); });
-        self
+    }
+    fn iter(&self) -> impl Iterator<Item=&'_ VariableAtom> {
+        self.0.iter()
     }
 }
 fn vars_from_atom(atom: &Atom) -> impl Iterator<Item=&VariableAtom> {
@@ -563,8 +569,8 @@ fn eval_result(prev: Option<Rc<RefCell<Stack>>>, res: Atom, call_stack: &Rc<RefC
     InterpretedAtom(stack, bindings)
 }
 
-fn call_to_stack(call: Atom, vars: Variables, prev: Option<Rc<RefCell<Stack>>>) -> Rc<RefCell<Stack>> {
-    let vars = vars.insert_all(vars_from_atom(&call));
+fn call_to_stack(call: Atom, mut vars: Variables, prev: Option<Rc<RefCell<Stack>>>) -> Rc<RefCell<Stack>> {
+    vars.insert_all(vars_from_atom(&call));
     let stack = Stack::from_prev_with_vars(prev, call, vars, call_ret);
     Rc::new(RefCell::new(stack))
 }
@@ -670,7 +676,7 @@ fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Optio
 }
 
 fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: chain, .. } = stack;
+    let Stack{ prev, atom: chain, vars, .. } = stack;
     let (nested, var, templ) = match_atom!{
         chain ~ [_op, nested, Atom::Variable(var), templ] => (nested, var, templ),
         _ => {
@@ -679,7 +685,11 @@ fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     };
     let b = Bindings::new().add_var_binding(var, nested).unwrap();
     let templ = apply_bindings_to_atom_move(templ, &b);
-    vec![InterpretedAtom(atom_to_stack(templ, prev), bindings)]
+    let stack = atom_to_stack(templ, prev);
+    if let Some(prev) = stack.prev.as_ref() {
+        prev.borrow_mut().vars.insert_all(vars.iter());
+    }
+    vec![InterpretedAtom(stack, bindings)]
 }
 
 fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
@@ -2050,5 +2060,19 @@ mod tests {
                 Atom::gnd(space)]));
 
         assert_eq!(result, Ok(vec![metta_atom("a")]));
+    }
+
+    #[test]
+    fn interpret_variable_substitution_after_superpose() {
+        let space = space("
+            (= (foo a) xa)
+            (= (foo b) xb)
+        ");
+        let result = interpret(space.clone(), &metta_atom("
+            (chain (collapse-bind (eval (foo $a))) $collapsed
+              (chain (superpose-bind $collapsed) $x
+                ($x $a)))
+        ")).unwrap();
+        assert_eq_no_order!(result, vec![metta_atom("(xa a)"), metta_atom("(xb b)")]);
     }
 }
