@@ -161,13 +161,13 @@ impl CustomExecute for DivOp {
 
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_fallible_token(regex(r"[\-\+]?\d+"),
-                                 |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
+        |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
     tref.register_fallible_token(regex(r"[\-\+]?\d+\.\d+"),
-                                 |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
+        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
     tref.register_fallible_token(regex(r"[\-\+]?\d+(\.\d+)?[eE][\-\+]?\d+"),
-                                 |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
+        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
     tref.register_token(regex(r"True|False"),
-                        |token| { Atom::gnd(Bool::from_str(token)) });
+        |token| { Atom::gnd(Bool::from_str(token)) });
 
     let sum_op = Atom::gnd(SumOp{});
     tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
