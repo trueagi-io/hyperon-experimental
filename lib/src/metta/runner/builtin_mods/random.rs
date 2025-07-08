@@ -196,7 +196,7 @@ mod tests {
     fn metta_random() {
         assert_eq!(run_program(&format!(
             "!(import! &self random)
-             !(chain (eval (random-int &rng 0 5)) $rint
+             !(let $rint (random-int &rng 0 5)
                 (and (>= $rint 0) (< $rint 5)))")),
             Ok(vec![vec![UNIT_ATOM], vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!(
@@ -207,7 +207,7 @@ mod tests {
             Ok(vec![vec![UNIT_ATOM], vec![UNIT_ATOM]]));
         assert_eq!(run_program(&format!(
             "!(import! &self random)
-             !(chain (eval (random-float &rng 0.0 5.0)) $rfloat
+             !(let $rfloat (random-float &rng 0.0 5.0)
                 (and (>= $rfloat 0.0) (< $rfloat 5.0)))")),
             Ok(vec![vec![UNIT_ATOM], vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!(

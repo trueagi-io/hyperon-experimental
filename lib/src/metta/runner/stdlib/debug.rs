@@ -213,8 +213,8 @@ mod tests {
 
     #[test]
     fn metta_alpha_eq_op() {
-        assert_eq!(run_program(&format!("(= (foo) (R $x $y)) !(let $foo (eval (foo)) (=alpha $foo (R $x $y)))")), Ok(vec![vec![expr!({Bool(true)})]]));
-        assert_eq!(run_program(&format!("(= (foo) (R $x $y)) !(let $foo (eval (foo)) (=alpha $foo (R $x $x)))")), Ok(vec![vec![expr!({Bool(false)})]]));
+        assert_eq!(run_program(&format!("(= (foo) (R $x $y)) !(let $foo (foo) (=alpha $foo (R $x $y)))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("(= (foo) (R $x $y)) !(let $foo (foo) (=alpha $foo (R $x $x)))")), Ok(vec![vec![expr!({Bool(false)})]]));
     }
 
     #[test]
