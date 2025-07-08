@@ -721,8 +721,13 @@ fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Op
             if is_embedded_op(&atom) {
                 Some((atom_to_stack(atom, Some(stack)), bindings))
             } else {
-                let err = error_atom(atom, NO_RETURN_SYMBOL);
-                let stack = Stack::finished(stack.borrow().prev.clone(), err);
+                let prev = stack.borrow().prev.clone();
+                let err = if let Some(ref prev) = prev {
+                    error_atom(prev.borrow().atom.clone(), NO_RETURN_SYMBOL)
+                } else {
+                    error_atom(atom, NO_RETURN_SYMBOL)
+                };
+                let stack = Stack::finished(prev, err);
                 Some((stack, bindings))
             }
         }
@@ -1798,6 +1803,11 @@ mod tests {
     fn interpret_function_error_on_no_return() {
         let result = call_interpret(space(""), &metta_atom("(function (SomeValue))"));
         assert_eq!(result, vec![metta_atom("(Error (SomeValue) NoReturn)")]);
+
+        let result = call_interpret(space("
+            (= (foo) (function (SomeValue)))
+        "), &metta_atom("(eval (foo))"));
+        assert_eq!(result, vec![metta_atom("(Error (foo) NoReturn)")]);
     }
 
     #[test]
