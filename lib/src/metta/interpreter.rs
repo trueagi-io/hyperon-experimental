@@ -718,7 +718,13 @@ fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Op
             Some((stack, bindings))
         },
         _ => {
-            Some((atom_to_stack(atom, Some(stack)), bindings))
+            if is_embedded_op(&atom) {
+                Some((atom_to_stack(atom, Some(stack)), bindings))
+            } else {
+                let err = error_atom(atom, NO_RETURN_SYMBOL);
+                let stack = Stack::finished(stack.borrow().prev.clone(), err);
+                Some((stack, bindings))
+            }
         }
     }
 }
@@ -1786,6 +1792,12 @@ mod tests {
                 Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: Variables::new(), depth: 1 },
                 bind!{ a: expr!("A"), b: expr!("B"), c: expr!("C"), d: expr!("D") }
         )]);
+    }
+
+    #[test]
+    fn interpret_function_error_on_no_return() {
+        let result = call_interpret(space(""), &metta_atom("(function (SomeValue))"));
+        assert_eq!(result, vec![metta_atom("(Error (SomeValue) NoReturn)")]);
     }
 
     #[test]
