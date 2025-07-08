@@ -324,6 +324,18 @@
     (return $template)
     (chain (eval (switch $atom $tail)) $ret (return $ret)) )))
 
+(: switch2 (-> %Undefined% Expression %Undefined%))
+(= (switch2 $atom $cases)
+  (let* (
+            ($list (decons-atom $cases))
+            ($res (switch-internal2 $atom $list))
+        )
+        (if-equal $res NotReducible Empty $res)))
+
+(= (switch-internal2 $atom (($pattern $template) $tail))
+  (unify $atom $pattern $template
+    (let $ret (switch2 $atom $tail) $ret)))
+
 ; TODO: Type is used here, but there is no definition for the -> type
 ; constructor for instance, thus in practice it matches because -> has
 ; %Undefined% type. We need to assign proper type to -> and other type

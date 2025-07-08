@@ -146,12 +146,15 @@ impl Grounded for DivOp {
 impl CustomExecute for DivOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("Divide expects two numbers: dividend and divisor");
-        let dividend: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        let divisor: f64 = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
+        let dividend = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        let divisor = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?;
 
-        match divisor {
-            0.0 => Err(ExecError::from("DivisionByZero")),
-            _ => Ok(vec![Atom::gnd(Number::Float(dividend / divisor))])
+        let (dividend, divisor) = Number::promote(dividend, divisor);
+        match (dividend, divisor) {
+            (Number::Integer(_), Number::Integer(0)) => Err(ExecError::from("DivisionByZero")),
+            (Number::Integer(a), Number::Integer(b)) => Ok(vec![Atom::gnd(Number::Integer(a / b))]),
+            (Number::Float(a), Number::Float(b)) => Ok(vec![Atom::gnd(Number::Float(a / b))]),
+            _ => panic!("Unexpected state")
         }
     }
 }
