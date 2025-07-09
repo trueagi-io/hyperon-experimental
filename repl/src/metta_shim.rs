@@ -121,7 +121,7 @@ pub mod metta_interface_mod {
 
         pub fn exec<R: Iterator<Item=std::io::Result<char>>, I: Into<CharReader<R>>>(&mut self, input: I) {
             // TODO: should be replaced by wrapping Rust CharReader into Python API
-            let line: String = input.into().into_chars().map(|r| r.expect("Error while reading input")).collect();
+            let line: String = input.into().map(|r| r.expect("Error while reading input")).collect();
 
             //Initialize the runner state
             let runner_state = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
