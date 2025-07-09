@@ -318,9 +318,13 @@ impl<R: Iterator<Item=io::Result<char>>> CharReader<R> {
             None => (None, 0),
         }
     }
+}
 
-    pub fn into_chars(self) -> R {
-        self.chars
+impl<R: Iterator<Item=io::Result<char>>> Iterator for CharReader<R> {
+    type Item = io::Result<char>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next().map(|(_, c)| c)
     }
 }
 
