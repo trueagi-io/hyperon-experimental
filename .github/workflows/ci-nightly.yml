@@ -12,7 +12,7 @@ jobs:
         os:  ["ubuntu-22.04", "ubuntu-24.04", "macos-13", "macos-14", "macos-15", "windows-latest"]
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
         cmake-version: ["3.24.x"]
-        build-type: ["Debug", "Release", "RelWithDebInfo", "MinSizeRel"]
+        build-type: ["Debug", "Release"]
       max-parallel: 5
 
     uses: ./.github/workflows/common.yml

@@ -318,6 +318,10 @@ impl<R: Iterator<Item=io::Result<char>>> CharReader<R> {
             None => (None, 0),
         }
     }
+
+    pub fn into_chars(self) -> R {
+        self.chars
+    }
 }
 
 impl<R: Read> From<R> for CharReader<CodePoints<std::io::Bytes<R>>> {
