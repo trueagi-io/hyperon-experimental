@@ -460,7 +460,7 @@ mod tests {
     #[test]
     fn metta_sqrt_math() {
         assert_eq!(run_program(&format!("!(sqrt-math 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (sqrt-math -4)) $sqrt (isnan-math $sqrt))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $sqrt (sqrt-math -4) (isnan-math $sqrt))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(sqrt-math A)")), Ok(vec![vec![expr!("Error" ({ SqrtMathOp{} } "A") "sqrt-math expects one argument: number")]]));
     }
 
@@ -474,8 +474,8 @@ mod tests {
     #[test]
     fn metta_log_math() {
         assert_eq!(run_program(&format!("!(log-math 2 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (log-math 0 0)) $log (isnan-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (log-math 5 0)) $log (isinf-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $log (log-math 0 0) (isnan-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $log (log-math 5 0) (isinf-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
     }
 
     #[test]
@@ -508,56 +508,56 @@ mod tests {
     #[test]
     fn metta_sin_math() {
         assert_eq!(run_program(&format!("!(sin-math 0)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (sin-math 1.570796327)) $sin (< (- $sin 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $sin (sin-math 1.570796327) (< (- $sin 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(sin-math A)")), Ok(vec![vec![expr!("Error" ({ SinMathOp{} } "A") "sin-math expects one argument: input number")]]));
     }
 
     #[test]
     fn metta_asin_math() {
         assert_eq!(run_program(&format!("!(asin-math 0)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (sin-math 1)) $sin (< (- (asin-math $sin) 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $sin (sin-math 1) (< (- (asin-math $sin) 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(asin-math A)")), Ok(vec![vec![expr!("Error" ({ AsinMathOp{} } "A") "asin-math expects one argument: input number")]]));
     }
 
     #[test]
     fn metta_cos_math() {
         assert_eq!(run_program(&format!("!(cos-math 0)")), Ok(vec![vec![expr!({Number::Integer(1)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (cos-math 1.570796327)) $cos (< (- $cos 0.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $cos (cos-math 1.570796327) (< (- $cos 0.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(cos-math A)")), Ok(vec![vec![expr!("Error" ({ CosMathOp{} } "A") "cos-math expects one argument: input number")]]));
     }
 
     #[test]
     fn metta_acos_math() {
         assert_eq!(run_program(&format!("!(acos-math 1)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (cos-math 1)) $cos (< (- (acos-math $cos) 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $cos (cos-math 1) (< (- (acos-math $cos) 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(acos-math A)")), Ok(vec![vec![expr!("Error" ({ AcosMathOp{} } "A") "acos-math expects one argument: input number")]]));
     }
 
     #[test]
     fn metta_tan_math() {
         assert_eq!(run_program(&format!("!(tan-math 0)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (tan-math 0.78539816339)) $tan (< (- $tan 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $tan (tan-math 0.78539816339) (< (- $tan 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(tan-math A)")), Ok(vec![vec![expr!("Error" ({ TanMathOp{} } "A") "tan-math expects one argument: input number")]]));
     }
 
     #[test]
     fn metta_atan_math() {
         assert_eq!(run_program(&format!("!(atan-math 0)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (atan-math 1)) $atan (< (- $atan 0.78539816339) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $atan (atan-math 1) (< (- $atan 0.78539816339) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(atan-math A)")), Ok(vec![vec![expr!("Error" ({ AtanMathOp{} } "A") "atan-math expects one argument: input number")]]));
     }
 
     #[test]
     fn metta_isnan_math() {
         assert_eq!(run_program(&format!("!(isnan-math 0)")), Ok(vec![vec![expr!({Bool(false)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (log-math 0 0)) $log (isnan-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $log (log-math 0 0) (isnan-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(isnan-math A)")), Ok(vec![vec![expr!("Error" ({ IsNanMathOp{} } "A") "isnan-math expects one argument: input number")]]));
     }
 
     #[test]
     fn metta_isinf_math() {
         assert_eq!(run_program(&format!("!(isinf-math 0)")), Ok(vec![vec![expr!({Bool(false)})]]));
-        assert_eq!(run_program(&format!("!(chain (eval (log-math 5 0)) $log (isinf-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(let $log (log-math 5 0) (isinf-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(isinf-math A)")), Ok(vec![vec![expr!("Error" ({ IsInfMathOp{} } "A") "isinf-math expects one argument: input number")]]));
     }
 

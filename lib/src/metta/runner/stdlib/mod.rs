@@ -161,40 +161,40 @@ mod tests {
 
     #[test]
     fn metta_switch() {
-        let result = run_program("!(eval (switch (A $b) ( (($a B) ($b $a)) ((B C) (C B)) )))");
+        let result = run_program("!(switch (A $b) ( (($a B) ($b $a)) ((B C) (C B)) ))");
         assert_eq!(result, Ok(vec![vec![expr!("B" "A")]]));
-        let result = run_program("!(eval (switch (A $b) ( ((B C) (C B)) (($a B) ($b $a)) )))");
+        let result = run_program("!(switch (A $b) ( ((B C) (C B)) (($a B) ($b $a)) ))");
         assert_eq!(result, Ok(vec![vec![expr!("B" "A")]]));
-        let result = run_program("!(eval (switch (A $b) ( ((B C) (C B)) ((D E) (E B)) )))");
+        let result = run_program("!(switch (A $b) ( ((B C) (C B)) ((D E) (E B)) ))");
         assert_eq!(result, Ok(vec![vec![]]));
     }
 
     #[test]
     fn metta_is_function() {
-        let result = run_program("!(eval (is-function (-> $t)))");
+        let result = run_program("!(is-function (-> $t))");
         assert_eq!(result, Ok(vec![vec![expr!({Bool(true)})]]));
-        let result = run_program("!(eval (is-function (A $t)))");
+        let result = run_program("!(is-function (A $t))");
         assert_eq!(result, Ok(vec![vec![expr!({Bool(false)})]]));
-        let result = run_program("!(eval (is-function %Undefined%))");
+        let result = run_program("!(is-function %Undefined%)");
         assert_eq!(result, Ok(vec![vec![expr!({Bool(false)})]]));
     }
 
     #[test]
     fn metta_type_cast() {
-        assert_eq!(run_program("(: a A) !(eval (type-cast a A &self))"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("(: a A) !(eval (type-cast a B &self))"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));
-        assert_eq!(run_program("(: a A) !(eval (type-cast a %Undefined% &self))"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("!(eval (type-cast a B &self))"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("!(eval (type-cast 42 Number &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
-        assert_eq!(run_program("!(eval (type-cast 42 %Undefined% &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
-        assert_eq!(run_program("(: a A) !(eval (type-cast a Atom &self))"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("(: a A) !(eval (type-cast a Symbol &self))"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("!(eval (type-cast 42 Grounded &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
-        assert_eq!(run_program("!(eval (type-cast () Expression &self))"), Ok(vec![vec![expr!()]]));
-        assert_eq!(run_program("!(eval (type-cast (a b) Expression &self))"), Ok(vec![vec![expr!("a" "b")]]));
-        assert_eq!(run_program("!(eval (type-cast $v Variable &self))"), Ok(vec![vec![expr!(v)]]));
-        assert_eq!(run_program("(: a A) (: b B) !(eval (type-cast (a b) (A B) &self))"), Ok(vec![vec![expr!("a" "b")]]));
-        assert_eq!(run_program("(: a A) (: a B) !(eval (type-cast a A &self))"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("(: a A) !(type-cast a A &self)"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("(: a A) !(type-cast a B &self)"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));
+        assert_eq!(run_program("(: a A) !(type-cast a %Undefined% &self)"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("!(type-cast a B &self)"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("!(type-cast 42 Number &self)"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
+        assert_eq!(run_program("!(type-cast 42 %Undefined% &self)"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
+        assert_eq!(run_program("(: a A) !(type-cast a Atom &self)"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("(: a A) !(type-cast a Symbol &self)"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("!(type-cast 42 Grounded &self)"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
+        assert_eq!(run_program("!(type-cast () Expression &self)"), Ok(vec![vec![expr!()]]));
+        assert_eq!(run_program("!(type-cast (a b) Expression &self)"), Ok(vec![vec![expr!("a" "b")]]));
+        assert_eq!(run_program("!(type-cast $v Variable &self)"), Ok(vec![vec![expr!(v)]]));
+        assert_eq!(run_program("(: a A) (: b B) !(type-cast (a b) (A B) &self)"), Ok(vec![vec![expr!("a" "b")]]));
+        assert_eq!(run_program("(: a A) (: a B) !(type-cast a A &self)"), Ok(vec![vec![expr!("a")]]));
     }
 
     #[test]

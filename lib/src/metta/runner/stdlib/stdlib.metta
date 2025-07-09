@@ -47,7 +47,7 @@
     (@param "Atom to be evaluated, can be reduced via equality expression (= ...) or by calling a grounded function")
     (@param "Space to evaluate atom in its context")))
   (@return "Result of evaluation"))
-(: evalc (-> Atom Grounded Atom))
+(: evalc (-> Atom SpaceType Atom))
 
 (@doc chain
   (@desc "Evaluates first argument, binds it to the variable (second argument) and then evaluates third argument which contains (or not) mentioned variable")
@@ -262,22 +262,6 @@
 (= (atom-subst $atom $var $templ)
   (function (chain (eval (noeval $atom)) $var (return $templ))) )
 
-(@doc if-decons-expr
-  (@desc "Checks if first argument is non empty expression. If so gets tail and head from the first argument and returns forth argument using head and tail values. Returns fifth argument otherwise.")
-  (@params (
-    (@param "Expression to be deconstructed")
-    (@param "Head variable")
-    (@param "Tail variable")
-    (@param "Template to return if first argument is a non-empty expression")
-    (@param "Default value to return otherwise")))
-  (@return "Either template with head and tail replaced by values or default value"))
-(: if-decons-expr (-> Expression Variable Variable Atom Atom %Undefined%))
-(= (if-decons-expr $atom $head $tail $then $else)
-  (function (eval (if-equal $atom ()
-    (return $else)
-    (chain (decons-atom $atom) $list
-      (unify $list ($head $tail) (return $then) (return $else)) )))))
-
 (@doc if-error
   (@desc "Checks if first argument is an error atom. Returns second argument if so or third argument otherwise.")
   (@params (
@@ -354,9 +338,10 @@
   (function (chain (eval (get-metatype $type)) $meta
     (eval (switch ($type $meta) (
       (($type Expression)
-        (eval (if-decons-expr $type $head $_tail
-          (unify $head -> (return True) (return False))
-          (return (Error (is-function $type) "is-function non-empty expression as an argument")) )))
+        (chain (decons-atom $type) $pair
+          (unify ($head $_tail) $pair
+            (unify $head -> (return True) (return False))
+            (return (Error (is-function $type) "is-function non-empty expression as an argument")) )))
       (($type $meta) (return False))
     ))))))
 
@@ -429,14 +414,15 @@
   (@return "Filtered list"))
 (: filter-atom (-> Expression Variable Atom Expression))
 (= (filter-atom $list $var $filter)
-  (function (eval (if-decons-expr $list $head $tail
-    (chain (eval (filter-atom $tail $var $filter)) $tail-filtered
-      (chain (eval (atom-subst $head $var $filter)) $filter-expr
-        (chain $filter-expr $is-filtered
-          (eval (if $is-filtered
-            (chain (cons-atom $head $tail-filtered) $res (return $res))
-            (return $tail-filtered) )))))
-    (return ()) ))))
+  (function (chain (decons-atom $list) $ht
+    (unify ($head $tail) $ht
+      (chain (eval (filter-atom $tail $var $filter)) $tail-filtered
+        (chain (eval (atom-subst $head $var $filter)) $filter-expr
+          (chain $filter-expr $is-filtered
+            (eval (if $is-filtered
+              (chain (cons-atom $head $tail-filtered) $res (return $res))
+              (return $tail-filtered) )))))
+      (return ()) ))))
 
 (@doc map-atom
   (@desc "Function takes list of atoms (first argument), variable to be used inside (second variable) and an expression which will be evaluated for each atom in list (third argument). Expression should contain variable. So e.g. (map-atom (1 2 3 4) $v (eval (+ $v 1))) will give (2 3 4 5)")
@@ -447,12 +433,13 @@
   (@return "Result of evaluating template for each atom in a list"))
 (: map-atom (-> Expression Variable Atom Expression))
 (= (map-atom $list $var $map)
-  (function (eval (if-decons-expr $list $head $tail
-    (chain (eval (map-atom $tail $var $map)) $tail-mapped
-      (chain (eval (atom-subst $head $var $map)) $map-expr
-        (chain $map-expr $head-mapped
-          (chain (cons-atom $head-mapped $tail-mapped) $res (return $res)) )))
-    (return ()) ))))
+  (function (chain (decons-atom $list) $ht
+    (unify ($head $tail) $ht
+      (chain (eval (map-atom $tail $var $map)) $tail-mapped
+        (chain (eval (atom-subst $head $var $map)) $map-expr
+          (chain $map-expr $head-mapped
+            (chain (cons-atom $head-mapped $tail-mapped) $res (return $res)) )))
+      (return ()) ))))
 
 (@doc foldl-atom
   (@desc "Function takes list of values (first argument), initial value (second argument) and operation (fifth argument) and applies it consequently to the list of values, using init value as a start. It also takes two variables (third and fourth argument) to use them inside")
@@ -465,13 +452,14 @@
   (@return "Result of applying operation to the list of values"))
 (: foldl-atom (-> Expression Atom Variable Variable Atom %Undefined%))
 (= (foldl-atom $list $init $a $b $op)
-  (function (eval (if-decons-expr $list $head $tail
-    (chain (eval (atom-subst $init $a $op)) $op-init
-      (chain (eval (atom-subst $head $b $op-init)) $op-head
-        (chain (context-space) $space
-          (chain (metta $op-head %Undefined% $space) $head-folded
-            (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) ))))
-      (return $init) ))))
+  (function (chain (decons-atom $list) $ht
+    (unify ($head $tail) $ht
+      (chain (eval (atom-subst $init $a $op)) $op-init
+        (chain (eval (atom-subst $head $b $op-init)) $op-head
+          (chain (context-space) $space
+            (chain (metta $op-head %Undefined% $space) $head-folded
+              (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) ))))
+        (return $init) ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Standard library written in MeTTa ;
@@ -542,11 +530,12 @@
   (@return "Second argument or Empty"))
 (: let* (-> Expression Atom %Undefined%))
 (= (let* $pairs $template)
-  (if-decons-expr $pairs $head $tail
-    (unify ($pattern $atom) $head
-      (let $pattern $atom (let* $tail $template))
-      (Error (let* $pairs $template) "List of (<pattern> <atom>) pairs is expected as a second argument"))
-    $template ))
+  (chain (decons-atom $pairs) $ht
+    (unify ($head $tail) $ht
+      (unify ($pattern $atom) $head
+        (let $pattern $atom (let* $tail $template))
+        (Error (let* $pairs $template) "List of (<pattern> <atom>) pairs is expected as a second argument"))
+      $template )))
 
 (@doc add-reduct
   (@desc "Reduces atom (second argument) and adds it into the atomspace (first argument)")
@@ -554,7 +543,7 @@
     (@param "Atomspace to add atom into")
     (@param "Atom to add")))
   (@return "Unit atom"))
-(: add-reduct (-> Grounded %Undefined% (->)))
+(: add-reduct (-> SpaceType %Undefined% (->)))
 (= (add-reduct $dst $atom) (add-atom $dst $atom))
 
 (@doc car-atom
@@ -564,9 +553,9 @@
   (@return "First atom of an expression"))
 (: car-atom (-> Expression %Undefined%))
 (= (car-atom $atom)
-  (if-decons-expr $atom $head $_
+  (chain (decons-atom $atom) $ht (unify ($head $_) $ht
     $head
-    (Error (car-atom $atom) "car-atom expects a non-empty expression as an argument") ))
+    (Error (car-atom $atom) "car-atom expects a non-empty expression as an argument") )))
 
 (@doc cdr-atom
   (@desc "Extracts the tail of an expression (all except first atom)")
@@ -575,9 +564,9 @@
   (@return "Tail of an expression"))
 (: cdr-atom (-> Expression Expression))
 (= (cdr-atom $atom)
-  (if-decons-expr $atom $_ $tail
+  (chain (decons-atom $atom) $ht (unify ($_ $tail) $ht
     $tail
-    (Error (cdr-atom $atom) "cdr-atom expects a non-empty expression as an argument") ))
+    (Error (cdr-atom $atom) "cdr-atom expects a non-empty expression as an argument") )))
 
 (@doc quote
   (@desc "Prevents atom from being reduced")
@@ -658,7 +647,7 @@
     (@param "Space")
     (@param "Expression")))
   (@return "Unit atom"))
-(: add-reducts (-> Grounded %Undefined% (->)))
+(: add-reducts (-> SpaceType %Undefined% (->)))
 (= (add-reducts $space $tuple)
     (foldl-atom $tuple () $a $b (add-atom $space $b)))
 
@@ -668,7 +657,7 @@
     (@param "Space")
     (@param "Expression")))
   (@return "Unit atom"))
-(: add-atoms (-> Grounded Expression (->)))
+(: add-atoms (-> SpaceType Expression (->)))
 (= (add-atoms $space $tuple)
     (foldl-atom $tuple () $a $b (add-atom $space $b)))
 

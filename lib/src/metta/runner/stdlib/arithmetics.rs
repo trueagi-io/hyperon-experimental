@@ -50,7 +50,6 @@ macro_rules! def_binary_number_op {
 def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, Number);
-def_binary_number_op!(DivOp, /, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(ModOp, %, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(LessOp, <, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(GreaterOp, >, ATOM_TYPE_BOOL, Bool);
@@ -125,6 +124,41 @@ impl CustomExecute for NotOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct DivOp{}
+
+impl Display for DivOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "/")
+    }
+}
+
+impl Grounded for DivOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for DivOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("Divide expects two numbers: dividend and divisor");
+        let dividend = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        let divisor = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?;
+
+        let (dividend, divisor) = Number::promote(dividend, divisor);
+        match (dividend, divisor) {
+            (Number::Integer(_), Number::Integer(0)) => Err(ExecError::from("DivisionByZero")),
+            (Number::Integer(a), Number::Integer(b)) => Ok(vec![Atom::gnd(Number::Integer(a / b))]),
+            (Number::Float(a), Number::Float(b)) => Ok(vec![Atom::gnd(Number::Float(a / b))]),
+            _ => panic!("Unexpected state")
+        }
+    }
+}
+
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_fallible_token(regex(r"[\-\+]?\d+"),
         |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
@@ -166,6 +200,7 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
 
 #[cfg(test)]
 mod tests {
+    use crate::metta::runner::run_program;
     use super::*;
 
     macro_rules! assert_binary_op {
@@ -178,6 +213,12 @@ mod tests {
         ($name:ident, $a: expr, $r: expr) => {
             assert_eq!($name{}.execute(&mut vec![Atom::gnd($a)]), Ok(vec![Atom::gnd($r)]));
         }
+    }
+
+    #[test]
+    fn div_errors() {
+        assert_eq!(run_program(&format!("!(assertEqual (/ 5 0) (Error (/ 5 0) DivisionByZero))")), Ok(vec![vec![UNIT_ATOM]]));
+        assert_eq!(run_program(&format!("!(assertEqual (let $div (/ 5.0 0.0) (isinf-math $div)) True)")), Ok(vec![vec![UNIT_ATOM]]));
     }
 
     #[test]
