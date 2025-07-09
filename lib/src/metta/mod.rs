@@ -25,6 +25,7 @@ pub const BAD_TYPE_SYMBOL : Atom = sym!("BadType");
 pub const INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL : Atom = sym!("IncorrectNumberOfArguments");
 pub const NOT_REDUCIBLE_SYMBOL : Atom = sym!("NotReducible");
 pub const STACK_OVERFLOW_SYMBOL : Atom = sym!("StackOverflow");
+pub const NO_RETURN_SYMBOL : Atom = sym!("NoReturn");
 
 pub const EMPTY_SYMBOL : Atom = sym!("Empty");
 
