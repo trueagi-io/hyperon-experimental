@@ -51,8 +51,13 @@ jobs:
       - name: Build Rust library
         working-directory: ./lib
         run: |
-          cargo check
           cargo build
+
+      - name: Check Rust REPL
+        working-directory: ./repl
+        run: |
+          cargo check
+          cargo check --features python,git
 
       - name: Install cbindgen
         uses: actions-rs/cargo@v1.0.1
@@ -82,7 +87,7 @@ jobs:
 
       - name: Test Rust build
         shell: bash
-        run: RUST_LOG=hyperon=debug cargo test --features "git online-test"
+        run: RUST_LOG=hyperon=debug cargo test --features git,online-test
 
       - name: Print environment
         shell: bash
