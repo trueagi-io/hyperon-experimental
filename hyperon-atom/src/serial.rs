@@ -79,7 +79,7 @@ impl PrivHasher for DefaultHasher {}
 impl<H: PrivHasher> Serializer for H {
     fn serialize_bool(&mut self, v: bool) -> Result { Ok(self.write_u8(v as u8)) }
     fn serialize_i64(&mut self, v: i64) -> Result { Ok(self.write_i64(v)) }
-    fn serialize_f64(&mut self, v: f64) -> Result { Ok(self.write_i64(unsafe{ std::mem::transmute::<f64, i64>(v) })) }
+    fn serialize_f64(&mut self, v: f64) -> Result { Ok(self.write_i64(f64::to_bits(v).cast_signed())) }
     fn serialize_str(&mut self, v: &str) -> Result { Ok(v.bytes().for_each(|b| self.write_u8(b))) }
 }
 
