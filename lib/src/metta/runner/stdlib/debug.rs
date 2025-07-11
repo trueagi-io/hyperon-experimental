@@ -172,12 +172,12 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
             ));
     tref.register_function(GroundedFunctionAtom::new(
         r"_assert-results-are-equal-msg".into(),
-        expr!("->" "Atom" "Atom" "Atom" "String" ("->")),
+        expr!("->" "Atom" "Atom" "Atom" "Atom" ("->")),
         |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { assert_results_are_equal(args, DefaultEquality{}) },
     ));
     tref.register_function(GroundedFunctionAtom::new(
         r"_assert-results-are-alpha-equal-msg".into(),
-        expr!("->" "Atom" "Atom" "Atom" "String" ("->")),
+        expr!("->" "Atom" "Atom" "Atom" "Atom" ("->")),
         |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { assert_results_are_equal(args, AlphaEquality{}) },
     ));
 }
