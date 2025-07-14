@@ -1052,7 +1052,7 @@
    (chain (context-space) $space
      (chain (metta (collapse $actual) %Undefined% $space) $actual-results
        (chain (metta (collapse $expected) %Undefined% $space) $expected-results
-         (_assert-results-are-equal-msg $actual-results $expected-results (assertEqualMsg $actual $expected $msg) $msg) ))))
+         (_assert-results-are-equal-msg $actual-results $expected-results (assertEqualMsg $actual $expected) $msg) ))))
 
 (@doc assertAlphaEqual
   (@desc "Compares (sets of) results of evaluation of two expressions using alpha equality")
@@ -1079,7 +1079,7 @@
    (chain (context-space) $space
      (chain (metta (collapse $actual) %Undefined% $space) $actual-results
        (chain (metta (collapse $expected) %Undefined% $space) $expected-results
-         (_assert-results-are-alpha-equal-msg $actual-results $expected-results (assertAlphaEqualMsg $actual $expected $msg) $msg) ))))
+         (_assert-results-are-alpha-equal-msg $actual-results $expected-results (assertAlphaEqualMsg $actual $expected) $msg) ))))
 
 (@doc assertEqualToResult
   (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
@@ -1104,7 +1104,7 @@
 (= (assertEqualToResultMsg $actual $expected-results $msg)
    (chain (context-space) $space
      (chain (metta (collapse $actual) %Undefined% $space) $actual-results
-       (_assert-results-are-equal-msg $actual-results $expected-results (assertEqualToResultMsg $actual $expected-results $msg) $msg) )))
+       (_assert-results-are-equal-msg $actual-results $expected-results (assertEqualToResultMsg $actual $expected-results) $msg) )))
 
 (@doc assertAlphaEqualToResult
   (@desc "Same as assertAlphaEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
@@ -1129,7 +1129,7 @@
 (= (assertAlphaEqualToResultMsg $actual $expected-results $msg)
    (chain (context-space) $space
      (chain (metta (collapse $actual) %Undefined% $space) $actual-results
-       (_assert-results-are-alpha-equal-msg $actual-results $expected-results (assertAlphaEqualToResult $actual $expected-results $msg) $msg) )))
+       (_assert-results-are-alpha-equal-msg $actual-results $expected-results (assertAlphaEqualToResultMsg $actual $expected-results) $msg) )))
 
 (@doc superpose
   (@desc "Turns a tuple (first argument) into a nondeterministic result")

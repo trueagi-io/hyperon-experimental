@@ -81,11 +81,14 @@
 
 ; next part of tests is to test if message is being output on assert failure
 
-!(assertEqual (assertEqualMsg (+ 1 2) 4 "Test message") ("Test message"))
-!(assertEqual (assertAlphaEqualMsg (f1 A) (f2 B) "Test message") ("Test message"))
-!(assertEqual (assertAlphaEqualToResultMsg ((foo) (foo)) (($x $x)) "Test message") ("Test message"))
-!(assertEqual (assertEqualToResultMsg
-                 (noeval (+ 1 2))
-                 ((+ 1 3))
-                 "Test message")
-              ("Test message"))
+!(assertEqual (assertEqualMsg (+ 1 2) 4 "Test message")
+              (Error (assertEqualMsg (+ 1 2) 4) "Test message"))
+
+!(assertEqual (assertAlphaEqualMsg (f1 A) (f2 B) "Test message")
+              (Error (assertAlphaEqualMsg (f1 A) (f2 B)) "Test message"))
+
+!(assertEqual (assertAlphaEqualToResultMsg ((foo) (foo)) (($x $x)) "Test message")
+              (Error (assertAlphaEqualToResultMsg ((foo) (foo)) (($x $x))) "Test message"))
+
+!(assertEqual (assertEqualToResultMsg (noeval (+ 1 2)) ((+ 1 3)) "Test message")
+              (Error (assertEqualToResultMsg (noeval (+ 1 2)) ((+ 1 3))) "Test message"))
