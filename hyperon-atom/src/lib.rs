@@ -324,8 +324,8 @@ impl Display for VariableAtom {
 
 /// Returns `atom` with all variables replaced by unique instances.
 pub fn make_variables_unique(mut atom: Atom) -> Atom {
-    let mut mapper = hyperon_common::CachingMapper::new(VariableAtom::make_unique);
-    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
+    let mut mapper = hyperon_common::CachingMapper::new(|v: &VariableAtom| v.clone().make_unique());
+    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var));
     atom
 }
 
