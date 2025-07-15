@@ -271,7 +271,7 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
     /// Query trie using list of the [QueryKey] instances.
     #[inline]
     pub fn query<'a, I: Debug + Clone + Iterator<Item=QueryKey<'a>>>(&self, key: I) -> BindingsSet {
-        let mut mapper = CachingMapper::new(VariableAtom::make_unique);
+        let mut mapper = CachingMapper::new(|v: &VariableAtom| v.clone().make_unique());
         self.query_internal(self.root, key, &mut mapper)
     }
 
@@ -280,7 +280,7 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
-            M: Fn(VariableAtom)->VariableAtom
+            M: Fn(&VariableAtom)->VariableAtom
     {
         match key.next() {
             Some(head) => {
@@ -303,7 +303,7 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
-            M: Fn(VariableAtom)->VariableAtom,
+            M: Fn(&VariableAtom)->VariableAtom,
     {
         let mut result = BindingsSet::empty();
         if let TrieNode::Leaf(_count) = self.nodes[node_id] {
@@ -355,12 +355,12 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
-            M: Fn(VariableAtom)->VariableAtom
+            M: Fn(&VariableAtom)->VariableAtom
     {
         let mut result = BindingsSet::empty();
         let mut entry = entry.clone();
         // TODO: replacing variables each time could be eliminated
-        entry.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
+        entry.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var));
         // TODO: conversion to Iterator and back
         result.extend(match_atoms(&entry, key));
         if result.is_empty() {
@@ -377,7 +377,7 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
-            M: Fn(VariableAtom)->VariableAtom
+            M: Fn(&VariableAtom)->VariableAtom
     {
         let mut result = BindingsSet::empty();
         for (entry, child_id) in self.unpack_atoms_internal(node_id) {
