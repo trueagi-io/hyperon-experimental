@@ -49,3 +49,46 @@
 !(assertEqualToResult
    (id (noeval (+ 1 2)))
    (3))
+
+; assert
+
+!(assert True)
+!(assert (or True False))
+!(assertEqual (assert (and True False)) (Error (assert (and True False)) ((and True False) not True)))
+
+; asserts with custom messages
+; first part of tests is to check if asserts works as intended when assert should output [()].
+; So those tests are duplicate of tests for original asserts
+
+!(assertEqualToResultMsg
+   (noeval (+ 1 2))
+   ((+ 1 2))
+   "Test message")
+
+!(assertEqualToResultMsg
+   (= (f) (+ 1 2))
+   ((= (f) 3))
+   "Test message")
+
+(= (f1 $x) $x)
+(= (f2 $x) $x)
+
+!(assertEqualMsg (+ 1 2) 3 "Test message")
+!(assertAlphaEqualMsg (f1 $x) (f2 $x) "Test message")
+
+(= (f3) $x)
+!(assertAlphaEqualToResultMsg ((f3) (f3)) (($x $y)) "Test message")
+
+; next part of tests is to test if message is being output on assert failure
+
+!(assertEqual (assertEqualMsg (+ 1 2) 4 "Test message")
+              (Error (assertEqualMsg (+ 1 2) 4) "Test message"))
+
+!(assertEqual (assertAlphaEqualMsg (f1 A) (f2 B) "Test message")
+              (Error (assertAlphaEqualMsg (f1 A) (f2 B)) "Test message"))
+
+!(assertEqual (assertAlphaEqualToResultMsg ((foo) (foo)) (($x $x)) "Test message")
+              (Error (assertAlphaEqualToResultMsg ((foo) (foo)) (($x $x))) "Test message"))
+
+!(assertEqual (assertEqualToResultMsg (noeval (+ 1 2)) ((+ 1 3)) "Test message")
+              (Error (assertEqualToResultMsg (noeval (+ 1 2)) ((+ 1 3))) "Test message"))

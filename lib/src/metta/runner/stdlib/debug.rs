@@ -111,12 +111,16 @@ fn assert_results_are_equal<'a, E: Equality<&'a Atom>>(args: &'a [Atom], cmp: E)
     let expected = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children();
     let assert = args.get(2).ok_or_else(arg_error)?;
 
+
     let report = format!("\nExpected: {}\nGot: {}", SliceDisplay(expected), SliceDisplay(actual));
 
     match compare_vec_no_order(actual.iter(), expected.iter(), cmp).as_display() {
         None => unit_result(),
         Some(diff) => {
-            let msg = format!("{}\n{}", report, diff);
+            let msg = match args.get(3) {
+                None => format!("{}\n{}", report, diff),
+                Some(m) => atom_to_string(m),
+            };
             Ok(vec![Atom::expr([ERROR_SYMBOL, assert.clone(), Atom::gnd(Str::from_string(msg))])])
         },
     }
@@ -165,6 +169,16 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
             expr!("->" "Atom" "Atom" "Atom" ("->")),
             |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { assert_results_are_equal(args, AlphaEquality{}) }, 
             ));
+    tref.register_function(GroundedFunctionAtom::new(
+        r"_assert-results-are-equal-msg".into(),
+        expr!("->" "Atom" "Atom" "Atom" "Atom" ("->")),
+        |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { assert_results_are_equal(args, DefaultEquality{}) },
+    ));
+    tref.register_function(GroundedFunctionAtom::new(
+        r"_assert-results-are-alpha-equal-msg".into(),
+        expr!("->" "Atom" "Atom" "Atom" "Atom" ("->")),
+        |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { assert_results_are_equal(args, AlphaEquality{}) },
+    ));
 }
 
 #[cfg(test)]
