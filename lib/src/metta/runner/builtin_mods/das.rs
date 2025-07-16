@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use hyperon_atom::{rust_type_atom, Atom, CustomExecute, ExecError, Grounded};
-use hyperon_space::DynSpace;
+use hyperon_atom::{Atom, CustomExecute, ExecError, Grounded};
+use hyperon_space::{DynSpace, ATOM_TYPE_SPACE};
 use metta_bus_client::space::DistributedAtomSpace;
 use metta_bus_client::{host_id_from_atom, init_service_bus};
 
@@ -58,7 +58,7 @@ impl Grounded for NewDasOp {
             ARROW_SYMBOL,
             ATOM_TYPE_SYMBOL,
             ATOM_TYPE_SYMBOL,
-            rust_type_atom::<DynSpace>(),
+            ATOM_TYPE_SPACE,
         ])
     }
 
