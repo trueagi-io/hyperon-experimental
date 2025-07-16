@@ -320,6 +320,14 @@ impl<R: Iterator<Item=io::Result<char>>> CharReader<R> {
     }
 }
 
+impl<R: Iterator<Item=io::Result<char>>> Iterator for CharReader<R> {
+    type Item = io::Result<char>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next().map(|(_, c)| c)
+    }
+}
+
 impl<R: Read> From<R> for CharReader<CodePoints<std::io::Bytes<R>>> {
     fn from(input: R) -> Self {
         let chars: CodePoints<_> = input.bytes().into();

@@ -676,6 +676,12 @@
                 (Error (assertIncludes $atom $content) 
                   (assertIncludes error: $diff not included in result: $eval_atom))))))
 
+(: assert (-> Atom (->)))
+(= (assert $atom)
+    (chain (context-space) $space
+        (chain (metta $atom %Undefined% $space) $eval-atom
+            (unify $eval-atom True () (Error (assert $atom) ($atom not True))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1034,6 +1040,20 @@
        (chain (metta (collapse $expected) %Undefined% $space) $expected-results
          (_assert-results-are-equal $actual-results $expected-results (assertEqual $actual $expected)) ))))
 
+(@doc assertEqualMsg
+  (@desc "Compares (sets of) results of evaluation of two expressions")
+  (@params (
+    (@param "First expression")
+    (@param "Second expression")
+    (@param "Message to return on assert failure")))
+  (@return "Unit atom if both expressions after evaluation are equal, input message - otherwise"))
+(: assertEqualMsg (-> Atom Atom Atom (->)))
+(= (assertEqualMsg $actual $expected $msg)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (chain (metta (collapse $expected) %Undefined% $space) $expected-results
+         (_assert-results-are-equal-msg $actual-results $expected-results (assertEqualMsg $actual $expected) $msg) ))))
+
 (@doc assertAlphaEqual
   (@desc "Compares (sets of) results of evaluation of two expressions using alpha equality")
   (@params (
@@ -1047,6 +1067,20 @@
        (chain (metta (collapse $expected) %Undefined% $space) $expected-results
          (_assert-results-are-alpha-equal $actual-results $expected-results (assertAlphaEqual $actual $expected)) ))))
 
+(@doc assertAlphaEqualMsg
+  (@desc "Compares (sets of) results of evaluation of two expressions using alpha equality")
+  (@params (
+    (@param "First expression")
+    (@param "Second expression")
+    (@param "Message to return on assert failure")))
+  (@return "Unit atom if both expressions after evaluation are alpha equal, input message - otherwise"))
+(: assertAlphaEqualMsg (-> Atom Atom Atom (->)))
+(= (assertAlphaEqualMsg $actual $expected $msg)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (chain (metta (collapse $expected) %Undefined% $space) $expected-results
+         (_assert-results-are-alpha-equal-msg $actual-results $expected-results (assertAlphaEqualMsg $actual $expected) $msg) ))))
+
 (@doc assertEqualToResult
   (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
   (@params (
@@ -1059,6 +1093,19 @@
      (chain (metta (collapse $actual) %Undefined% $space) $actual-results
        (_assert-results-are-equal $actual-results $expected-results (assertEqualToResult $actual $expected-results)) )))
 
+(@doc assertEqualToResultMsg
+  (@desc "Same as assertEqualMsg but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
+  (@params (
+    (@param "First expression (it will be evaluated)")
+    (@param "Second expression containing the expected evaluation results (it won't be evaluated)")
+    (@param "Message to return on assert failure")))
+  (@return "Unit atom if both expressions after evaluation of the first argument are equal, input message - otherwise"))
+(: assertEqualToResultMsg (-> Atom Atom Atom (->)))
+(= (assertEqualToResultMsg $actual $expected-results $msg)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (_assert-results-are-equal-msg $actual-results $expected-results (assertEqualToResultMsg $actual $expected-results) $msg) )))
+
 (@doc assertAlphaEqualToResult
   (@desc "Same as assertAlphaEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
   (@params (
@@ -1070,6 +1117,19 @@
    (chain (context-space) $space
      (chain (metta (collapse $actual) %Undefined% $space) $actual-results
        (_assert-results-are-alpha-equal $actual-results $expected-results (assertAlphaEqualToResult $actual $expected-results)) )))
+
+(@doc assertAlphaEqualToResultMsg
+  (@desc "Same as assertAlphaEqualMsg but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
+  (@params (
+    (@param "First expression (it will be evaluated)")
+    (@param "Second expression (it won't be evaluated)")
+    (@param "Message to return on assert failure")))
+  (@return "Unit atom if both expressions after evaluation of the first argument are alpha equal, input message - otherwise"))
+(: assertAlphaEqualToResultMsg (-> Atom Atom Atom (->)))
+(= (assertAlphaEqualToResultMsg $actual $expected-results $msg)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (_assert-results-are-alpha-equal-msg $actual-results $expected-results (assertAlphaEqualToResultMsg $actual $expected-results) $msg) )))
 
 (@doc superpose
   (@desc "Turns a tuple (first argument) into a nondeterministic result")
