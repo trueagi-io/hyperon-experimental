@@ -1,7 +1,7 @@
 use hyperon_atom::*;
 use hyperon_common::collections::ImmutableString;
 use hyperon_atom::serial;
-use hyperon_atom::serial::ConvertingSerializer;
+use hyperon_atom::ConvertingSerializer;
 use unescaper;
 
 /// String type
@@ -52,6 +52,12 @@ impl std::fmt::Display for Str {
     }
 }
 
+impl Into<String> for Str {
+    fn into(self) -> String {
+        self.as_str().into()
+    }
+}
+
 /// A utility function to return the part of a string in between starting and ending quotes
 pub fn strip_quotes(src: &str) -> &str {
     if let Some(first) = src.chars().next() {
@@ -80,7 +86,11 @@ impl serial::Serializer for StrSerializer {
     }
 }
 
-impl serial::ConvertingSerializer<Str> for StrSerializer {
+impl ConvertingSerializer<Str> for StrSerializer {
+    fn check_type(gnd: &dyn GroundedAtom) -> bool {
+        gnd.type_() == ATOM_TYPE_STRING
+    }
+
     fn into_type(self) -> Option<Str> {
         self.value
     }
@@ -89,9 +99,7 @@ impl serial::ConvertingSerializer<Str> for StrSerializer {
 pub fn atom_to_string(atom: &Atom) -> String {
     match atom {
         Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING =>
-            // TODO: get string from internal representation using
-            // serialization like we do for Number
-            unescape(&atom.to_string()).unwrap(),
+            Str::from_atom(atom).unwrap().as_str().into(),
         _ => atom.to_string(),
     }
 }
