@@ -27,6 +27,13 @@ hyperon-common = { workspace = true }
 hyperon-atom = { workspace = true }
 hyperon-space = { workspace = true }
 
+# das deps
+[dependencies.metta-bus-client]
+git = "https://github.com/singnet/das"
+tag = "0.10.2"
+package = "metta-bus-client"
+optional = true
+
 [dev-dependencies]
 ra_ap_profile = "0.0.261"
 
@@ -45,3 +52,4 @@ online-test = [] # includes tests which require internet access
 git = ["git2", "pkg_mgmt"]
 pkg_mgmt = ["xxhash-rust", "serde", "serde_json", "semver"]
 benchmark = []
+das = ["metta-bus-client"]
