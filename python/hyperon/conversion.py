@@ -22,3 +22,8 @@ class ConvertingSerializer(Serializer):
         """Accept float value"""
         self.value = v
         return SerialResult.OK
+
+    def serialize_str(self, v):
+        """Accept float value"""
+        self.value = v
+        return SerialResult.OK

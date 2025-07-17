@@ -154,26 +154,40 @@ class GroundedTypeTest(unittest.TestCase):
     def test_conversion_between_rust_and_python(self):
         metta = MeTTa(env_builder=Environment.test_env())
         metta.run('!(import! &self random)', flat=True)
+
         integer = metta.run('!(+ 1 (random-int &rng 4 5))', flat=True)[0].get_object()
         self.assertEqual(integer, ValueObject(5))
+
         float = metta.run('!(+ 1.0 (random-float &rng 4 5))', flat=True)[0].get_object()
         self.assertTrue(float.value >= 5.0 and float.value < 6)
+
         bool = metta.run('!(not (flip))', flat=True)[0].get_object()
         self.assertTrue(bool.value or not bool.value)
+
         false = metta.run('!(not True)', flat=True)[0].get_object()
         self.assertEqual(false, ValueObject(False))
 
+        false = metta.run('!(format-args "test {}" ("string"))', flat=True)[0].get_object()
+        self.assertEqual(false, ValueObject("test string"))
+
     def test_python_value_conversion(self):
         metta = MeTTa(env_builder=Environment.test_env())
+
         metta.register_atom("return-int", OperationAtom("return-int", lambda: 42))
         integer = metta.run('!(return-int)', flat=True)[0].get_object()
         self.assertEqual(integer, ValueObject(42))
+
         metta.register_atom("return-float", OperationAtom("return-float", lambda: 4.2))
         float = metta.run('!(return-float)', flat=True)[0].get_object()
         self.assertEqual(float, ValueObject(4.2))
+
         metta.register_atom("return-bool", OperationAtom("return-bool", lambda: True))
-        float = metta.run('!(return-bool)', flat=True)[0].get_object()
-        self.assertEqual(float, ValueObject(True))
+        bool = metta.run('!(return-bool)', flat=True)[0].get_object()
+        self.assertEqual(bool, ValueObject(True))
+
+        metta.register_atom("return-str", OperationAtom("return-str", lambda: "some string"))
+        str = metta.run('!(return-str)', flat=True)[0].get_object()
+        self.assertEqual(str, ValueObject("some string"))
 
     def test_grounded_override(self):
         metta = MeTTa(env_builder=Environment.test_env())
