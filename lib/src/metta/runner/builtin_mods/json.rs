@@ -5,7 +5,7 @@ use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, ModuleLoader, RunContext};
 use crate::metta::runner::modules::MettaMod;
-use crate::metta::runner::str::{atom_to_string, ATOM_TYPE_STRING};
+use crate::metta::runner::str::ATOM_TYPE_STRING;
 use crate::metta::runner::str::Str;
 use serde_json::Value;
 use hyperon_space::ATOM_TYPE_SPACE;
@@ -265,8 +265,8 @@ fn decode_array(arr: &Vec<Value>) -> Result<Atom, ExecError> {
 
 fn json_decode(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
     let arg_error = || ExecError::from("json-decode expects string to decode as input");
-    let input = atom_to_string(args.get(0).ok_or_else(arg_error)?);
-    match &serde_json::from_str(&input) {
+    let input = args.get(0).and_then(Str::from_atom).ok_or_else(arg_error)?;
+    match &serde_json::from_str(input.as_str()) {
         Ok(decoded) => Ok(vec![decode_value(decoded)?]),
         Err(e) => Err(ExecError::from(format!("Failed to decode string. Reason: {}", e))),
     }

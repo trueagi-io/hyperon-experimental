@@ -274,9 +274,9 @@ pub mod metta_interface_mod {
     use hyperon_atom::ExpressionAtom;
     use hyperon_atom::Atom;
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
+    use hyperon::metta::runner::str::Str;
     use hyperon_common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
-    use hyperon::metta::runner::str::atom_to_string;
 
     pub struct MettaShim {
         pub metta: Metta,
@@ -370,8 +370,9 @@ pub mod metta_interface_mod {
 
         pub fn get_config_string(&mut self, config_name: &str) -> Option<String> {
             let atom = self.get_config_atom(config_name)?;
-            //TODO: We need to do atom type checking here
-            Some(atom_to_string(&atom))
+            Some(Str::from_atom(&atom)
+                .expect(format!("String is expected as a value of {}", config_name).as_str())
+                .into())
         }
 
         pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
@@ -380,8 +381,9 @@ pub mod metta_interface_mod {
                 Some(expr.into_children()
                     .into_iter()
                     .map(|atom| {
-                        //TODO: We need to do atom type checking here
-                        atom_to_string(&atom)
+                        Str::from_atom(&atom)
+                            .expect(format!("String is expected as a value of {}", config_name).as_str())
+                            .into()
                     })
                     .collect())
             } else {
