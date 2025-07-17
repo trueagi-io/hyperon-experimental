@@ -118,10 +118,10 @@ fn assert_results_are_equal<'a, E: Equality<&'a Atom>>(args: &'a [Atom], cmp: E)
         None => unit_result(),
         Some(diff) => {
             let msg = match args.get(3) {
-                None => format!("{}\n{}", report, diff),
-                Some(m) => atom_to_string(m),
+                None => Atom::gnd(Str::from_string(format!("{}\n{}", report, diff))),
+                Some(m) => m.clone(),
             };
-            Ok(vec![Atom::expr([ERROR_SYMBOL, assert.clone(), Atom::gnd(Str::from_string(msg))])])
+            Ok(vec![Atom::expr([ERROR_SYMBOL, assert.clone(), msg])])
         },
     }
 }

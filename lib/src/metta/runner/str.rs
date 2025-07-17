@@ -89,9 +89,7 @@ impl serial::ConvertingSerializer<Str> for StrSerializer {
 pub fn atom_to_string(atom: &Atom) -> String {
     match atom {
         Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING =>
-            // TODO: get string from internal representation using
-            // serialization like we do for Number
-            unescape(&atom.to_string()).unwrap(),
+            Str::from_atom(atom).unwrap().as_str().into(),
         _ => atom.to_string(),
     }
 }

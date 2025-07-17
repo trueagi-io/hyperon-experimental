@@ -50,7 +50,7 @@ impl Grounded for FormatArgsOp {
 impl CustomExecute for FormatArgsOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("format-args expects format string as a first argument and expression as a second argument");
-        let format = atom_to_string(args.get(0).ok_or_else(arg_error)?);
+        let format = args.get(0).and_then(Str::from_atom).ok_or_else(arg_error)?;
         let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
         let args: Vec<String> = args.children().iter()
             .map(|atom| atom_to_string(atom))
