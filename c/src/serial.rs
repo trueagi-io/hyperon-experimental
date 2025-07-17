@@ -1,6 +1,7 @@
 use hyperon_atom::serial;
 
 use std::os::raw::*;
+use crate::util::*;
 
 type serial_serialize_func_t<T> = extern "C" fn(context: *mut c_void, value: T) -> serial_result_t;
 
@@ -30,6 +31,12 @@ pub struct serializer_api_t {
     /// @return  A `serial_result_t` indicating whether the `serialize` operation was successful
     ///
     serialize_double: Option<extern "C" fn(context: *mut c_void, v: c_double) -> serial_result_t>,
+    /// @brief Serialize C `char[]` value
+    /// @param[in]  context A caller-defined object to pass to functions in the `api`, to receive the encoded value(s)
+    /// @param[in]  v A value to serialize
+    /// @return  A `serial_result_t` indicating whether the `serialize` operation was successful
+    ///
+    serialize_str: Option<extern "C" fn(context: *mut c_void, v: *const c_char) -> serial_result_t>,
 }
 
 /// @struct c_to_rust_serializer_t
@@ -89,6 +96,7 @@ pub(crate) const C_TO_RUST_SERIALIZER_API: serializer_api_t = serializer_api_t {
     serialize_bool: Some(serialize_bool_rust_adapter),
     serialize_longlong: Some(serialize_longlong_rust_adapter),
     serialize_double: Some(serialize_double_rust_adapter),
+    serialize_str: Some(serialize_str_rust_adapter),
 };
 
 #[no_mangle]
@@ -109,6 +117,11 @@ extern "C" fn serialize_double_rust_adapter(context: *mut c_void, v: c_double) -
     target.serialize_f64(v).into()
 }
 
+#[no_mangle]
+extern "C" fn serialize_str_rust_adapter(context: *mut c_void, v: *const c_char) -> serial_result_t {
+    let target = unsafe{ &mut*(context as *mut c_to_rust_serializer_t)}.borrow_mut();
+    target.serialize_str(cstr_as_str(v)).into()
+}
 
 /// @struct RustToCSerializer
 /// @brief Adapt a serializer implemented in C to Rust API
@@ -129,6 +142,9 @@ impl serial::Serializer for RustToCSerializer {
     }
     fn serialize_f64(&mut self, v: f64) -> serial::Result {
         self.call_serialize(self.api().serialize_double, v)
+    }
+    fn serialize_str(&mut self, v: &str) -> serial::Result {
+        self.call_serialize(self.api().serialize_str, str_as_cstr(v).as_ptr())
     }
 }
 

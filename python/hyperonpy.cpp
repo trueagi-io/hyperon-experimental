@@ -253,6 +253,9 @@ struct Serializer {
     virtual serial_result_t serialize_float(py::float_ v) {
         return serial_result_t::NOT_SUPPORTED;
     }
+    virtual serial_result_t serialize_str(py::str v) {
+        return serial_result_t::NOT_SUPPORTED;
+    }
 };
 
 struct PySerializer : public Serializer {
@@ -269,6 +272,10 @@ struct PySerializer : public Serializer {
     serial_result_t serialize_float(py::float_ v) override {
         PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_float, v);
     }
+
+    serial_result_t serialize_str(py::str v) override {
+        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_str, v);
+    }
 };
 
 struct PythonToCSerializer : public Serializer {
@@ -283,6 +290,10 @@ struct PythonToCSerializer : public Serializer {
     }
     serial_result_t serialize_float(py::float_ v) override {
         return this->api->serialize_double(this->context, v);
+    }
+    serial_result_t serialize_str(py::str v) override {
+        std::string s = v;
+        return this->api->serialize_str(this->context, s.c_str());
     }
 
     struct serializer_api_t const* api;
@@ -315,6 +326,9 @@ struct CToPythonSerializer {
     static serial_result_t serialize_double(void* serializer, double v) {
         return to_this(serializer)->serializer.serialize_float(v);
     }
+    static serial_result_t serialize_str(void* serializer, char const* v) {
+        return to_this(serializer)->serializer.serialize_str(v);
+    }
 
     Serializer& serializer;
 };
@@ -322,7 +336,8 @@ struct CToPythonSerializer {
 const serializer_api_t PY_C_TO_PYTHON_SERIALIZER = {
     &CToPythonSerializer::serialize_bool,
     &CToPythonSerializer::serialize_longlong,
-    &CToPythonSerializer::serialize_double
+    &CToPythonSerializer::serialize_double,
+    &CToPythonSerializer::serialize_str
 };
 
 bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {
@@ -1022,7 +1037,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(GROUNDED_SPACE, "Space")
         ADD_TYPE(UNIT, "Unit")
         ADD_TYPE(NUMBER, "Number")
-        ADD_TYPE(BOOL, "Bool");
+        ADD_TYPE(BOOL, "Bool")
+        ADD_TYPE(STRING, "String");
     m.def("check_type", [](CSpace space, CAtom& atom, CAtom& type) {
             return check_type(space.ptr(), atom.ptr(), type.ptr());
         }, "Check if atom is an instance of the passed type");
@@ -1156,11 +1172,13 @@ PYBIND11_MODULE(hyperonpy, m) {
         .def(py::init<>(), "Constructor")
         .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
         .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
-        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
+        .def("serialize_float", &Serializer::serialize_float, "Serialize float value")
+        .def("serialize_str", &Serializer::serialize_str, "Serialize string value");
     py::class_<PythonToCSerializer>(m, "PythonToCSerializer", "Python serializer which is backed by C serializer")
         .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
         .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
-        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
+        .def("serialize_float", &Serializer::serialize_float, "Serialize float value")
+        .def("serialize_str", &Serializer::serialize_str, "Serialize string value");
     m.def("atom_gnd_serialize", [](CAtom atom, Serializer& _serializer) -> serial_result_t {
                 CToPythonSerializer serializer(_serializer);
                 return atom_gnd_serialize(atom.ptr(), &PY_C_TO_PYTHON_SERIALIZER, &serializer);
