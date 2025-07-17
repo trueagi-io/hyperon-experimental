@@ -177,7 +177,7 @@ def _priv_gnd_get_object(atom):
     if typ == AtomType.GROUNDED_SPACE:
         from .base import SpaceRef
         return SpaceRef._from_cspace(hp.atom_get_space(atom.catom))
-    elif typ == S('Bool') or typ == S('Number'):
+    elif typ == S('Bool') or typ == S('Number') or typ == S('String'):
         converter = ConvertingSerializer()
         try:
             res = hp.atom_gnd_serialize(atom.catom, converter)
@@ -331,6 +331,8 @@ class ValueObject(GroundedObject):
             return serializer.serialize_int(self.content)
         elif isinstance(self.content, float):
             return serializer.serialize_float(self.content)
+        elif isinstance(self.content, str):
+            return serializer.serialize_str(self.content)
         else:
             return SerialResult.NOT_SUPPORTED
 
