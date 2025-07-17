@@ -1,6 +1,6 @@
 use hyperon_atom::*;
 use hyperon_atom::serial;
-use hyperon_atom::serial::ConvertingSerializer;
+use hyperon_atom::ConvertingSerializer;
 
 use std::fmt::Display;
 
@@ -148,7 +148,7 @@ impl serial::Serializer for NumberSerializer {
     }
 }
 
-impl serial::ConvertingSerializer<Number> for NumberSerializer {
+impl ConvertingSerializer<Number> for NumberSerializer {
     fn into_type(self) -> Option<Number> {
         self.value
     }

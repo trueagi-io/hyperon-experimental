@@ -1,7 +1,7 @@
 use hyperon_atom::*;
 use hyperon_common::collections::ImmutableString;
 use hyperon_atom::serial;
-use hyperon_atom::serial::ConvertingSerializer;
+use hyperon_atom::ConvertingSerializer;
 use unescaper;
 
 /// String type
@@ -80,7 +80,7 @@ impl serial::Serializer for StrSerializer {
     }
 }
 
-impl serial::ConvertingSerializer<Str> for StrSerializer {
+impl ConvertingSerializer<Str> for StrSerializer {
     fn into_type(self) -> Option<Str> {
         self.value
     }

@@ -785,6 +785,39 @@ impl Clone for Box<dyn GroundedAtom> {
     }
 }
 
+/// Converts serializable grounded atom into native Rust type `T`.
+/// Returning error from this serializer is not expected as usually it should
+/// just write data into a memory buffer for conversion. [Default] is required
+/// to instantiate it in [ConvertingSerializer::convert] method.
+pub trait ConvertingSerializer<T>: serial::Serializer + Default {
+    fn into_type(self) -> Option<T>;
+
+    /// Converts atom into Rust value using `Self::default()` instance.
+    /// First it checks whether the grounded atom is already an instance of `T`
+    /// and clones value if it the case. Otherwise it uses `Self` to convert
+    /// into `T` via serialization.
+    fn convert(atom: &Atom) -> Option<T>
+        where T: 'static + Clone
+    {
+        std::convert::TryInto::<&dyn GroundedAtom>::try_into(atom)
+            .ok()
+            .and_then(|gnd| {
+                gnd.as_any_ref()
+                    // TODO: it is not clear whether this step really improves performance.
+                    // On the other hand it requires `T` to be static and implement `Clone`.
+                    // It is better to do a performance test and check if first step should be
+                    // removed.
+                    .downcast_ref::<T>()
+                    .cloned()
+                    .or_else(|| {
+                        let mut serializer = Self::default();
+                        gnd.serialize(&mut serializer).ok()
+                            .and_then(|()| serializer.into_type())
+                    })
+            })
+    }
+}
+
 // Atom enum
 
 /// Atoms are main components of the atomspace. There are four meta-types of
@@ -1104,6 +1137,7 @@ mod test {
     #![allow(non_snake_case)]
 
     use super::*;
+    use crate::serial;
     use std::collections::HashMap;
 
     // Expected atom constructors to make test checks
@@ -1312,4 +1346,46 @@ mod test {
             Err("Atom is not an ExpressionAtom"));
     }
 
+    #[derive(Default)]
+    struct I64Serializer {
+        value: Option<i64>,
+    }
+
+    impl serial::Serializer for I64Serializer {
+        fn serialize_i64(&mut self, v: i64) -> serial::Result {
+            self.value = Some(v);
+            Ok(())
+        }
+    }
+
+    impl ConvertingSerializer<i64> for I64Serializer {
+        fn into_type(self) -> Option<i64> {
+            self.value
+        }
+    }
+
+    #[derive(PartialEq, Debug, Clone)]
+    struct I64Gnd(i64);
+
+    impl Display for I64Gnd {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl Grounded for I64Gnd {
+        fn type_(&self) -> Atom {
+            rust_type_atom::<Self>()
+        }
+
+        fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+            serializer.serialize_i64(self.0)
+        }
+    }
+
+    #[test]
+    fn test_converting_serializer() {
+        assert_eq!(I64Serializer::convert(&Atom::gnd(I64Gnd(42))), Some(42));
+        assert_eq!(I64Serializer::convert(&Atom::value("42")), None);
+    }
 }

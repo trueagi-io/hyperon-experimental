@@ -1,6 +1,6 @@
 use hyperon_atom::*;
 use hyperon_atom::serial;
-use hyperon_atom::serial::ConvertingSerializer;
+use hyperon_atom::ConvertingSerializer;
 
 use std::fmt::Display;
 
@@ -70,7 +70,7 @@ impl serial::Serializer for BoolSerializer {
     }
 }
 
-impl serial::ConvertingSerializer<Bool> for BoolSerializer {
+impl ConvertingSerializer<Bool> for BoolSerializer {
     fn into_type(self) -> Option<Bool> {
         self.value
     }
