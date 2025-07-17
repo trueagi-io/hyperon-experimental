@@ -71,6 +71,10 @@ impl serial::Serializer for BoolSerializer {
 }
 
 impl ConvertingSerializer<Bool> for BoolSerializer {
+    fn check_type(gnd: &dyn GroundedAtom) -> bool {
+        gnd.type_() == ATOM_TYPE_BOOL
+    }
+
     fn into_type(self) -> Option<Bool> {
         self.value
     }

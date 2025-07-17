@@ -81,6 +81,10 @@ impl serial::Serializer for StrSerializer {
 }
 
 impl ConvertingSerializer<Str> for StrSerializer {
+    fn check_type(gnd: &dyn GroundedAtom) -> bool {
+        gnd.type_() == ATOM_TYPE_STRING
+    }
+
     fn into_type(self) -> Option<Str> {
         self.value
     }

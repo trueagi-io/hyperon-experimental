@@ -149,6 +149,10 @@ impl serial::Serializer for NumberSerializer {
 }
 
 impl ConvertingSerializer<Number> for NumberSerializer {
+    fn check_type(gnd: &dyn GroundedAtom) -> bool {
+        gnd.type_() == ATOM_TYPE_NUMBER
+    }
+
     fn into_type(self) -> Option<Number> {
         self.value
     }

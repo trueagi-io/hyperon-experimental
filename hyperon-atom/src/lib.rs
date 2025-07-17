@@ -790,6 +790,7 @@ impl Clone for Box<dyn GroundedAtom> {
 /// just write data into a memory buffer for conversion. [Default] is required
 /// to instantiate it in [ConvertingSerializer::convert] method.
 pub trait ConvertingSerializer<T>: serial::Serializer + Default {
+    fn check_type(gnd: &dyn GroundedAtom) -> bool;
     fn into_type(self) -> Option<T>;
 
     /// Converts atom into Rust value using `Self::default()` instance.
@@ -810,9 +811,13 @@ pub trait ConvertingSerializer<T>: serial::Serializer + Default {
                     .downcast_ref::<T>()
                     .cloned()
                     .or_else(|| {
-                        let mut serializer = Self::default();
-                        gnd.serialize(&mut serializer).ok()
-                            .and_then(|()| serializer.into_type())
+                        if Self::check_type(gnd) {
+                            let mut serializer = Self::default();
+                            gnd.serialize(&mut serializer).ok()
+                                .and_then(|()| serializer.into_type())
+                        } else {
+                            None
+                        }
                     })
             })
     }
@@ -1359,6 +1364,10 @@ mod test {
     }
 
     impl ConvertingSerializer<i64> for I64Serializer {
+        fn check_type(gnd: &dyn GroundedAtom) -> bool {
+            gnd.type_() == rust_type_atom::<I64Gnd>()
+        }
+
         fn into_type(self) -> Option<i64> {
             self.value
         }
@@ -1383,9 +1392,29 @@ mod test {
         }
     }
 
+    #[derive(PartialEq, Debug, Clone)]
+    struct F64Gnd(f64);
+
+    impl Display for F64Gnd {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl Grounded for F64Gnd {
+        fn type_(&self) -> Atom {
+            rust_type_atom::<Self>()
+        }
+
+        fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+            serializer.serialize_f64(self.0)
+        }
+    }
+
     #[test]
     fn test_converting_serializer() {
         assert_eq!(I64Serializer::convert(&Atom::gnd(I64Gnd(42))), Some(42));
         assert_eq!(I64Serializer::convert(&Atom::value("42")), None);
+        assert_eq!(I64Serializer::convert(&Atom::gnd(F64Gnd(42.0))), None);
     }
 }
