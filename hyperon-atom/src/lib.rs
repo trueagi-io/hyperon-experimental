@@ -94,7 +94,7 @@ macro_rules! expr {
 #[macro_export]
 macro_rules! constexpr {
     () => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(&[]))) };
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::collections::ImmutableString::Literal($x))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::immutable_string::ImmutableString::Literal($x))) };
     (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
     ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
 }
@@ -115,7 +115,7 @@ macro_rules! constexpr {
 /// ```
 #[macro_export]
 macro_rules! sym {
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::collections::ImmutableString::Literal($x))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::immutable_string::ImmutableString::Literal($x))) };
 }
 
 pub mod matcher;
@@ -130,7 +130,8 @@ use std::any::Any;
 use std::fmt::{Display, Debug};
 use std::convert::TryFrom;
 
-use hyperon_common::collections::{ImmutableString, CowArray};
+use hyperon_common::immutable_string::ImmutableString;
+use hyperon_common::collections::CowArray;
 
 // Symbol atom
 
