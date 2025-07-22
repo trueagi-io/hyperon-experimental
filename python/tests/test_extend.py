@@ -1,6 +1,7 @@
 import unittest
 
 from hyperon import *
+from hyperon.ext import grounded
 from test_common import change_dir_to_parent_of
 
 class ExtendTest(unittest.TestCase):
@@ -24,6 +25,21 @@ class ExtendTest(unittest.TestCase):
              [ValueAtom('B')]])
         self.assertEqual(
               metta.run('! &runner')[0][0].get_object().value, metta)
+        self.assertEqual(
+            metta.run('!(triple 4)'),
+            [[ValueAtom(12)]])
+
+    def test_grounded_noext(self):
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+
+        @grounded(metta)
+        def abs_dif(x, y):
+            return abs(x - y)
+
+        self.assertEqual(
+            metta.run('!(abs_dif 4 7)'),
+            [[ValueAtom(3)]])
+
 
 class ExtendTestDirMod(unittest.TestCase):
 

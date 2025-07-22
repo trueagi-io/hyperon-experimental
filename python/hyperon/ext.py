@@ -1,5 +1,6 @@
 from enum import Enum
 from functools import wraps
+from .atoms import OperationAtom
 
 class RegisterType(Enum):
     ATOM = 1
@@ -78,3 +79,26 @@ def register_tokens(*args, **kwargs):
         Default is False.
     """
     return mark_register_function(RegisterType.TOKEN, args, kwargs)
+
+def _register_grounded(metta, func):
+    name = func.__name__
+    func_atom = OperationAtom(name, func, unwrap=True)
+    if metta is not None:
+        metta.register_atom(name, func_atom)
+    else:
+        return mark_register_function(RegisterType.ATOM, [lambda: {name: func_atom}], [])
+
+def grounded(arg):
+    """Function decorator which registers a purely Python grounded function
+    using its name as a token and unwrap=True.
+    There are two ways of using this decorator:
+      - @grounded without arguments and parentheses in extensions
+      - @grounded(metta), where metta is a MeTTa instance, within Python scripts
+    Note that MeTTa object is passed to the decorator - not to the grounded function,
+    and @grounded creates an atom out of the function itself (which differs from
+    register_atoms, which decorates a function returning mappings from tokens to atoms)
+    """
+    if callable(arg):
+        return _register_grounded(None, arg)
+    else:
+        return lambda func: _register_grounded(arg, func)
