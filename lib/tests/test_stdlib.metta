@@ -95,20 +95,20 @@
 
 ; Test foldl (issue 857) after adding sealed
 
-(= (remove $list $elem)
+(= (remove-857 $list $elem)
    (if-decons-expr $list $head $tail
-      (unify $elem $head ($head $tail) (let ($res $ntail) (remove $tail $elem) ($res (cons-atom $head $ntail))))
+      (unify $elem $head ($head $tail) (let ($res $ntail) (remove-857 $tail $elem) ($res (cons-atom $head $ntail))))
       (() $list)
 ))
 
-(= (overlap $list1 $list2)
+(= (overlap-857 $list1 $list2)
    (foldl-atom $list1 (() () $list2) $accum $elem
     (let ($left $intersection $right) $accum
-     (let ($res $nright) (remove $right $elem)
+     (let ($res $nright) (remove-857 $right $elem)
       (if (== $res ())
        ((cons-atom $elem $left) $intersection $right)
        ($left (cons-atom $res $intersection) $nright))))))
 
-!(assertEqual (overlap (a b c) (b c d)) ((a) (c b) (d)))
+!(assertEqual (overlap-857 (a b c) (b c d)) ((a) (c b) (d)))
 
 !(assertEqual (let $f_hyps ((⟨wff⟩ ⟨P⟩) (⟨wff⟩ ⟨Q⟩)) (map-atom $f_hyps $f_hyp (let ($typecode $mvar) $f_hyp $mvar))) (⟨P⟩ ⟨Q⟩))
