@@ -13,10 +13,7 @@ use crate::space::grounding::GroundingSpace;
 
 /// This module expose DAS directly in metta-repl:
 /// 
-/// In order to use it we must compile metta-repl using the "das" feature:
-/// cargo build --release --features=das
-/// 
-/// Then run the MeTTa REPL binary:
+/// Run the MeTTa REPL binary:
 /// ./target/release/metta-repl
 /// Visit https://metta-lang.dev/ for tutorials.
 /// Execute !(help!) to get list of the standard library functions.
