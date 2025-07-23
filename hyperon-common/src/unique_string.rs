@@ -142,3 +142,42 @@ impl Drop for UniqueString {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::hint::black_box;
+
+    #[test]
+    fn unique_string_drop() {
+        {
+            let a = UniqueString::from("test string");
+            let b = UniqueString::from("test string");
+            let count = UNIQUE_STRINGS.lock().unwrap().strings.len();
+            assert_eq!(count, 1);
+            black_box(a);
+            black_box(b);
+        }
+        let count = UNIQUE_STRINGS.lock().unwrap().strings.len();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn unique_string_equal() {
+        let store_a = UniqueString::from("test string");
+        let store_b = UniqueString::from("test string");
+        let const_c = UniqueString::Const("test string");
+        let const_d = UniqueString::Const("test string");
+        assert_eq!(store_a, store_b);
+        assert_eq!(store_a, const_c);
+        assert_eq!(const_c, store_a);
+        assert_eq!(const_c, const_d);
+    }
+
+    #[test]
+    fn unique_string_from() {
+        let store_a = UniqueString::from("test string");
+        assert!(matches!(store_a, UniqueString::Store(_)));
+        let store_b = UniqueString::from(String::from("test string"));
+        assert!(matches!(store_b, UniqueString::Store(_)));
+    }
+}
