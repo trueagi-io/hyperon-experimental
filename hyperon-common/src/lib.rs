@@ -11,6 +11,7 @@ pub mod vecondemand;
 mod flex_ref;
 pub use flex_ref::FlexRef;
 pub mod immutable_string;
+pub mod unique_string;
 
 use std::collections::HashMap;
 

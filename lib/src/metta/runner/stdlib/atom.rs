@@ -4,7 +4,6 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use hyperon_common::multitrie::{MultiTrie, TrieKey, TrieToken};
-use hyperon_common::immutable_string::ImmutableString;
 use super::{grounded_op, regex};
 use crate::metta::runner::number::*;
 
@@ -99,7 +98,7 @@ fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
                 // them.
                 let mut h = DefaultHasher::new();
                 match (*g).serialize(&mut h) {
-                    Ok(()) => { tokens.push(TrieToken::Exact(SymbolAtom::new(ImmutableString::Allocated(h.finish().to_string())))) }
+                    Ok(()) => { tokens.push(TrieToken::Exact(SymbolAtom::new(h.finish().to_string().into()))) }
                     Err(_) => { tokens.push(TrieToken::Wildcard) }
                 }
             }

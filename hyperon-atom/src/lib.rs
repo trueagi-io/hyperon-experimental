@@ -94,7 +94,7 @@ macro_rules! expr {
 #[macro_export]
 macro_rules! constexpr {
     () => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(&[]))) };
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::immutable_string::ImmutableString::Literal($x))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::unique_string::UniqueString::Const($x))) };
     (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
     ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
 }
@@ -115,7 +115,7 @@ macro_rules! constexpr {
 /// ```
 #[macro_export]
 macro_rules! sym {
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::immutable_string::ImmutableString::Literal($x))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::unique_string::UniqueString::Const($x))) };
 }
 
 pub mod matcher;
@@ -130,7 +130,7 @@ use std::any::Any;
 use std::fmt::{Display, Debug};
 use std::convert::TryFrom;
 
-use hyperon_common::immutable_string::ImmutableString;
+use hyperon_common::unique_string::UniqueString;
 use hyperon_common::collections::CowArray;
 
 // Symbol atom
@@ -138,18 +138,18 @@ use hyperon_common::collections::CowArray;
 /// A symbol atom structure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SymbolAtom {
-    name: ImmutableString,
+    name: UniqueString,
 }
 
 impl SymbolAtom {
     /// Constructs new symbol from `name`. Not intended to be used directly,
     /// use [sym!] or [Atom::sym] instead.
-    pub const fn new(name: ImmutableString) -> Self {
+    pub const fn new(name: UniqueString) -> Self {
         Self{ name }
     }
 
     /// Returns the name of the symbol.
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> String {
         self.name.as_str()
     }
 }
@@ -869,10 +869,8 @@ impl Atom {
     /// assert_eq!(a, aa);
     /// assert_ne!(a, b);
     /// ```
-    // TODO: can be rewritten using Into<ImmutableString> to convert &str
-    // literasl into ImmutableString::Literal.
-    pub fn sym<T: Into<String>>(name: T) -> Self {
-        Self::Symbol(SymbolAtom::new(ImmutableString::Allocated(name.into())))
+    pub fn sym<T: Into<UniqueString>>(name: T) -> Self {
+        Self::Symbol(SymbolAtom::new(name.into()))
     }
 
     /// Constructs expression out of array of children.
@@ -1150,7 +1148,7 @@ mod test {
 
     #[inline]
     fn symbol(name: &'static str) -> Atom {
-        Atom::Symbol(SymbolAtom::new(ImmutableString::Literal(name)))
+        Atom::Symbol(SymbolAtom::new(UniqueString::Const(name)))
     }
 
     #[inline]
@@ -1264,8 +1262,8 @@ mod test {
 
     #[test]
     fn test_display_atom() {
-        assert_eq!(format!("{}", Atom::Symbol(SymbolAtom::new(ImmutableString::Literal("test")))), "test");
-        assert_eq!(format!("{}", Atom::Symbol(SymbolAtom::new(ImmutableString::Allocated("test".into())))), "test");
+        assert_eq!(format!("{}", Atom::Symbol(SymbolAtom::new(UniqueString::Const("test")))), "test");
+        assert_eq!(format!("{}", Atom::Symbol(SymbolAtom::new("test".into()))), "test");
         assert_eq!(format!("{}", Atom::var("x")), "$x");
         assert_eq!(format!("{}", Atom::value(42)), "42");
         assert_eq!(format!("{}", Atom::value([1, 2, 3])), "[1, 2, 3]");

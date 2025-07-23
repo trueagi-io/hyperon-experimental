@@ -258,7 +258,7 @@ impl CustomExecute for BindOp {
         let token = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "bind! expects symbol atom as a token")?.name();
         let atom = args.get(1).ok_or_else(arg_error)?.clone();
 
-        let token_regex = Regex::new(token).map_err(|err| format!("Could convert token {} into regex: {}", token, err))?;
+        let token_regex = Regex::new(&token).map_err(|err| format!("Could convert token {} into regex: {}", token, err))?;
         self.tokenizer.borrow_mut().register_token(token_regex, move |_| { atom.clone() });
         unit_result()
     }

@@ -653,7 +653,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
         for result_vec in self.i_wrapper.results {
             for result in result_vec {
                 if atom_is_error(&result) {
-                    return Err(atom_error_message(&result).to_owned())
+                    return Err(atom_error_message(&result))
                 }
             }
         }
