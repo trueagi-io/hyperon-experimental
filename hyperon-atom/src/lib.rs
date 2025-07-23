@@ -1148,7 +1148,7 @@ mod test {
 
     #[inline]
     fn symbol(name: &'static str) -> Atom {
-        Atom::Symbol(SymbolAtom::new(UniqueString::Const(name)))
+        Atom::Symbol(SymbolAtom::new(UniqueString::from(name)))
     }
 
     #[inline]

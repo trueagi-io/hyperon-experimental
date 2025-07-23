@@ -505,7 +505,7 @@ pub extern "C" fn atom_is_error(atom: *const atom_ref_t) -> bool {
 #[no_mangle]
 pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, buf_len: usize) -> usize {
     let atom = unsafe{ &*atom }.borrow();
-    write_into_buf(&hyperon::metta::atom_error_message(atom), buf, buf_len)
+    write_into_buf(hyperon::metta::atom_error_message(atom), buf, buf_len)
 }
 
 /// @brief Creates a Symbol atom for the special MeTTa symbol: "%Undefined%"

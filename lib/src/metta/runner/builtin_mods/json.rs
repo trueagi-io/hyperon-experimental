@@ -175,7 +175,7 @@ fn encode_atom<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONError> 
             writer.write(b"null").map(|_| ()).map_err(|e| e.into())
         },
         Atom::Symbol(sym) => {
-            let sym_name = "sym!:".to_string() + &sym.name();
+            let sym_name = "sym!:".to_string() + sym.name();
             serde_json::to_writer(writer, &sym_name)
                 .map_err(|err| JSONError::Runtime(format!("Encode symbol failed: {}", err)))
         },

@@ -10,7 +10,6 @@ hyperon-common = { workspace = true }
 log = { workspace = true }
 smallvec = "1.10.0"
 bimap = "0.6.3"
-lazy_static = "1.5.0"
 
 [dev-dependencies]
 hyperon = { workspace = true }

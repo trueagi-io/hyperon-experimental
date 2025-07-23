@@ -73,7 +73,7 @@ pub fn atom_is_error(atom: &Atom) -> bool {
 /// Returns a message string from an error expression
 ///
 /// NOTE: this function will panic if the supported atom is not a valid error expression
-pub fn atom_error_message(atom: &Atom) -> String {
+pub fn atom_error_message(atom: &Atom) -> &str {
     const PANIC_STR: &str = "Atom is not error expression";
     match atom {
         Atom::Expression(expr) => {
@@ -83,7 +83,7 @@ pub fn atom_error_message(atom: &Atom) -> String {
                 _ => panic!("{}", PANIC_STR)
             };
             let sym_atom = <&SymbolAtom>::try_from(sym_atom).expect(PANIC_STR);
-            sym_atom.name().into()
+            sym_atom.name()
         },
         _ => panic!("{}", PANIC_STR)
     }
