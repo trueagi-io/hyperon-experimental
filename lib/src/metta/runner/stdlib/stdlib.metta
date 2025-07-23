@@ -262,6 +262,22 @@
 (= (atom-subst $atom $var $templ)
   (function (chain (eval (noeval $atom)) $var (return $templ))) )
 
+(@doc if-decons-expr
+  (@desc "Checks if first argument is non empty expression. If so gets tail and head from the first argument and returns forth argument using head and tail values. Returns fifth argument otherwise.")
+  (@params (
+    (@param "Expression to be deconstructed")
+    (@param "Head variable")
+    (@param "Tail variable")
+    (@param "Template to return if first argument is a non-empty expression")
+    (@param "Default value to return otherwise")))
+  (@return "Either template with head and tail replaced by values or default value"))
+(: if-decons-expr (-> Expression Variable Variable Atom Atom %Undefined%))
+(= (if-decons-expr $atom $head $tail $then $else)
+  (function (eval (if-equal $atom ()
+    (return $else)
+    (chain (decons-atom $atom) $list
+      (unify $list ($head $tail) (return $then) (return $else)) )))))
+
 (@doc if-error
   (@desc "Checks if first argument is an error atom. Returns second argument if so or third argument otherwise.")
   (@params (
@@ -416,12 +432,13 @@
 (= (filter-atom $list $var $filter)
   (function (chain (decons-atom $list) $ht
     (unify ($head $tail) $ht
-      (chain (eval (filter-atom $tail $var $filter)) $tail-filtered
-        (chain (eval (atom-subst $head $var $filter)) $filter-expr
-          (chain $filter-expr $is-filtered
-            (eval (if $is-filtered
-              (chain (cons-atom $head $tail-filtered) $res (return $res))
-              (return $tail-filtered) )))))
+        (chain (eval (sealed ($var) $filter)) $sealedfilter
+          (chain (eval (filter-atom $tail $var $sealedfilter)) $tail-filtered
+            (chain (eval (atom-subst $head $var $sealedfilter)) $filter-expr
+              (chain $filter-expr $is-filtered
+                (eval (if $is-filtered
+                  (chain (cons-atom $head $tail-filtered) $res (return $res))
+                  (return $tail-filtered) ))))))
       (return ()) ))))
 
 (@doc map-atom
@@ -435,10 +452,11 @@
 (= (map-atom $list $var $map)
   (function (chain (decons-atom $list) $ht
     (unify ($head $tail) $ht
-      (chain (eval (map-atom $tail $var $map)) $tail-mapped
-        (chain (eval (atom-subst $head $var $map)) $map-expr
-          (chain $map-expr $head-mapped
-            (chain (cons-atom $head-mapped $tail-mapped) $res (return $res)) )))
+      (chain (eval (sealed ($var) $map)) $sealedmap
+        (chain (eval (map-atom $tail $var $sealedmap)) $tail-mapped
+          (chain (eval (atom-subst $head $var $sealedmap)) $map-expr
+            (chain $map-expr $head-mapped
+              (chain (cons-atom $head-mapped $tail-mapped) $res (return $res)) ))))
       (return ()) ))))
 
 (@doc foldl-atom
@@ -454,12 +472,13 @@
 (= (foldl-atom $list $init $a $b $op)
   (function (chain (decons-atom $list) $ht
     (unify ($head $tail) $ht
-      (chain (eval (atom-subst $init $a $op)) $op-init
-        (chain (eval (atom-subst $head $b $op-init)) $op-head
-          (chain (context-space) $space
-            (chain (metta $op-head %Undefined% $space) $head-folded
-              (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) ))))
-        (return $init) ))))
+      (chain (eval (sealed ($a $b) $op)) $op_sealed
+        (chain (eval (atom-subst $init $a $op_sealed)) $op-init
+          (chain (eval (atom-subst $head $b $op-init)) $op-head
+            (chain (context-space) $space
+              (chain (metta $op-head %Undefined% $space) $head-folded
+                (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))))
+      (return $init) ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Standard library written in MeTTa ;
@@ -673,7 +692,7 @@
         (let $diff (subtraction-atom $content $eval_atom)
             (if (== $diff ())
                 ()
-                (Error (assertIncludes $atom $content) 
+                (Error (assertIncludes $atom $content)
                   (assertIncludes error: $diff not included in result: $eval_atom))))))
 
 (: assert (-> Atom (->)))
@@ -1222,9 +1241,9 @@ Possible pragmas:
   (@return "Expression with replaced {} with atoms"))
 
 (@doc sealed
-  (@desc "Replaces all occurrences of any var from var list (first argument) inside atom (second argument) by unique variable. Can be used to create a locally scoped variables")
+  (@desc "Replaces all occurrences of any var inside atom (second argument) by unique variable, except list of variables to ignore (first argument). Can be used to create a locally scoped variables")
   (@params (
-    (@param "Variable list e.g. ($x $y)")
+    (@param "Variable list to ignore e.g. ($x $y)")
     (@param "Atom which uses those variables")))
   (@return "Second argument but with variables being replaced with unique variables"))
 

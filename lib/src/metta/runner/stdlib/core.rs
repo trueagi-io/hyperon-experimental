@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use hyperon_atom::*;
 use hyperon_space::*;
 use crate::metta::*;
@@ -10,7 +11,6 @@ use hyperon_atom::gnd::GroundedFunctionAtom;
 use hyperon_atom::matcher::{Bindings, apply_bindings_to_atom_move};
 
 use std::convert::TryInto;
-
 use super::{interpret_no_error, grounded_op, unit_result, regex, interpret};
 
 #[derive(Clone, Debug)]
@@ -90,24 +90,23 @@ impl Grounded for SealedOp {
 
 impl CustomExecute for SealedOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("sealed expects two arguments: var_list and expression");
+        let arg_error = || ExecError::from("sealed expects two arguments: var_list to be ignored and expression");
 
         let mut term_to_seal = args.get(1).ok_or_else(arg_error)?.clone();
         let var_list = args.get(0).ok_or_else(arg_error)?.clone();
 
+        let to_ignore: HashSet<&VariableAtom> = var_list.iter().filter_type::<&VariableAtom>().collect();
         let mut local_var_mapper = CachingMapper::new(|var: &VariableAtom| var.clone().make_unique());
 
-        var_list.iter().filter_type::<&VariableAtom>()
-            .for_each(|var| { let _ = local_var_mapper.replace(var); });
-
         term_to_seal.iter_mut().filter_type::<&mut VariableAtom>()
-            .for_each(|var| match local_var_mapper.mapping().get(var) {
-                Some(v) => *var = v.clone(),
-                None => {},
+            .for_each(|var: &mut VariableAtom| {
+                if !to_ignore.contains(var) {
+                    *var = local_var_mapper.replace(var);
+                }
             });
 
         let result = vec![term_to_seal.clone()];
-        log::debug!("sealed::execute: var_list: {}, term_to_seal: {}, result: {:?}", var_list, term_to_seal, result);
+        log::debug!("sealed::execute: ignore_list: {}, term_to_seal: {}, result: {:?}", var_list, term_to_seal, result);
 
         Ok(result)
     }
@@ -244,7 +243,7 @@ impl CustomExecute for SuperposeOp {
 #[derive(Clone, Debug)]
 pub struct CaptureOp {
     space: DynSpace,
-    settings: PragmaSettings, 
+    settings: PragmaSettings,
 }
 
 grounded_op!(CaptureOp, "capture");
@@ -358,10 +357,10 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let eq_op = Atom::gnd(EqualOp{});
     tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
     tref.register_function(GroundedFunctionAtom::new(
-            r"_collapse-add-next-atom-from-collapse-bind-result".into(),
-            expr!("->" "Expression" "Expression" "Atom"),
-            collapse_add_next_atom_from_collapse_bind_result, 
-            ));
+        r"_collapse-add-next-atom-from-collapse-bind-result".into(),
+        expr!("->" "Expression" "Expression" "Atom"),
+        collapse_add_next_atom_from_collapse_bind_result,
+    ));
 }
 
 pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
@@ -487,7 +486,7 @@ mod tests {
     fn use_sealed_to_make_scoped_variable() {
         assert_eq!(run_program("!(let $x (input $x) (output $x))"), Ok(vec![vec![]]));
         assert_eq!(run_program("!(let $x (input $y) (output $x))"), Ok(vec![vec![expr!("output" ("input" y))]]));
-        assert_eq!(run_program("!(let (quote ($sv $st)) (sealed ($x) (quote ($x (output $x))))
+        assert_eq!(run_program("!(let (quote ($sv $st)) (sealed () (quote ($x (output $x))))
                (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
     }
 
@@ -520,8 +519,8 @@ mod tests {
 
     #[test]
     fn sealed_op_runner() {
-        let nested = run_program("!(sealed ($a $b $x) (quote (= ($a $x $c) ($b))))");
-        let simple_replace = run_program("!(sealed ($x $y) (quote (= ($y $z))))");
+        let nested = run_program("!(sealed ($c) (quote (= ($a $x $c) ($b))))");
+        let simple_replace = run_program("!(sealed ($z $x) (quote (= ($y $z))))");
 
         assert!(hyperon_atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("quote" ("=" (a b c) (z)))));
         assert!(hyperon_atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("quote" ("=" (y z)))));
@@ -552,7 +551,7 @@ mod tests {
 
     #[test]
     fn sealed_op_execute() {
-        let val = SealedOp{}.execute(&mut vec![expr!(x y), expr!("="(y z))]);
-        assert!(hyperon_atom::matcher::atoms_are_equivalent(&val.unwrap()[0], &expr!("="(y z))));
+        let val = SealedOp{}.execute(&mut vec![expr!(x z), expr!("="(y z))]);
+        assert!(atoms_are_equivalent(&val.unwrap()[0], &expr!("="(y z))));
     }
 }

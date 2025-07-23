@@ -25,3 +25,7 @@ def my_get_runner(metta):
     return {
         '&runner': lambda _: ValueAtom(metta)
     }
+
+@grounded
+def triple(x):
+    return x * 3
