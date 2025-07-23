@@ -222,7 +222,7 @@ fn next_variable_id() -> usize {
 /// A variable atom structure
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableAtom {
-    name: String,
+    name: UniqueString,
     id: usize,
 }
 
@@ -233,20 +233,20 @@ impl VariableAtom {
     /// to create new variable atom instance. But sometimes [VariableAtom]
     /// instance is required. For example for using as a key in variable bindings
     /// (see [matcher::Bindings]).
-    pub fn new<T: Into<String>>(name: T) -> Self {
+    pub fn new<T: Into<UniqueString>>(name: T) -> Self {
         Self{ name: Self::check_name(name), id: 0 }
     }
 
     /// Constructs new variable using `name` and 'id' provided. This method is
     /// used to construct proper variable for testing purposes only.
-    pub fn new_id<T: Into<String>>(name: T, id: usize) -> Self {
+    pub fn new_id<T: Into<UniqueString>>(name: T, id: usize) -> Self {
         Self{ name: Self::check_name(name), id }
     }
 
     #[inline]
-    fn check_name<T: Into<String>>(name: T) -> String {
+    fn check_name<T: Into<UniqueString>>(name: T) -> UniqueString {
         let name = name.into();
-        assert!(name.find('#').is_none(), "character # is reserved and cannot be used in a variable name");
+        assert!(name.as_str().find('#').is_none(), "character # is reserved and cannot be used in a variable name");
         name
     }
 
@@ -281,7 +281,7 @@ impl VariableAtom {
         if !parts.next().is_none() {
             return Err(format!("Variable name should have the following format: name[#id], actual name is {formatted}"));
         }
-        Ok(Self{ name, id })
+        Ok(Self{ name: name.into(), id })
     }
 
     // TODO: for now name() is used to expose keys of Bindings via C API as
@@ -909,7 +909,7 @@ impl Atom {
     /// assert_eq!(a, aa);
     /// assert_ne!(a, b);
     /// ```
-    pub fn var<T: Into<String>>(name: T) -> Self {
+    pub fn var<T: Into<UniqueString>>(name: T) -> Self {
         Self::Variable(VariableAtom::new(name))
     }
 
@@ -1158,7 +1158,7 @@ mod test {
 
     #[inline]
     fn variable(name: &'static str) -> Atom {
-        Atom::Variable(VariableAtom{ name: name.to_string(), id: 0 })
+        Atom::Variable(VariableAtom{ name: name.into(), id: 0 })
     }
 
     #[inline]
