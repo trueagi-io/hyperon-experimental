@@ -83,7 +83,7 @@ pub fn atom_error_message(atom: &Atom) -> String {
                 _ => panic!("{}", PANIC_STR)
             };
             let sym_atom = <&SymbolAtom>::try_from(sym_atom).expect(PANIC_STR);
-            sym_atom.name()
+            sym_atom.name().into()
         },
         _ => panic!("{}", PANIC_STR)
     }

@@ -149,7 +149,7 @@ impl SymbolAtom {
     }
 
     /// Returns the name of the symbol.
-    pub fn name(&self) -> String {
+    pub fn name(&self) -> &str {
         self.name.as_str()
     }
 }

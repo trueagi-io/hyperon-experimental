@@ -1,4 +1,7 @@
-use bimap::BiMap;
+use std::sync::Arc;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::hash::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Mutex, LazyLock};
 use crate::immutable_string::ImmutableString;
@@ -8,48 +11,80 @@ static UNIQUE_STRINGS: LazyLock<Mutex<UniqueStringStorage>> = LazyLock::new(|| {
 });
 
 struct UniqueStringStorage {
-    next_id: usize,
-    strings: BiMap<ImmutableString, usize>,
+    strings: HashMap<Arc<UniqueStringInternal>, ()>,
 }
 
 impl UniqueStringStorage {
     fn new() -> Self {
         Self {
-            next_id: 0,
-            strings: BiMap::new(),
+            strings: HashMap::new(),
         }
     }
 
-    fn insert(&mut self, key: ImmutableString) -> usize {
-        match self.strings.get_by_left(&key) {
-            Some(id) => *id,
-            None => {
-                let id = self.next_id;
-                self.next_id += 1;
-                self.strings.insert(key, id);
-                id
-            },
+    fn insert(&mut self, key: ImmutableString) -> Arc<UniqueStringInternal> {
+        let key = Arc::new(key.into());
+        match self.strings.entry(key) {
+            Entry::Occupied(o) => o.key().clone(),
+            Entry::Vacant(v) => {
+                let key = v.key().clone();
+                v.insert(());
+                key
+            }
         }
     }
 
-    fn get(&self, id: usize) -> &ImmutableString {
-        unsafe {
-            self.strings.get_by_right(&id).unwrap_unchecked()
+    fn remove(&mut self, key: &Arc<UniqueStringInternal>) {
+        self.strings.remove(key);
+    }
+}
+
+#[derive(Eq, Debug)]
+struct UniqueStringInternal {
+    string: ImmutableString,
+    hash: u64,
+}
+
+impl UniqueStringInternal {
+    pub fn as_str(&self) -> &str {
+        self.string.as_str()
+    }
+}
+
+impl PartialEq for UniqueStringInternal {
+    fn eq(&self, other: &Self) -> bool {
+        self.string == other.string
+    }
+}
+
+impl Hash for UniqueStringInternal {
+    fn hash<H>(&self, state: &mut H) where H: Hasher {
+        state.write_u64(self.hash)
+    }
+}
+
+impl From<ImmutableString> for UniqueStringInternal {
+    fn from(value: ImmutableString) -> Self {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        Self {
+            string: value,
+            hash: hasher.finish(),
         }
     }
 }
 
+#[allow(private_interfaces)]
 #[derive(Debug, Clone, Eq)]
 pub enum UniqueString {
     Const(&'static str),
-    Store(usize),
+    Store(Arc<UniqueStringInternal>),
 }
 
 impl UniqueString {
-    pub fn as_str(&self) -> String {
+    pub fn as_str(&self) -> &str {
         match self {
-            Self::Store(id) => UNIQUE_STRINGS.lock().unwrap().get(*id).as_str().into(),
-            Self::Const(s) => (*s).into(),
+            Self::Store(rc) => rc.as_str(),
+            Self::Const(s) => s,
         }
     }
 }
@@ -63,8 +98,8 @@ impl std::fmt::Display for UniqueString {
 impl PartialEq for UniqueString {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Store(a), Self::Store(b)) => a == b,
-            (Self::Const(a), Self::Const(b)) => a == b,
+            (Self::Store(a), Self::Store(b)) => Arc::as_ptr(a) == Arc::as_ptr(b),
+            (Self::Const(a), Self::Const(b)) => *a == *b,
             _ => self.as_str() == other.as_str(),
         }
     }
@@ -74,7 +109,7 @@ impl Hash for UniqueString {
     fn hash<H>(&self, state: &mut H) where H: Hasher {
         match self {
             Self::Const(s) => s.hash(state),
-            Self::Store(id) => id.hash(state),
+            Self::Store(rc) => state.write_u64(rc.hash),
         }
     }
 }
@@ -91,3 +126,19 @@ impl<I: Into<String>> From<I> for UniqueString {
         Self::Store(UNIQUE_STRINGS.lock().unwrap().insert(s.into()))
     }
 }
+
+impl Drop for UniqueString {
+    fn drop(&mut self) {
+        match self {
+            Self::Store(rc) => {
+                let lock = UNIQUE_STRINGS.lock();
+                // one instance is inside the storage and second one is inside self
+                if Arc::strong_count(rc) == 2 {
+                    lock.unwrap().remove(rc);
+                }
+            },
+            Self::Const(_) => {},
+        }
+    }
+}
+
