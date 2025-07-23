@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::hash::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Mutex, LazyLock};
 use crate::immutable_string::ImmutableString;
@@ -11,7 +10,7 @@ static UNIQUE_STRINGS: LazyLock<Mutex<UniqueStringStorage>> = LazyLock::new(|| {
 });
 
 struct UniqueStringStorage {
-    strings: HashMap<Arc<UniqueStringInternal>, ()>,
+    strings: HashMap<Arc<ImmutableString>, ()>,
 }
 
 impl UniqueStringStorage {
@@ -21,7 +20,7 @@ impl UniqueStringStorage {
         }
     }
 
-    fn insert(&mut self, key: ImmutableString) -> Arc<UniqueStringInternal> {
+    fn insert(&mut self, key: ImmutableString) -> Arc<ImmutableString> {
         let key = Arc::new(key.into());
         match self.strings.entry(key) {
             Entry::Occupied(o) => o.key().clone(),
@@ -33,43 +32,8 @@ impl UniqueStringStorage {
         }
     }
 
-    fn remove(&mut self, key: &Arc<UniqueStringInternal>) {
+    fn remove(&mut self, key: &Arc<ImmutableString>) {
         self.strings.remove(key);
-    }
-}
-
-#[derive(Eq, Debug)]
-struct UniqueStringInternal {
-    string: ImmutableString,
-    hash: u64,
-}
-
-impl UniqueStringInternal {
-    pub fn as_str(&self) -> &str {
-        self.string.as_str()
-    }
-}
-
-impl PartialEq for UniqueStringInternal {
-    fn eq(&self, other: &Self) -> bool {
-        self.string == other.string
-    }
-}
-
-impl Hash for UniqueStringInternal {
-    fn hash<H>(&self, state: &mut H) where H: Hasher {
-        state.write_u64(self.hash)
-    }
-}
-
-impl From<ImmutableString> for UniqueStringInternal {
-    fn from(value: ImmutableString) -> Self {
-        let mut hasher = DefaultHasher::new();
-        value.hash(&mut hasher);
-        Self {
-            string: value,
-            hash: hasher.finish(),
-        }
     }
 }
 
@@ -77,7 +41,7 @@ impl From<ImmutableString> for UniqueStringInternal {
 #[derive(Debug, Clone, Eq)]
 pub enum UniqueString {
     Const(&'static str),
-    Store(Arc<UniqueStringInternal>),
+    Store(Arc<ImmutableString>),
 }
 
 impl UniqueString {
@@ -109,7 +73,7 @@ impl Hash for UniqueString {
     fn hash<H>(&self, state: &mut H) where H: Hasher {
         match self {
             Self::Const(s) => s.hash(state),
-            Self::Store(rc) => state.write_u64(rc.hash),
+            Self::Store(rc) => state.write_usize(Arc::as_ptr(rc) as usize),
         }
     }
 }
