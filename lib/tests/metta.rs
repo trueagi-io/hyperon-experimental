@@ -1,4 +1,4 @@
-use hyperon_common::collections::ImmutableString;
+use hyperon_common::immutable_string::ImmutableString;
 use hyperon_atom::*;
 use hyperon_atom::gnd::*;
 use hyperon::metta::{UNIT_ATOM, ERROR_SYMBOL};
