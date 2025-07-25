@@ -6,7 +6,7 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
     apt-get install -y sudo git curl cmake build-essential \
-        pkg-config libssl-dev zlib1g-dev && \
+        pkg-config libssl-dev zlib1g-dev protobuf-compiler && \
     rm -rf /var/lib/apt/lists/*
 
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
