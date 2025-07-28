@@ -11,7 +11,7 @@ use hyperon_atom::gnd::GroundedFunctionAtom;
 use hyperon_atom::matcher::{Bindings, apply_bindings_to_atom_move};
 
 use std::convert::TryInto;
-use super::{interpret_no_error, grounded_op, unit_result, regex, interpret};
+use super::{grounded_op, unit_result, regex, interpret};
 
 #[derive(Clone, Debug)]
 pub struct PragmaOp {
@@ -196,22 +196,13 @@ impl CustomExecute for IfEqualOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct SuperposeOp {
-    space: DynSpace,
-    settings: PragmaSettings,
-}
+pub struct SuperposeOp { }
 
 grounded_op!(SuperposeOp, "superpose");
 
-impl SuperposeOp {
-    fn new(space: DynSpace, settings: PragmaSettings) -> Self {
-        Self{ space, settings }
-    }
-}
-
 impl Grounded for SuperposeOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -224,19 +215,7 @@ impl CustomExecute for SuperposeOp {
         let arg_error = || ExecError::from("superpose expects single expression as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
         let expr  = TryInto::<&ExpressionAtom>::try_into(atom).map_err(|_| arg_error())?;
-
-        if expr.children().is_empty() {
-            Ok(vec![EMPTY_SYMBOL])
-        } else {
-            let mut superposed = Vec::new();
-            for atom in expr.children() {
-                match interpret_no_error(self.space.clone(), atom, self.settings.clone()) {
-                    Ok(results) => { superposed.extend(results); },
-                    Err(message) => { return Err(format!("Error: {}", message).into()) },
-                }
-            }
-            Ok(superposed)
-        }
+        Ok(expr.clone().into_children())
     }
 }
 
@@ -361,11 +340,11 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
         expr!("->" "Expression" "Expression" "Atom"),
         collapse_add_next_atom_from_collapse_bind_result,
     ));
+    let superpose_op = Atom::gnd(SuperposeOp{});
+    tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
 }
 
 pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
-    let superpose_op = Atom::gnd(SuperposeOp::new(space.clone(), metta.settings().clone()));
-    tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let case_op = Atom::gnd(CaseOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let capture_op = Atom::gnd(CaptureOp::new(space.clone(), metta.settings().clone()));

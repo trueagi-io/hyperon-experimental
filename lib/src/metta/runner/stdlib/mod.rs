@@ -46,17 +46,6 @@ pub(crate) fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
 
-// TODO: remove hiding errors completely after making it possible passing
-// them to the user
-pub fn interpret_no_error(space: DynSpace, expr: &Atom, settings: PragmaSettings) -> Result<Vec<Atom>, String> {
-    let result = interpret(space, &expr, settings);
-    log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
-    match result {
-        Ok(result) => Ok(result),
-        Err(_) => Ok(vec![]),
-    }
-}
-
 pub fn interpret(space: DynSpace, expr: &Atom, settings: PragmaSettings) -> Result<Vec<Atom>, String> {
     let expr = Atom::expr([METTA_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]);
     let mut state = crate::metta::interpreter::interpret_init(space, &expr);
