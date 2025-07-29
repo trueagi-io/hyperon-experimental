@@ -7,13 +7,11 @@ option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 if (POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
 endif ()
-if (MSVC)
-    # MSVC doesn't support C++11 standard, so lowest possible is C++14
-    set(CMAKE_CXX_STANDARD 14)
-else ()
-    # cibuildwheel images support only C++11 for some of the platforms
-    set(CMAKE_CXX_STANDARD 11)
-endif ()
+
+# protobuf/6.30.1 requires C++17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 message(STATUS "CMAKE_CXX_STANDARD = ${CMAKE_CXX_STANDARD}")
 
 # The default value ("FIRST") prefers the installation with the highest
