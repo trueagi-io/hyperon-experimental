@@ -9,6 +9,7 @@ class HyperonpyRecipe(ConanFile):
     def requirements(self):
         self.requires("optional-lite/3.5.0")
         self.requires("pybind11/2.10.1")
+        self.requires("protobuf/6.30.1")
         if self.settings.os == "Windows":
             self.requires("openssl/3.4.1")
 
