@@ -14,7 +14,16 @@ class HyperonpyRecipe(ConanFile):
             self.requires("openssl/3.4.1")
 
     def configure(self):
-       self.settings.compiler.cppstd = "17"
+        # Force C++17 standard for protobuf compatibility
+        # This overrides any profile settings
+        if self.settings.compiler == "gcc":
+            self.settings.compiler.cppstd = "gnu17"
+        elif self.settings.compiler == "clang":
+            self.settings.compiler.cppstd = "gnu17"
+        elif self.settings.compiler == "apple-clang":
+            self.settings.compiler.cppstd = "17"
+        elif self.settings.compiler == "msvc":
+            self.settings.compiler.cppstd = "17"
 
     def layout(self):
         cmake_layout(self)
