@@ -1,18 +1,25 @@
 cmake_minimum_required(VERSION 3.19)
 project(hyperonpy)
 
+# Set C++ standard and explicitly disable extensions to avoid "gnu" prefix
+if (MSVC)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+else ()
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+endif ()
+message(STATUS "CMAKE_CXX_STANDARD = ${CMAKE_CXX_STANDARD}")
+message(STATUS "CMAKE_CXX_EXTENSIONS = ${CMAKE_CXX_EXTENSIONS}")
+
 option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
 # Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
 if (POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
 endif ()
-
-# protobuf/6.30.1 requires C++17
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-message(STATUS "CMAKE_CXX_STANDARD = ${CMAKE_CXX_STANDARD}")
 
 # The default value ("FIRST") prefers the installation with the highest
 # version. "ONLY" sticks to a virtualenv even when its version is smaller

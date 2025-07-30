@@ -13,9 +13,5 @@ class HyperonpyRecipe(ConanFile):
         if self.settings.os == "Windows":
             self.requires("openssl/3.4.1")
 
-    def configure(self):
-        # Ensure C++17 is used for protobuf compatibility
-        self.settings.compiler.cppstd = "17"
-
     def layout(self):
         cmake_layout(self)
