@@ -440,7 +440,7 @@ function(conan_profile_detect_default)
                     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     if(NOT ${return_code} EQUAL "0")
         message(STATUS "CMake-Conan: The default profile doesn't exist, detecting it.")
-        execute_process(COMMAND ${CONAN_COMMAND} profile detect
+        execute_process(COMMAND ${CONAN_COMMAND} profile detect --force
             RESULT_VARIABLE return_code
             OUTPUT_VARIABLE conan_stdout
             ERROR_VARIABLE conan_stderr
@@ -660,8 +660,8 @@ endmacro()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL conan_provide_dependency_check)
 
 # Configurable variables for Conan profiles
-set(CONAN_HOST_PROFILE "auto-cmake" CACHE STRING "Conan host profile")
-set(CONAN_BUILD_PROFILE "auto-cmake" CACHE STRING "Conan build profile")
+set(CONAN_HOST_PROFILE "${CMAKE_CURRENT_SOURCE_DIR}/conan_profile.txt" CACHE STRING "Conan host profile")
+set(CONAN_BUILD_PROFILE "${CMAKE_CURRENT_SOURCE_DIR}/conan_profile.txt" CACHE STRING "Conan build profile")
 set(CONAN_INSTALL_ARGS "--build=missing" CACHE STRING "Command line arguments for conan install")
 
 find_program(_cmake_program NAMES cmake NO_PACKAGE_ROOT_PATH NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH NO_CMAKE_FIND_ROOT_PATH)

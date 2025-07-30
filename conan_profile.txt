@@ -5,4 +5,7 @@ compiler=gcc
 compiler.cppstd=gnu17
 compiler.libcxx=libstdc++
 compiler.version=10
-os=Linux 
+os=Linux
+
+[conf]
+tools.cmake.cmaketoolchain:generator=Unix Makefiles 
