@@ -7,6 +7,10 @@ include(ExternalProject)
 
 option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
+# Override Conan profile settings to use only auto-cmake profile
+set(CONAN_HOST_PROFILE "auto-cmake" CACHE STRING "Conan host profile" FORCE)
+set(CONAN_BUILD_PROFILE "auto-cmake" CACHE STRING "Conan build profile" FORCE)
+
 set(HYPERONC_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-install")
 message(STATUS "HYPERONC_INSTALL_PREFIX = ${HYPERONC_INSTALL_PREFIX}")
 
