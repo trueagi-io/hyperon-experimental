@@ -7,15 +7,7 @@ class HyperonpyRecipe(ConanFile):
     generators = "CMakeDeps", "CMakeToolchain"
 
     def requirements(self):
-        self.requires("optional-lite/3.5.0")
-        self.requires("pybind11/2.10.1")
-        self.requires("protobuf/6.30.1")
-        if self.settings.os == "Windows":
-            self.requires("openssl/3.4.1")
-
-    def configure(self):
-        # Force C++17 standard for protobuf compatibility
-        # This overrides any profile settings
+        # Force C++17 standard before adding requirements
         if self.settings.compiler == "gcc":
             self.settings.compiler.cppstd = "gnu17"
         elif self.settings.compiler == "clang":
@@ -24,6 +16,12 @@ class HyperonpyRecipe(ConanFile):
             self.settings.compiler.cppstd = "17"
         elif self.settings.compiler == "msvc":
             self.settings.compiler.cppstd = "17"
+            
+        self.requires("optional-lite/3.5.0")
+        self.requires("pybind11/2.10.1")
+        self.requires("protobuf/6.30.1")
+        if self.settings.os == "Windows":
+            self.requires("openssl/3.4.1")
 
     def layout(self):
         cmake_layout(self)
