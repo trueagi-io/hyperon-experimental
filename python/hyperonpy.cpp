@@ -12,8 +12,10 @@
 
 namespace py = pybind11;
 
-// Remove the custom type caster for nonstd::optional - it conflicts with std::optional
-// The nonstd::optional will be handled by the existing pybind11 mechanisms
+namespace PYBIND11_NAMESPACE { namespace detail {
+    template <typename T>
+    struct type_caster<nonstd::optional<T>> : optional_caster<nonstd::optional<T>> {};
+}}
 
 template<class T, size_t N>
 constexpr size_t lenghtof(T (&)[N]) { return N; }

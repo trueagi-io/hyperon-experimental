@@ -1,25 +1,20 @@
 cmake_minimum_required(VERSION 3.19)
 project(hyperonpy)
 
-# Set C++ standard and explicitly disable extensions to avoid "gnu" prefix
-if (MSVC)
-    set(CMAKE_CXX_STANDARD 17)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-else ()
-    set(CMAKE_CXX_STANDARD 17)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-endif ()
-message(STATUS "CMAKE_CXX_STANDARD = ${CMAKE_CXX_STANDARD}")
-message(STATUS "CMAKE_CXX_EXTENSIONS = ${CMAKE_CXX_EXTENSIONS}")
-
 option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
 # Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
 if (POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
 endif ()
+if (MSVC)
+    # MSVC doesn't support C++11 standard, so lowest possible is C++14
+    set(CMAKE_CXX_STANDARD 17)
+else ()
+    # cibuildwheel images support only C++11 for some of the platforms
+    set(CMAKE_CXX_STANDARD 11)
+endif ()
+message(STATUS "CMAKE_CXX_STANDARD = ${CMAKE_CXX_STANDARD}")
 
 # The default value ("FIRST") prefers the installation with the highest
 # version. "ONLY" sticks to a virtualenv even when its version is smaller
@@ -42,9 +37,6 @@ if(GIT)
     find_package(ZLIB REQUIRED)
 endif()
 
-# DAS dep
-find_package(protobuf REQUIRED)
-
 # Use the same location of the target library for each configuration of
 # multi-configuration build
 foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
@@ -53,7 +45,7 @@ foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
 endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
 
 pybind11_add_module(hyperonpy MODULE ./hyperonpy.cpp)
-target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" nonstd::optional-lite protobuf::libprotobuf)
+target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" nonstd::optional-lite)
 if(APPLE)
     target_link_libraries(hyperonpy PRIVATE "-framework CoreFoundation" "-framework Security")
 endif()
