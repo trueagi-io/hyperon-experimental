@@ -117,10 +117,6 @@ if(BUILD_SHARED_LIBS)
         target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
     endif(GIT)
 
-    # DAS dep
-    find_package(protobuf REQUIRED)
-    target_link_libraries(hyperonc-shared INTERFACE protobuf::libprotobuf)
-
     add_dependencies(hyperonc-shared copy-hyperonc-shared)
     if (WIN32)
         add_dependencies(hyperonc-shared copy-hyperonc-implib)

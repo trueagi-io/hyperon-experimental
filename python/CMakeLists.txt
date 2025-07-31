@@ -45,7 +45,7 @@ foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
 endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
 
 pybind11_add_module(hyperonpy MODULE ./hyperonpy.cpp)
-target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" nonstd::optional-lite protobuf::libprotobuf)
+target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" nonstd::optional-lite)
 if(APPLE)
     target_link_libraries(hyperonpy PRIVATE "-framework CoreFoundation" "-framework Security")
 endif()
