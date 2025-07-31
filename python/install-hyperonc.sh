@@ -35,6 +35,21 @@ python3 -m pip install cmake==3.24 conan==2.16.1 pip==23.1.2
 PATH="${PATH}:${HOME}/.local/bin"
 conan profile detect --force
 
+# Override the default profile to use C++17 for protobuf compatibility
+cat > ~/.conan2/profiles/default << EOF
+[settings]
+arch=x86_64
+build_type=Release
+compiler=gcc
+compiler.cppstd=gnu17
+compiler.libcxx=libstdc++
+compiler.version=10
+os=Linux
+
+[conf]
+tools.cmake.cmaketoolchain:generator=Unix Makefiles
+EOF
+
 mkdir -p ${HOME}/hyperonc
 cd ${HOME}/hyperonc
 git init

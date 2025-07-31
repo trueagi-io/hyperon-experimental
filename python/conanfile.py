@@ -7,6 +7,16 @@ class HyperonpyRecipe(ConanFile):
     generators = "CMakeDeps", "CMakeToolchain"
 
     def requirements(self):
+        # Force C++17 standard for protobuf compatibility
+        if self.settings.compiler == "gcc":
+            self.settings.compiler.cppstd = "gnu17"
+        elif self.settings.compiler == "clang":
+            self.settings.compiler.cppstd = "gnu17"
+        elif self.settings.compiler == "apple-clang":
+            self.settings.compiler.cppstd = "17"
+        elif self.settings.compiler == "msvc":
+            self.settings.compiler.cppstd = "17"
+            
         self.requires("optional-lite/3.5.0")
         self.requires("pybind11/2.10.1")
         self.requires("protobuf/6.30.1")

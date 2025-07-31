@@ -1,7 +1,7 @@
 [build-system]
 # setuptools >68.0.0 is incompatible with macos-13
 # urllib3 >=2.1.0 is incompatible with Conan 2.13
-requires = ["setuptools==68.0.0", "conan==2.16.1", "urllib3==2.0.7", "cmake==3.24", "setuptools_scm[toml]==8.2.0"]
+requires = ["setuptools==68.0.0", "conan==2.17.0", "urllib3==2.0.7", "cmake==3.24", "setuptools_scm[toml]==8.2.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -41,6 +41,6 @@ package-dir = { "hyperon" = "hyperon" }
 before-all = "sh -c ./python/install-hyperonc.sh"
 # There is no Rust toolchain is available for musllinux-i686 environment.
 # Other musllinux platforms are opted out to decrease the build time.
-skip = "*musllinux*"
+skip = "*musllinux*,*pypy*"
 test-requires = ["pytest==7.3.2"]
 test-command = "pytest {project}/python/tests"
