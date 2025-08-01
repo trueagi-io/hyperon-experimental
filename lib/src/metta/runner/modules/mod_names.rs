@@ -336,7 +336,7 @@ impl ModNameNode {
     }
 
     /// Internal generic `parse_parent` that can expand to mutable and const versions.
-    /// Return valus is (parent_node, subtree_idx, remaining_name_path)
+    /// Return value is (parent_node, subtree_idx, remaining_name_path)
     /// If subtree_idx is None, the path was parsed to the end.  If it is Some, then the overlay_map
     ///  indicated we need to follow a subtree.
     fn parse_parent_generic<'a, SelfT, GetF, PushParentF>(gen_self: SelfT, name: &'a str, overlay_map: &OverlayMap, get_f: GetF, mut push_f: PushParentF) -> Result<(SelfT, Option<usize>, &'a str), String>

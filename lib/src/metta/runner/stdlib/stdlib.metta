@@ -1201,10 +1201,10 @@ Possible pragmas:
   (@return "Unit atom"))
 
 (@doc import!
-  (@desc "Imports module using its relative path (second argument) and binds it to the token (first argument) which will represent imported atomspace. If first argument is &self then everything will be imported to current atomspace")
+  (@desc "Imports module using its relative path (second argument), which could contain ':' as a path separation (e.g. !(import &module relative:path:to:module)) and binds it to the token (first argument) which will represent imported atomspace. If first argument is &self then everything will be imported to current atomspace)")
   (@params (
     (@param "Symbol, which is turned into the token for accessing the imported module")
-    (@param "Module name")))
+    (@param "Module name/relative path to module")))
   (@return "Unit atom"))
 
 (@doc include
