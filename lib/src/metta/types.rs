@@ -108,12 +108,13 @@ fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expect
 ///
 /// assert!(is_func(&expr!("->" "A" "B")));
 /// assert!(!is_func(&expr!("A")));
+/// assert!(!is_func(&expr!(("->"))));
 /// ```
 #[inline]
 pub fn is_func(typ: &Atom) -> bool {
     match typ {
         Atom::Expression(expr) => {
-            expr.children().first() == Some(&ARROW_SYMBOL)
+            (expr.children().first() == Some(&ARROW_SYMBOL)) && (expr.children().len() > 1)
         },
         _ => false,
     }
