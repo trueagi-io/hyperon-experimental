@@ -296,6 +296,7 @@ fn is_embedded_op(atom: &Atom) -> bool {
             || *op == EVALC_SYMBOL
             || *op == CHAIN_SYMBOL
             || *op == UNIFY_SYMBOL
+            || *op == MATCH_SYMBOL
             || *op == CONS_ATOM_SYMBOL
             || *op == DECONS_ATOM_SYMBOL
             || *op == FUNCTION_SYMBOL
@@ -430,6 +431,9 @@ fn interpret_stack(context: &InterpreterContext, stack: Stack, mut bindings: Bin
             },
             Some([op, ..]) if *op == UNIFY_SYMBOL => {
                 unify(stack, bindings)
+            },
+            Some([op, ..]) if *op == MATCH_SYMBOL => {
+                match_op(stack, bindings)
             },
             Some([op, ..]) if *op == DECONS_ATOM_SYMBOL => {
                 decons_atom(stack, bindings)
@@ -784,6 +788,40 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
 
 fn atom_bindings_into_atom(atom: Atom, bindings: Bindings) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
+}
+
+fn match_op(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: match_op, .. } = stack;
+    let (space, pattern, out) = match_atom!{
+        match_op ~ [_op, atom, pattern, out] => (atom, pattern, out),
+        _ => {
+            let error: String = format!("expected: ({} <space> <pattern> <template>), found: {}", MATCH_SYMBOL, match_op);
+            return finished_result(error_msg(match_op, error), bindings, prev);
+        }
+    };
+
+    let matches: Vec<Bindings> = match_atoms(&space, &pattern).collect();
+    let result = |bindings| {
+        let out = apply_bindings_to_atom_move(out.clone(), &bindings);
+        let stack = Stack::finished(prev.clone(), out);
+        InterpretedAtom(stack, bindings)
+    };
+    let bindings_ref = &bindings;
+    let matches: Vec<InterpretedAtom> = matches.into_iter().flat_map(move |b| {
+        b.merge(bindings_ref).into_iter().filter_map(move |b| {
+            if b.has_loops() {
+                None
+            } else {
+                Some(result(b))
+            }
+        })
+    })
+        .collect();
+    if matches.is_empty() {
+        finished_result(EMPTY_SYMBOL.into(), bindings, prev)
+    } else {
+        matches
+    }
 }
 
 fn unify_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {

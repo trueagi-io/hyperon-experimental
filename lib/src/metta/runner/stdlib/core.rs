@@ -137,32 +137,32 @@ impl CustomExecute for EqualOp {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct MatchOp {}
-
-grounded_op!(MatchOp, "match");
-
-impl Grounded for MatchOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SPACE, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for MatchOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("match expects three arguments: space, pattern and template");
-        let space = args.get(0).ok_or_else(arg_error)?;
-        let pattern = args.get(1).ok_or_else(arg_error)?;
-        let template = args.get(2).ok_or_else(arg_error)?;
-        log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
-        let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
-        Ok(space.borrow().subst(&pattern, &template))
-    }
-}
+// #[derive(Clone, Debug)]
+// pub struct MatchOp {}
+//
+// grounded_op!(MatchOp, "match");
+//
+// impl Grounded for MatchOp {
+//     fn type_(&self) -> Atom {
+//         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SPACE, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
+//     }
+//
+//     fn as_execute(&self) -> Option<&dyn CustomExecute> {
+//         Some(self)
+//     }
+// }
+//
+// impl CustomExecute for MatchOp {
+//     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+//         let arg_error = || ExecError::from("match expects three arguments: space, pattern and template");
+//         let space = args.get(0).ok_or_else(arg_error)?;
+//         let pattern = args.get(1).ok_or_else(arg_error)?;
+//         let template = args.get(2).ok_or_else(arg_error)?;
+//         log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
+//         let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
+//         Ok(space.borrow().subst(&pattern, &template))
+//     }
+// }
 
 #[derive(Clone, Debug)]
 pub struct IfEqualOp { }
@@ -329,8 +329,8 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
     let nop_op = Atom::gnd(NopOp{});
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
-    let match_op = Atom::gnd(MatchOp{});
-    tref.register_token(regex(r"match"), move |_| { match_op.clone() });
+    // let match_op = Atom::gnd(MatchOp{});
+    // tref.register_token(regex(r"match"), move |_| { match_op.clone() });
     let sealed_op = Atom::gnd(SealedOp{});
     tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
     let eq_op = Atom::gnd(EqualOp{});
@@ -505,23 +505,23 @@ mod tests {
         assert!(hyperon_atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("quote" ("=" (y z)))));
     }
 
-    #[test]
-    fn match_op() {
-        let space = metta_space("(A B)");
-        let match_op = MatchOp{};
-        assert_eq!(match_op.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
-                   Ok(vec![expr!("B" "A")]));
-    }
+    // #[test]
+    // fn match_op() {
+    //     let space = metta_space("(A B)");
+    //     let match_op = MatchOp{};
+    //     assert_eq!(match_op.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
+    //                Ok(vec![expr!("B" "A")]));
+    // }
 
-    #[test]
-    fn match_op_issue_530() {
-        let space = metta_space("(A $a $a)");
-        let match_op = MatchOp{};
-        let result = match_op.execute(&mut vec![expr!({space}), expr!("A" x y), expr!("A" x y)]).unwrap();
-        assert_eq!(result.len(), 1);
-        assert!(atoms_are_equivalent(&result[0], &expr!("A" x x)),
-                "atoms are not equivalent: expected: {}, actual: {}", expr!("A" x x), result[0]);
-    }
+    // #[test]
+    // fn match_op_issue_530() {
+    //     let space = metta_space("(A $a $a)");
+    //     let match_op = MatchOp{};
+    //     let result = match_op.execute(&mut vec![expr!({space}), expr!("A" x y), expr!("A" x y)]).unwrap();
+    //     assert_eq!(result.len(), 1);
+    //     assert!(atoms_are_equivalent(&result[0], &expr!("A" x x)),
+    //             "atoms are not equivalent: expected: {}, actual: {}", expr!("A" x x), result[0]);
+    // }
 
     #[test]
     fn nop_op() {

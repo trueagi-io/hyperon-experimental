@@ -33,6 +33,7 @@ pub const EVAL_SYMBOL : Atom = sym!("eval");
 pub const EVALC_SYMBOL : Atom = sym!("evalc");
 pub const CHAIN_SYMBOL : Atom = sym!("chain");
 pub const UNIFY_SYMBOL : Atom = sym!("unify");
+pub const MATCH_SYMBOL : Atom = sym!("match");
 pub const DECONS_ATOM_SYMBOL : Atom = sym!("decons-atom");
 pub const CONS_ATOM_SYMBOL : Atom = sym!("cons-atom");
 pub const FUNCTION_SYMBOL : Atom = sym!("function");
