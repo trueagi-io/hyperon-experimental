@@ -453,7 +453,7 @@ mod tests {
         let simple_replace = run_program("!(sealed ($z $x) (quote (= ($y $z))))");
 
         assert!(atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("quote" ("=" (a b c) (z)))));
-        assert!(    atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("quote" ("=" (y z)))));
+        assert!(atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("quote" ("=" (y z)))));
     }
 
     #[test]
