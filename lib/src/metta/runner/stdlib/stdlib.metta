@@ -339,6 +339,7 @@
     (@param "Atom (it will be evaluated)")
     (@param "Deconsed tuple of pairs mapping condition patterns to results")))
   (@return "Result of evaluating of Atom bound to met condition"))
+(: switch-internal (-> Atom Expression %Undefined%))
 (= (switch-internal $atom (($pattern $template) $tail))
   (function (unify $atom $pattern
     (return $template)
@@ -1186,7 +1187,6 @@
     (@param "Atom (it will be evaluated)")
     (@param "Tuple of pairs mapping condition patterns to results")))
   (@return "Result of evaluating of Atom bound to met condition"))
-
 (: case (-> Atom Expression %Undefined%))
 (= (case $atom $cases)
    (let $c (collapse $atom)

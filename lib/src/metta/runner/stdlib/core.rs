@@ -350,10 +350,10 @@ mod tests {
     fn metta_case_error() {
         let program = "
             (= (err) (Error (err) \"Test error\"))
-            !(assertEqual (case (err) (
-              ((Error $a \"Test error\") ok)
+            !(case (err) (
+              ((Error $a \"Test error\") ())
               ($_ (Error $_ \"Error is expected\"))
-              )) ok)
+              ))
         ";
         assert_eq!(run_program(program), Ok(vec![vec![UNIT_ATOM]]));
     }
