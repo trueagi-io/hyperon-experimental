@@ -1046,7 +1046,7 @@ impl BindingsSet {
 /// Iterator over atom matching results. Each result is an instance of [Bindings].
 //TODO: A situation where a MatchResultIter returns an unbounded (infinite) number of results
 // will hang this implementation, on account of `.collect()`
-pub type MatchResultIter = Box<dyn Iterator<Item=Bindings>>;
+pub type MatchResultIter = BoxedIter<'static, Bindings>;
 
 /// Matches two atoms and returns an iterator over results. Atoms are
 /// treated symmetrically.

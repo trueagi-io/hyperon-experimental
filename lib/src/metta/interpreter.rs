@@ -508,10 +508,21 @@ fn eval_impl(to_eval: Atom, space: &DynSpace, bindings: Bindings, prev: Option<R
             match op.as_grounded().as_execute() {
                 None => query(space, prev, to_eval, bindings, vars),
                 Some(executable) => {
-                    let exec_res = executable.execute(args);
-                    log::debug!("eval: execution results: {:?}", exec_res);
+                    let exec_res = executable.execute_bindings(args);
                     match exec_res {
                         Ok(results) => {
+                            let call_stack = call_to_stack(to_eval, vars, prev.clone());
+                            let results: Vec<InterpretedAtom> = results.into_iter()
+                                .flat_map(|(atom, b)| {
+                                    let c = move |b| (apply_bindings_to_atom_move(atom.clone(), &b), b);
+                                    match b {
+                                        None => BindingsSet::from(bindings.clone()).into_iter().map(c),
+                                        Some(b) => b.merge(&bindings).into_iter().map(c),
+                                    }
+                                })
+                                .map(|(res, b)| eval_result(prev.clone(), res, &call_stack, b))
+                                .collect();
+                            log::debug!("eval: execution results: {:?}", results);
                             if results.is_empty() {
                                 // There is no valid reason to return empty result from
                                 // the grounded function. If alternative should be removed
@@ -523,10 +534,7 @@ fn eval_impl(to_eval: Atom, space: &DynSpace, bindings: Bindings, prev: Option<R
                                 // interpreter empty result by any way we like.
                                 finished_result(EMPTY_SYMBOL, bindings, prev)
                             } else {
-                                let call_stack = call_to_stack(to_eval, vars, prev.clone());
-                                results.into_iter()
-                                    .map(|res| eval_result(prev.clone(), res, &call_stack, bindings.clone()))
-                                    .collect()
+                                results
                             }
                         },
                         Err(ExecError::Runtime(err)) =>
