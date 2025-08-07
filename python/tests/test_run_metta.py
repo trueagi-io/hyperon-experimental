@@ -20,7 +20,7 @@ class MeTTaTest(HyperonTestCase):
 
         metta = MeTTa(env_builder=Environment.test_env())
         self.assertEqualMettaRunnerResults(metta.run(program),
-            [metta.parse_all('red  green  blue'), metta.parse_all('5')])
+                                           [metta.parse_all('red  green  blue'), metta.parse_all('5')])
 
     def test_run_complex_query(self):
         program = '''
@@ -79,11 +79,7 @@ class MeTTaTest(HyperonTestCase):
 
     def test_scripts(self):
 
-        #LP-TODO-Next:  I'd like to remove the working directory for this runner, and instead try
-        # to import child modules relative to their parents using `self:` paths.  See comments around
-        # `relative_submodule_import_test`
-        # metta = MeTTa(env_builder=Environment.test_env())
-        metta = MeTTa(env_builder=Environment.custom_env(working_dir=f"{pwd}/scripts", disable_config=True, is_test=True))
+        metta = MeTTa(env_builder=Environment.test_env())
 
         metta.load_module_at_path(f"{pwd}/scripts/a1_symbols.metta")
         metta.load_module_at_path(f"{pwd}/scripts/a2_opencoggy.metta")
