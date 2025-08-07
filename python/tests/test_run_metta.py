@@ -20,7 +20,7 @@ class MeTTaTest(HyperonTestCase):
 
         metta = MeTTa(env_builder=Environment.test_env())
         self.assertEqualMettaRunnerResults(metta.run(program),
-                                           [metta.parse_all('red  green  blue'), metta.parse_all('5')])
+            [metta.parse_all('red  green  blue'), metta.parse_all('5')])
 
     def test_run_complex_query(self):
         program = '''
