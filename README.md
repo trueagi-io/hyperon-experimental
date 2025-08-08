@@ -26,6 +26,7 @@ The following command installs the latest release version from PyPi package repo
 ```
 python3 -m pip install hyperon
 ```
+If you encountered `externally-managed-environment` error then create and activate a Python virtual environment. One can use `venv`, `virtualenv` or `conda` virtual environment (please see Python's [Creating Virtual Environments](https://packaging.python.org/en/latest/tutorials/installing-packages/#creating-virtual-environments) or Anaconda's [Creating an environment from an environment.yml file](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file) instructions, [environment.yaml](./environment.yaml) for conda). One more option is using `--break-system-packages` Pip flag: `python3 -m pip install hyperon --break-system-packages`.
 
 Another way is using released Docker image:
 ```
@@ -41,7 +42,7 @@ metta-py
 Using Docker you can also run Rust REPL:
 ```
 metta-repl
-```
+``` 
 
 # Using latest development version
 
