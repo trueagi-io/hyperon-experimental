@@ -26,6 +26,7 @@ The following command installs the latest release version from PyPi package repo
 ```
 python3 -m pip install hyperon
 ```
+If you encountered externally-managed-environment error then create and activate a Python virtual environment. One can use venv, virtualenv or conda virtual environment (please see Python's [Creating Virtual Environments](https://packaging.python.org/en/latest/tutorials/installing-packages/#creating-virtual-environments) or Anaconda's [Creating an environment from an environment.yml file](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file) instructions, [environment.yaml](https://github.com/trueagi-io/hyperon-experimental/blob/main/environment.yaml) for conda). One more option is using --break-system-packages flag with Pip: python3 -m pip install hyperon --break-system-packages.
 
 Another way is using released Docker image:
 ```
@@ -41,13 +42,7 @@ metta-py
 Using Docker you can also run Rust REPL:
 ```
 metta-repl
-```
-
-On the latest Ubuntu releases `error: externally-managed-environment` can be encountered when installing hyperon using 
-pip install command. To bypass this problem anaconda could be installed following [these instructions](https://www.anaconda.com/docs/getting-started/anaconda/install).
-After that you can create metta-ready conda environment using environment.yaml file in the root directory of hyperon-experimental
-with command `conda env create --file environment.yaml`. If you still want to install hyperon into system-wide python, 
-please run `python3 -m pip install hyperon --break-system-packages` command at your own risk. 
+``` 
 
 # Using latest development version
 
