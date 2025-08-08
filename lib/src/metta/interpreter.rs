@@ -1013,13 +1013,21 @@ fn metta_impl(args: Atom, bindings: Bindings) -> MettaResult {
         } else if meta == ATOM_TYPE_GROUNDED {
             type_cast(space, atom, typ, bindings)
         } else {
-            let var = Atom::Variable(VariableAtom::new("x").make_unique());
-            let res = Atom::Variable(VariableAtom::new("res").make_unique());
-            once((Atom::expr([CHAIN_SYMBOL, Atom::expr([COLLAPSE_BIND_SYMBOL, call_native!(interpret_expression, Atom::expr([atom, typ, space]))]), var.clone(),
-                Atom::expr([CHAIN_SYMBOL, call_native!(check_alternatives, Atom::expr([var])), res.clone(),
-                    return_atom(res)
-                ])
-            ]), bindings))
+            let evaluated = match &atom {
+                Atom::Expression(e) => e.is_evaluated(),
+                _ => unreachable!(),
+            };
+            if !evaluated {
+                let var = Atom::Variable(VariableAtom::new("x").make_unique());
+                let res = Atom::Variable(VariableAtom::new("res").make_unique());
+                once((Atom::expr([CHAIN_SYMBOL, Atom::expr([COLLAPSE_BIND_SYMBOL, call_native!(interpret_expression, Atom::expr([atom.clone(), typ, space]))]), var.clone(),
+                    Atom::expr([CHAIN_SYMBOL, call_native!(check_alternatives, Atom::expr([atom, var])), res.clone(),
+                        return_atom(res)
+                    ])
+                ]), bindings))
+            } else {
+                once((return_atom(atom), bindings))
+            }
         }
     }
 }
@@ -1083,8 +1091,8 @@ fn match_types(type1: &Atom, type2: &Atom, bindings: Bindings) -> Result<MatchRe
 }
 
 fn check_alternatives(args: Atom, bindings: Bindings) -> MettaResult {
-    let expr = match_atom!{
-        args ~ [Atom::Expression(expr)] => expr,
+    let (original, expr) = match_atom!{
+        args ~ [original, Atom::Expression(expr)] => (original, expr),
         _ => {
             let error = format!("expected args: ((: expr Expression)), found: {}", args);
             return once((return_atom(error_msg(call_native!(check_alternatives, args), error)), bindings));
@@ -1094,7 +1102,15 @@ fn check_alternatives(args: Atom, bindings: Bindings) -> MettaResult {
         .map(atom_into_atom_bindings);
     let mut succ = results.clone()
         .filter(|(atom, _bindings)| !atom_is_error(&atom))
-        .map(|(atom, bindings)| (return_atom(atom), bindings))
+        .map(move |(mut atom, bindings)| {
+            if original == atom {
+                match &mut atom {
+                    Atom::Expression(e) => e.set_evaluated(),
+                    _ => {},
+                };
+            }
+            (return_atom(atom), bindings)
+        })
         .peekable();
     let err = results
         .filter(|(atom, _bindings)| atom_is_error(&atom))
