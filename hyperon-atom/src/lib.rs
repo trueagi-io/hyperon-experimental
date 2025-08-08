@@ -163,16 +163,17 @@ impl Display for SymbolAtom {
 // Expression atom
 
 /// An expression atom structure.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct ExpressionAtom {
     children: CowArray<Atom>,
+    evaluated: bool,
 }
 
 impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
     /// used directly, use [expr!], [constexpr!] or [Atom::expr] instead.
     pub const fn new(children: CowArray<Atom>) -> Self {
-        Self{ children }
+        Self{ children, evaluated: false }
     }
 
     /// Returns true if expression doesn't contain sub-expressions.
@@ -194,6 +195,14 @@ impl ExpressionAtom {
     pub fn into_children(self) -> Vec<Atom> {
         self.children.into()
     }
+
+    pub fn set_evaluated(&mut self) {
+        self.evaluated = true;
+    }
+
+    pub fn is_evaluated(&self) -> bool {
+        self.evaluated
+    }
 }
 
 impl Display for ExpressionAtom {
@@ -204,6 +213,12 @@ impl Display for ExpressionAtom {
             .and_then(|_| self.children.iter().skip(1).fold(Ok(()),
                 |res, atom| res.and_then(|_| write!(f, " {}", atom))))
             .and_then(|_| write!(f, ")"))
+    }
+}
+
+impl PartialEq for ExpressionAtom {
+    fn eq(&self, other: &Self) -> bool {
+        self.children == other.children
     }
 }
 
