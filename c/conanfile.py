@@ -8,6 +8,7 @@ class HyperoncRecipe(ConanFile):
 
     def requirements(self):
         self.requires("libcheck/0.15.2")
+        self.requires("protobuf/6.30.1")
         if self.settings.os == "Windows":
             self.requires("openssl/3.4.1")
 
