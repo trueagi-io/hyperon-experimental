@@ -43,6 +43,12 @@ Using Docker you can also run Rust REPL:
 metta-repl
 ```
 
+On the latest Ubuntu releases `error: externally-managed-environment` can be encountered when installing hyperon using 
+pip install command. To bypass this problem anaconda could be installed following [these instructions](https://www.anaconda.com/docs/getting-started/anaconda/install).
+After that you can create metta-ready conda environment using environment.yaml file in the root directory of hyperon-experimental
+with command `conda env create --file environment.yaml`. If you still want to install hyperon into system-wide python, 
+please run `python3 -m pip install hyperon --break-system-packages` command at your own risk. 
+
 # Using latest development version
 
 ## Docker
