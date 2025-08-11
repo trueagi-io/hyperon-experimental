@@ -1,0 +1,7 @@
+# run: conda env create --file environment.yaml
+name: hyperon
+dependencies: 
+- "python>=3.10, < 3.13"
+- pip>=23.1.2
+- pip:
+    - hyperon
