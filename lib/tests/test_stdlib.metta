@@ -112,3 +112,8 @@
 !(assertEqual (overlap-857 (a b c) (b c d)) ((a) (c b) (d)))
 
 !(assertEqual (let $f_hyps ((⟨wff⟩ ⟨P⟩) (⟨wff⟩ ⟨Q⟩)) (map-atom $f_hyps $f_hyp (let ($typecode $mvar) $f_hyp $mvar))) (⟨P⟩ ⟨Q⟩))
+
+; Test match function (see issue 911)
+(issue911 A B)
+(= (isa911 $x $y) (match &self (issue911 $x $y) True))
+!(assertEqual ((isa911 $a B) $a) (True A))

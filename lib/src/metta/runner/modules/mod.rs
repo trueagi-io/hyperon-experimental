@@ -656,7 +656,11 @@ pub enum ResourceKey<'a> {
 
 #[cfg(test)]
 mod test {
+    use hyperon_atom::gnd::GroundedFunctionAtom;
+    use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
     use super::*;
+    use std::sync::Mutex;
+    use std::sync::LazyLock;
 
     #[derive(Debug)]
     struct OuterLoader;
@@ -763,6 +767,65 @@ mod test {
         // and then that I can import it directly into "outer" from within the runner's context using the "self:inner2" mod path
 
     }
+
+    #[derive(Debug)]
+    struct Issue982Loader;
+
+    static ISSUE_982_CALLED: LazyLock<Mutex<i64>> = LazyLock::new(|| Mutex::new(0));
+
+    pub static ISSUE982_METTA: &'static str = "!(i982 5)";
+
+    fn i982(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let mut data = ISSUE_982_CALLED.lock().unwrap();
+        *data = args.get(0).and_then(Number::from_atom).unwrap().into();
+        Ok(vec![args.get(0).unwrap().clone()])
+    }
+
+    impl ModuleLoader for Issue982Loader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            // Initialize module's space
+            let space = GroundingSpace::new();
+            context.init_self_module(space.into(), None);
+
+            // Load module's tokens
+            let _ = self.load_tokens(context.module(), context.metta.clone())?;
+
+            // Parse MeTTa code of the module
+            let parser = SExprParser::new(ISSUE982_METTA);
+            context.push_parser(Box::new(parser));
+
+            Ok(())
+        }
+
+        fn load_tokens(&self, target: &MettaMod, _metta: Metta) -> Result<(), String> {
+            let mut tref = target.tokenizer().borrow_mut();
+
+            tref.register_function(GroundedFunctionAtom::new(
+                r"i982".into(),
+                Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER]),
+                i982));
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn issue982_test() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+
+        let _i982loader_mod_id = runner.load_module_direct(Box::new(Issue982Loader), "i982loader").unwrap();
+
+        let result = runner.run(SExprParser::new("!(import! &self i982loader)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+
+        assert_eq!(*ISSUE_982_CALLED.lock().unwrap(), 5);
+
+        let result = runner.run(SExprParser::new("!(assertEqual (i982 6) 6)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+
+        assert_eq!(*ISSUE_982_CALLED.lock().unwrap(), 6);
+    }
+
 
     //LP-TODO-NEXT,  Make a test for an inner-loader that throws an error, blocking the outer-loader from loading sucessfully,
     // and make sure neither module is loaded into the named index

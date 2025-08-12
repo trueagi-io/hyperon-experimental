@@ -153,14 +153,16 @@ impl Grounded for MatchOp {
 }
 
 impl CustomExecute for MatchOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    fn execute_bindings(&self, args: &[Atom]) -> Result<BoxedIter<'static, (Atom, Option<Bindings>)>, ExecError> {
         let arg_error = || ExecError::from("match expects three arguments: space, pattern and template");
         let space = args.get(0).ok_or_else(arg_error)?;
         let pattern = args.get(1).ok_or_else(arg_error)?;
-        let template = args.get(2).ok_or_else(arg_error)?;
+        let template = args.get(2).ok_or_else(arg_error)?.clone();
         log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
-        Ok(space.borrow().subst(&pattern, &template))
+        let results = space.borrow().query(&pattern);
+        let results = results.into_iter().map(move |b| (template.clone(), Some(b)));
+        Ok(Box::new(results))
     }
 }
 
@@ -509,18 +511,18 @@ mod tests {
     fn match_op() {
         let space = metta_space("(A B)");
         let match_op = MatchOp{};
-        assert_eq!(match_op.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
-                   Ok(vec![expr!("B" "A")]));
+        let actual = match_op.execute_bindings(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]);
+        assert!(actual.is_ok());
+        assert_eq!(actual.unwrap().collect::<Vec<(Atom, Option<Bindings>)>>(), vec![(expr!("B" "A"), Some(Bindings::new()))]);
     }
 
     #[test]
     fn match_op_issue_530() {
         let space = metta_space("(A $a $a)");
         let match_op = MatchOp{};
-        let result = match_op.execute(&mut vec![expr!({space}), expr!("A" x y), expr!("A" x y)]).unwrap();
-        assert_eq!(result.len(), 1);
-        assert!(atoms_are_equivalent(&result[0], &expr!("A" x x)),
-                "atoms are not equivalent: expected: {}, actual: {}", expr!("A" x x), result[0]);
+        let actual = match_op.execute_bindings(&mut vec![expr!({space}), expr!("A" x y), expr!("A" x y)]);
+        assert!(actual.is_ok());
+        assert_eq!(actual.unwrap().collect::<Vec<(Atom, Option<Bindings>)>>(), vec![(expr!("A" x y), Some(bind!{ x: expr!(y) }))]);
     }
 
     #[test]

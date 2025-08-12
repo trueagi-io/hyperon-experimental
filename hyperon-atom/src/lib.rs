@@ -495,6 +495,9 @@ pub trait Grounded : Display {
     }
 }
 
+/// Boxed iterator type to simplify type annotations
+pub type BoxedIter<'a, T> = Box<dyn Iterator<Item=T> + 'a>;
+
 /// Trait for implementing custom execution logic. Using this trait one can
 /// represent a grounded function as an atom. In order to make it work
 /// one should also implement [Grounded::as_execute] method.
@@ -539,8 +542,22 @@ pub trait Grounded : Display {
 ///
 pub trait CustomExecute {
     /// Executes grounded function on passed `args` and returns list of
-    /// results as `Vec<Atom>` or [ExecError].
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError>;
+    /// results as `Vec<Atom>` or [ExecError]. This is a restricted version of
+    /// the [CustomExecute::execute_bindings] method which is implemented if
+    /// returning of variable bindings is not required.
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        Err(ExecError::NoReduce)
+    }
+
+    /// Executes grounded function on passed `args` and returns list of results
+    /// with associated variable bindings if there are ones. Default implementation
+    /// calls [CustomExecute::execute] and returns no bindings.
+    fn execute_bindings(&self, args: &[Atom]) -> Result<BoxedIter<'static, (Atom, Option<matcher::Bindings>)>, ExecError> {
+        fn iter(res: Vec<Atom>) -> Box<dyn Iterator<Item=(Atom, Option<matcher::Bindings>)>> {
+            Box::new(res.into_iter().map(|a| (a, None)))
+        }
+        self.execute(args).map(iter)
+    }
 }
 
 /// Trait for implementing custom matching logic. In order to make it work

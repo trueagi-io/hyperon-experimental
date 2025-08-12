@@ -65,9 +65,11 @@
   (deduce (Evaluation (mortal Plato)))
   T)
 
-; TODO : Some variables are not substituted
+; Deduce who is mortal
 (= (ift T $then) $then)
-(ift (deduce (Evaluation (mortal $x))) $x)
+!(assertEqual
+  (ift (deduce (Evaluation (mortal $x))) $x)
+  Plato)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

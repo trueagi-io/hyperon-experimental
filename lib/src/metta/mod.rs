@@ -6,6 +6,7 @@ pub mod types;
 pub mod runner;
 
 use hyperon_atom::*;
+use crate::metta::runner::str::atom_to_string;
 use crate::space::grounding::GroundingSpace;
 
 pub const ATOM_TYPE_UNDEFINED : Atom = sym!("%Undefined%");
@@ -73,7 +74,7 @@ pub fn atom_is_error(atom: &Atom) -> bool {
 /// Returns a message string from an error expression
 ///
 /// NOTE: this function will panic if the supported atom is not a valid error expression
-pub fn atom_error_message(atom: &Atom) -> &str {
+pub fn atom_error_message(atom: &Atom) -> String {
     const PANIC_STR: &str = "Atom is not error expression";
     match atom {
         Atom::Expression(expr) => {
@@ -82,8 +83,7 @@ pub fn atom_error_message(atom: &Atom) -> &str {
                 4 => expr.children().get(3).unwrap(),
                 _ => panic!("{}", PANIC_STR)
             };
-            let sym_atom = <&SymbolAtom>::try_from(sym_atom).expect(PANIC_STR);
-            sym_atom.name()
+            atom_to_string(sym_atom)
         },
         _ => panic!("{}", PANIC_STR)
     }
