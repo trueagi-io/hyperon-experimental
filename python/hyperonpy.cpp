@@ -222,12 +222,9 @@ bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
     CAtom catom = atom_clone(_atom);
     py::list results;
-    try
-    {
+    try {
         results = _priv_call_match_on_grounded_atom(pyobj, catom);
-    }
-    catch (py::error_already_set &e)
-    {
+    } catch (py::error_already_set &e) {
         std::string message = "Error while calling _priv_call_match_on_grounded_atom: ";
         message += e.what();
         throw_panic_with_message(message.c_str());
