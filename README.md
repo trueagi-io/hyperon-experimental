@@ -93,6 +93,9 @@ Rust (see the Notes at the installation page).
   * OpenSSL library
   * Zlib library
 
+  To support DAS integration (enabled by default):
+  * Protobuf compiler
+
 * Install cbindgen:
 ```
 cargo install --force cbindgen

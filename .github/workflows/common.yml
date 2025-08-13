@@ -48,6 +48,14 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Install protobuf-compiler (required by Das)
+        shell: bash
+        run: |
+          sudo apt-get update && \
+          DEBIAN_FRONTEND=noninteractive \
+          TZ=UTC \
+          sudo apt-get install -y protobuf-compiler
+
       - name: Build Rust library
         working-directory: ./lib
         run: |
