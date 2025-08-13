@@ -828,10 +828,9 @@ pub extern "C" fn exec_error_free(error: exec_error_t) {
 /// @ingroup grounded_atom_group
 /// @param[in]  message  A human-readable error message which will be used to throw a panic
 /// @return ()
-
 #[no_mangle]
 pub extern "C" fn throw_panic_with_message(message: *const c_char) -> () {
-    panic!("{}", cstr_into_string(message))
+    panic!("{}", cstr_as_str(message))
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
