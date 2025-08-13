@@ -1108,7 +1108,7 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
         // Returning both results breaks tests right now.
         (Atom::Variable(v), b) => BindingsSet::single().add_var_binding(v, b),
         (a, Atom::Variable(v)) => BindingsSet::single().add_var_binding(v, a),
-        (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b }))
+        (Atom::Expression(ExpressionAtom{ children: a, ..  }), Atom::Expression(ExpressionAtom{ children: b, .. }))
         if a.len() == b.len() => {
             a.iter().zip(b.iter()).fold(BindingsSet::single(),
             |acc, (a, b)| {
@@ -1155,13 +1155,23 @@ pub fn apply_bindings_to_atom_mut(atom: &mut Atom, bindings: &Bindings) {
         true => Some(atom.clone()),
         false => None,
     };
+    let mut updated = false;
     if !bindings.is_empty() {
         atom.iter_mut().for_each(|atom| match atom {
             Atom::Variable(var) => {
-                bindings.resolve(var).map(|value| *atom = value);
+                bindings.resolve(var).map(|value| {
+                    *atom = value;
+                    updated = true;
+                });
             },
             _ => {},
         });
+    }
+    if updated {
+        match atom {
+            Atom::Expression(e) => e.evaluated = false,
+            _ => {},
+        }
     }
     if let Some(atom_copy) = trace_atom {
         log::trace!("apply_bindings_to_atom: {} | {} -> {}", atom_copy, bindings, atom);
