@@ -2121,4 +2121,41 @@ mod tests {
         ")).unwrap();
         assert_eq_no_order!(result, vec![metta_atom("(xa a)"), metta_atom("(xb b)")]);
     }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct EvalCounter(Rc<RefCell<i64>>);
+
+    impl Grounded for EvalCounter {
+        fn type_(&self) -> Atom {
+            expr!("->" ("->"))
+        }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for EvalCounter {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            *self.0.borrow_mut() += 1;
+            Err(ExecError::NoReduce)
+        }
+    }
+
+    impl Display for EvalCounter {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "increment-self")
+        }
+    }
+
+    #[test]
+    fn interpret_evaluate_once() {
+        let counter = EvalCounter(Rc::new(RefCell::new(0)));
+        let space = space("
+            (= (one $x) (two $x))
+            (= (two $x) ok)
+        ");
+        let result = interpret(space.clone(), &Atom::expr([METTA_SYMBOL, expr!("one" ({counter.clone()})), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]));
+        assert_eq!(result, Ok(vec![Atom::sym("ok")]));
+        assert_eq!(*counter.0.borrow(), 1);
+    }
 }
