@@ -824,6 +824,16 @@ pub extern "C" fn exec_error_free(error: exec_error_t) {
     }
 }
 
+/// @brief Used to throw panic from C Api with message to prevent panics without any info
+/// @ingroup grounded_atom_group
+/// @param[in]  message  A human-readable error message which will be used to throw a panic
+/// @return ()
+
+#[no_mangle]
+pub extern "C" fn throw_panic_with_message(message: *const c_char) -> () {
+    panic!("{}", cstr_into_string(message))
+}
+
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Atom Vec Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

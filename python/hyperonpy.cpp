@@ -219,11 +219,19 @@ bindings_set_t py_match_value(const struct gnd_t *_gnd, const atom_ref_t *_atom)
 bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
     py::object hyperon = py::module_::import("hyperon.atoms");
     py::function _priv_call_match_on_grounded_atom = hyperon.attr("_priv_call_match_on_grounded_atom");
-
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
     CAtom catom = atom_clone(_atom);
-    py::list results = _priv_call_match_on_grounded_atom(pyobj, catom);
-
+    py::list results;
+    try
+    {
+        results = _priv_call_match_on_grounded_atom(pyobj, catom);
+    }
+    catch (py::error_already_set &e)
+    {
+        std::string message = "Error while calling _priv_call_match_on_grounded_atom: ";
+        message += e.what();
+        throw_panic_with_message(message.c_str());
+    }
     struct bindings_set_t result_set = bindings_set_empty();
     for (py::handle result: results) {
         py::dict pybindings = result.cast<py::dict>();
