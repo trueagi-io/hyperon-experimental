@@ -151,43 +151,44 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertNotEqual(metta.parse_single("untop").get_grounded_type(),
                 metta.parse_single("untyped").get_grounded_type())
 
-    def test_conversion_between_rust_and_python(self):
-        metta = MeTTa(env_builder=Environment.test_env())
-        metta.run('!(import! &self random)', flat=True)
-
-        integer = metta.run('!(+ 1 (random-int &rng 4 5))', flat=True)[0].get_object()
-        self.assertEqual(integer, ValueObject(5))
-
-        float = metta.run('!(+ 1.0 (random-float &rng 4 5))', flat=True)[0].get_object()
-        self.assertTrue(float.value >= 5.0 and float.value < 6)
-
-        bool = metta.run('!(not (flip))', flat=True)[0].get_object()
-        self.assertTrue(bool.value or not bool.value)
-
-        false = metta.run('!(not True)', flat=True)[0].get_object()
-        self.assertEqual(false, ValueObject(False))
-
-        false = metta.run('!(format-args "test {}" ("string"))', flat=True)[0].get_object()
-        self.assertEqual(false, ValueObject("test string"))
-
-    def test_python_value_conversion(self):
+    def test_use_rust_value_in_python_grounded_function(self):
         metta = MeTTa(env_builder=Environment.test_env())
 
-        metta.register_atom("return-int", OperationAtom("return-int", lambda: 42))
-        integer = metta.run('!(return-int)', flat=True)[0].get_object()
+        metta.register_atom("python-int-func", OperationAtom("python-int-func", lambda x: x * 2))
+        integer = metta.run('!(python-int-func 21)', flat=True)[0].get_object()
         self.assertEqual(integer, ValueObject(42))
 
-        metta.register_atom("return-float", OperationAtom("return-float", lambda: 4.2))
-        float = metta.run('!(return-float)', flat=True)[0].get_object()
+        metta.register_atom("python-float-func", OperationAtom("python-float-func", lambda x: x / 2.0))
+        float = metta.run('!(python-float-func 8.4)', flat=True)[0].get_object()
         self.assertEqual(float, ValueObject(4.2))
 
-        metta.register_atom("return-bool", OperationAtom("return-bool", lambda: True))
-        bool = metta.run('!(return-bool)', flat=True)[0].get_object()
-        self.assertEqual(bool, ValueObject(True))
+        metta.register_atom("python-bool-func", OperationAtom("python-bool-func", lambda x: not x))
+        bool = metta.run('!(python-bool-func False)', flat=True)[0].get_object()
+        self.assertTrue(bool.value)
 
-        metta.register_atom("return-str", OperationAtom("return-str", lambda: "some string"))
-        str = metta.run('!(return-str)', flat=True)[0].get_object()
-        self.assertEqual(str, ValueObject("some string"))
+        metta.register_atom("python-str-func", OperationAtom("python-str-func", lambda x: "test " + x))
+        str = metta.run('!(python-str-func "string")', flat=True)[0].get_object()
+        self.assertEqual(str, ValueObject("test string"))
+
+    def test_use_python_value_in_rust_grounded_function(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+
+        metta.register_atom("python-int", OperationAtom("python-int", lambda: 42))
+        integer = metta.run('!(+ 1 (python-int))', flat=True)[0].get_object()
+        self.assertEqual(integer, ValueObject(43))
+
+        metta.register_atom("python-float", OperationAtom("python-float", lambda: 4.2))
+        float = metta.run('!(+ 1.0 (python-float))', flat=True)[0].get_object()
+        self.assertEqual(float, ValueObject(5.2))
+
+        metta.register_atom("python-bool", OperationAtom("python-bool", lambda: True))
+        print("result: ", metta.run('!(not (python-bool))', flat=True))
+        bool = metta.run('!(not (python-bool))', flat=True)[0].get_object()
+        self.assertEqual(bool, ValueObject(False))
+
+        metta.register_atom("python-str", OperationAtom("python-str", lambda: "some string {}"))
+        str = metta.run('!(format-args (python-str) (A))', flat=True)[0].get_object()
+        self.assertEqual(str, ValueObject("some string A"))
 
     def test_grounded_override(self):
         metta = MeTTa(env_builder=Environment.test_env())
