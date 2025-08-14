@@ -190,6 +190,52 @@ class GroundedTypeTest(unittest.TestCase):
         str = metta.run('!(format-args (python-str) (A))', flat=True)[0].get_object()
         self.assertEqual(str, ValueObject("some string A"))
 
+    def test_match_python_value_with_rust_value_in_atomspace(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+
+        metta.register_atom("python-int", OperationAtom("python-int", lambda: 42))
+        metta.run("(= (match-int 42) ok)")
+        result = metta.run('!(match-int (python-int))', flat=True)[0]
+        self.assertEqual(result, S("ok"))
+
+        metta.register_atom("python-float", OperationAtom("python-float", lambda: 4.2))
+        metta.run("(= (match-float 4.2) ok)")
+        result = metta.run('!(match-float (python-float))', flat=True)[0]
+        self.assertEqual(result, S("ok"))
+
+        metta.register_atom("python-bool", OperationAtom("python-bool", lambda: True))
+        metta.run("(= (match-bool True) ok)")
+        result = metta.run('!(match-bool (python-bool))', flat=True)[0]
+        self.assertEqual(result, S("ok"))
+
+        metta.register_atom("python-str", OperationAtom("python-str", lambda: "text"))
+        metta.run("(= (match-str \"text\") ok)")
+        result = metta.run('!(match-str (python-str))', flat=True)[0]
+        self.assertEqual(result, S("ok"))
+
+    def test_match_rust_value_with_python_value_in_atomspace(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+
+        metta.register_atom("python-int", OperationAtom("python-int", lambda: 42))
+        metta.run("!(let $x (python-int) (add-atom &self (= (match-int $x) ok)))")
+        result = metta.run('!(match-int 42)', flat=True)[0]
+        self.assertEqual(result, S("ok"))
+
+        metta.register_atom("python-float", OperationAtom("python-float", lambda: 4.2))
+        metta.run("!(let $x (python-float) (add-atom &self (= (match-float $x) ok)))")
+        result = metta.run('!(match-float 4.2)', flat=True)[0]
+        self.assertEqual(result, S("ok"))
+
+        metta.register_atom("python-bool", OperationAtom("python-bool", lambda: True))
+        metta.run("!(let $x (python-bool) (add-atom &self (= (match-bool $x) ok)))")
+        result = metta.run('!(match-bool True)', flat=True)[0]
+        self.assertEqual(result, S("ok"))
+
+        metta.register_atom("python-str", OperationAtom("python-str", lambda: "text"))
+        metta.run("!(let $x (python-str) (add-atom &self (= (match-str $x) ok)))")
+        result = metta.run('!(match-str "text")', flat=True)[0]
+        self.assertEqual(result, S("ok"))
+
     def test_grounded_override(self):
         metta = MeTTa(env_builder=Environment.test_env())
         metta.register_atom(r'\+', OperationAtom('+', lambda a, b: a + b))
