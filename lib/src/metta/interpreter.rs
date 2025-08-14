@@ -1013,13 +1013,21 @@ fn metta_impl(args: Atom, bindings: Bindings) -> MettaResult {
         } else if meta == ATOM_TYPE_GROUNDED {
             type_cast(space, atom, typ, bindings)
         } else {
-            let var = Atom::Variable(VariableAtom::new("x").make_unique());
-            let res = Atom::Variable(VariableAtom::new("res").make_unique());
-            once((Atom::expr([CHAIN_SYMBOL, Atom::expr([COLLAPSE_BIND_SYMBOL, call_native!(interpret_expression, Atom::expr([atom, typ, space]))]), var.clone(),
-                Atom::expr([CHAIN_SYMBOL, call_native!(check_alternatives, Atom::expr([var])), res.clone(),
-                    return_atom(res)
-                ])
-            ]), bindings))
+            let evaluated = match &atom {
+                Atom::Expression(e) => e.is_evaluated(),
+                _ => unreachable!(),
+            };
+            if !evaluated {
+                let var = Atom::Variable(VariableAtom::new("x").make_unique());
+                let res = Atom::Variable(VariableAtom::new("res").make_unique());
+                once((Atom::expr([CHAIN_SYMBOL, Atom::expr([COLLAPSE_BIND_SYMBOL, call_native!(interpret_expression, Atom::expr([atom.clone(), typ, space]))]), var.clone(),
+                    Atom::expr([CHAIN_SYMBOL, call_native!(check_alternatives, Atom::expr([atom, var])), res.clone(),
+                        return_atom(res)
+                    ])
+                ]), bindings))
+            } else {
+                once((return_atom(atom), bindings))
+            }
         }
     }
 }
@@ -1083,8 +1091,8 @@ fn match_types(type1: &Atom, type2: &Atom, bindings: Bindings) -> Result<MatchRe
 }
 
 fn check_alternatives(args: Atom, bindings: Bindings) -> MettaResult {
-    let expr = match_atom!{
-        args ~ [Atom::Expression(expr)] => expr,
+    let (original, expr) = match_atom!{
+        args ~ [original, Atom::Expression(expr)] => (original, expr),
         _ => {
             let error = format!("expected args: ((: expr Expression)), found: {}", args);
             return once((return_atom(error_msg(call_native!(check_alternatives, args), error)), bindings));
@@ -1094,7 +1102,15 @@ fn check_alternatives(args: Atom, bindings: Bindings) -> MettaResult {
         .map(atom_into_atom_bindings);
     let mut succ = results.clone()
         .filter(|(atom, _bindings)| !atom_is_error(&atom))
-        .map(|(atom, bindings)| (return_atom(atom), bindings))
+        .map(move |(mut atom, bindings)| {
+            if original == atom {
+                match &mut atom {
+                    Atom::Expression(e) => e.set_evaluated(),
+                    _ => {},
+                };
+            }
+            (return_atom(atom), bindings)
+        })
         .peekable();
     let err = results
         .filter(|(atom, _bindings)| atom_is_error(&atom))
@@ -2104,5 +2120,42 @@ mod tests {
                 ($x $a)))
         ")).unwrap();
         assert_eq_no_order!(result, vec![metta_atom("(xa a)"), metta_atom("(xb b)")]);
+    }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct EvalCounter(Rc<RefCell<i64>>);
+
+    impl Grounded for EvalCounter {
+        fn type_(&self) -> Atom {
+            expr!("->" ("->"))
+        }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for EvalCounter {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            *self.0.borrow_mut() += 1;
+            Err(ExecError::NoReduce)
+        }
+    }
+
+    impl Display for EvalCounter {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "increment-self")
+        }
+    }
+
+    #[test]
+    fn interpret_evaluate_once() {
+        let counter = EvalCounter(Rc::new(RefCell::new(0)));
+        let space = space("
+            (= (one $x) (two $x))
+            (= (two $x) ok)
+        ");
+        let result = interpret(space.clone(), &Atom::expr([METTA_SYMBOL, expr!("one" ({counter.clone()})), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]));
+        assert_eq!(result, Ok(vec![Atom::sym("ok")]));
+        assert_eq!(*counter.0.borrow(), 1);
     }
 }
