@@ -42,7 +42,7 @@ class GroundedTypeTest(unittest.TestCase):
                 [['Number', 'Number', 'Number'], 'Number', ['Number', 'Number']],
                 unwrap=False))
         self.assertEqual(metta.run("!((curry_num plus 1) 2)"),
-                         metta.run("! 3"))
+                         [[ValueAtom(3)]])
 
     def test_string_repr(self):
         metta = MeTTa(env_builder=Environment.test_env())
@@ -54,18 +54,18 @@ class GroundedTypeTest(unittest.TestCase):
         ### Basic functional types
         metta.register_atom(r"id_num", OperationAtom("id_num", lambda x: x, ['Number', 'Number']))
         metta.register_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Number']))
-        v1 = metta.run("!(id_num (+ 2 2))")[0]
-        v2 = metta.run("! 4")[0]
-        v3 = metta.run("!(as_int (+ 2 2))")[0]
-        self.assertEqual(v1, v2)
-        self.assertEqual(v1[0].get_grounded_type(), v2[0].get_grounded_type())
+        v1 = metta.run("!(id_num (+ 2 2))")[0][0]
+        v2 = metta.run("! 4")[0][0]
+        v3 = metta.run("!(as_int (+ 2 2))")[0][0]
+        self.assertEqual(v1.get_object().value, v2.get_object().value)
+        self.assertEqual(v1.get_grounded_type(), v2.get_grounded_type())
         # Python int is represented by the Rust Number grounded atom. Number is
         # implemented to have constant type "Number" which is common
         # implementation of the grounded atoms in Rust. Usually type is an
         # attribute of the atom and cannot be changed by reassigning. Thus one
         # cannot override type of the value by calling (-> Number Int)
         # function. It doesn't work for usual Rust grounded atoms.
-        self.assertEqual(v1[0].get_grounded_type(), v3[0].get_grounded_type())
+        self.assertEqual(v1.get_grounded_type(), v3.get_grounded_type())
         # Untyped symbols don't cause type error, but the expression is not reduced
         self.assertEqual(metta.run("!(id_num untyp)"), [metta.parse_all("(id_num untyp)")])
         # Typed symbols cause type error when evaluated
@@ -126,7 +126,7 @@ class GroundedTypeTest(unittest.TestCase):
             !(id_undef False)
             !(id_undef (+ 1 1))
             ''', flat=True),
-            metta.parse_all("1 False 2"))
+            [ValueAtom(1), ValueAtom(False), ValueAtom(2)])
         # This will not be reduced, because unwrapping expects a grounded atom
         self.assertEqual(metta.run('''
             !(id_undef myAtom)
