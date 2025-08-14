@@ -152,6 +152,8 @@ class GroundedTypeTest(unittest.TestCase):
                 metta.parse_single("untyped").get_grounded_type())
 
     def test_use_rust_value_in_python_grounded_function(self):
+        # Test assumes default primitives parsed by MeTTa interpreter are Rust
+        # and Python grounded functions return Python values without conversion
         metta = MeTTa(env_builder=Environment.test_env())
 
         metta.register_atom("python-int-func", OperationAtom("python-int-func", lambda x: x * 2))
@@ -171,6 +173,8 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertEqual(str, ValueObject("test string"))
 
     def test_use_python_value_in_rust_grounded_function(self):
+        # Test assumes default primitives parsed by MeTTa interpreter are Rust
+        # and Python grounded functions return Python values without conversion
         metta = MeTTa(env_builder=Environment.test_env())
 
         metta.register_atom("python-int", OperationAtom("python-int", lambda: 42))
@@ -191,6 +195,8 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertEqual(str, ValueObject("some string A"))
 
     def test_match_python_value_with_rust_value_in_atomspace(self):
+        # Test assumes default primitives parsed by MeTTa interpreter are Rust
+        # and Python grounded functions return Python values without conversion
         metta = MeTTa(env_builder=Environment.test_env())
 
         metta.register_atom("python-int", OperationAtom("python-int", lambda: 42))
@@ -214,6 +220,8 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertEqual(result, S("ok"))
 
     def test_match_rust_value_with_python_value_in_atomspace(self):
+        # Test assumes default primitives parsed by MeTTa interpreter are Rust
+        # and Python grounded functions return Python values without conversion
         metta = MeTTa(env_builder=Environment.test_env())
 
         metta.register_atom("python-int", OperationAtom("python-int", lambda: 42))
