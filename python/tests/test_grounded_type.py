@@ -45,9 +45,14 @@ class GroundedTypeTest(unittest.TestCase):
                          [[ValueAtom(3)]])
 
     def test_string_repr(self):
+        # There is a difference between unvisible character representation in
+        # Rust and Python. This test calls `repr` on both.
         metta = MeTTa(env_builder=Environment.test_env())
-        self.assertEqual(metta.run('!(repr "A\n\tBB\x1b\u130A9")')[0][0].get_object(),
+        metta.register_atom(r"python-str", OperationAtom("python-str", lambda: "A\n\tBB\x1b\u130A9"))
+        self.assertEqual(metta.run('!(let $x (python-str) (repr $x))')[0][0].get_object(),
                          ValueObject("\"A\\n\\tBB\\x1b\u130A9\""))
+        self.assertEqual(metta.run('!(repr "A\n\tBB\x1b\u130A9")')[0][0].get_object(),
+                         ValueObject("\"A\\n\\tBB\\u{1b}\u130A9\""))
 
     def test_meta_types(self):
         metta = MeTTa(env_builder=Environment.test_env())
