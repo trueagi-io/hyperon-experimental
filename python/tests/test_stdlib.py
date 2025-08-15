@@ -30,15 +30,17 @@ class StdlibTest(HyperonTestCase):
         #                                  [[(V("X"))]])
 
         self.assertEqualMettaRunnerResults(metta.run('!(parse "\\"A\\"")'),
-                                                   [[(ValueAtom("A"))]])
+                                           metta.run('! "A"'))
 
         #self.assertEqualMettaRunnerResults(metta.run('!(parse "(func (Cons $x (Cons $xs $xss))) ")'),
         #                                   [[E(S("func"), E(S("Cons"), V("x"), E(S("Cons"), V("xs"), V("xss"))))]])
 
         self.assertEqualMettaRunnerResults(metta.run('!(parse "(A 2 \'S\')")'),
-                                   [[E(S("A"), ValueAtom(2), ValueAtom(Char("S")))]])
+                                           metta.run("!(A 2 'S')"))
 
         # Check that (stringToChars "ABC") == ('A' 'B' 'C')
+        # NOTE: `parse` is a Rust function, so we compare to metta.run
+        #       while `stringToChars`` is a Python function, so we construct Python atoms
         self.assertEqualMettaRunnerResults(metta.run('!(stringToChars "ABC")'),
                                            [[E(ValueAtom(Char("A")), ValueAtom(Char("B")), ValueAtom(Char("C")))]])
 
@@ -96,19 +98,19 @@ class StdlibTest(HyperonTestCase):
 
     def test_number_parsing(self):
         metta = MeTTa(env_builder=Environment.test_env())
-        self.assertEqualMettaRunnerResults(metta.run("!(+ 1 2)"), [[ValueAtom(3)]])
-        self.assertEqualMettaRunnerResults(metta.run("!(+ 5.0 -2.0)"), [[ValueAtom(3.0)]])
-        self.assertEqualMettaRunnerResults(metta.run("!(+ 1.0e3 2.0e3)"), [[ValueAtom(3e3)]])
-        self.assertEqualMettaRunnerResults(metta.run("!(+ 5e-3 -2e-3)"), [[ValueAtom(3e-3)]])
+        self.assertEqualMettaRunnerResults(metta.run("!(+ 1 2)"), metta.run("! 3"))
+        self.assertEqualMettaRunnerResults(metta.run("!(+ 5.0 -2.0)"), metta.run("! 3.0"))
+        self.assertEqualMettaRunnerResults(metta.run("!(+ 1.0e3 2.0e3)"), metta.run("! 3e3"))
+        self.assertEqualMettaRunnerResults(metta.run("!(+ 5e-3 -2e-3)"), metta.run("! 3e-3"))
 
     def test_string_parsing(self):
         metta = MeTTa(env_builder=Environment.test_env())
         metta.run("(= (id' $x) $x)")
-        self.assertEqualMettaRunnerResults(metta.run("!(id' \"test\")"), [[ValueAtom("test")]])
-        self.assertEqualMettaRunnerResults(metta.run("!(id' \"te st\")"), [[ValueAtom("te st")]])
-        self.assertEqualMettaRunnerResults(metta.run("!(id' \"te\\\"st\")"), [[ValueAtom("te\"st")]])
-        self.assertEqualMettaRunnerResults(metta.run("!(id' \"\")"), [[ValueAtom("")]])
-        self.assertEqualMettaRunnerResults(metta.run("!(id' \"te\\nst\")"), [[ValueAtom("te\nst")]])
+        self.assertEqual(metta.run("!(id' \"test\")")[0][0].get_object().value, "test")
+        self.assertEqual(metta.run("!(id' \"te st\")")[0][0].get_object().value, "te st")
+        self.assertEqual(metta.run("!(id' \"te\\\"st\")")[0][0].get_object().value, "te\"st")
+        self.assertEqual(metta.run("!(id' \"\")")[0][0].get_object().value, "")
+        self.assertEqual(metta.run("!(id' \"te\\nst\")")[0][0].get_object().value, "te\nst")
 
     def test_regex(self):
         metta = MeTTa(env_builder=Environment.test_env())
