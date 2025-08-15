@@ -173,8 +173,8 @@ option.
 ### Single configuration generators like "Unix Makefiles"
 
 For this kind of generators the build type is selected at the CMake project
-initialization stage. To use release build type add
-`-DCMAKE_BUILD_TYPE=Release` CMake flag to the command above. To change the
+initialization stage. To use debug build type add
+`-DCMAKE_BUILD_TYPE=Debug` CMake flag to the command above. To change the
 build type the whole project configuration should be regenerated.
 
 Build and run tests commands:
