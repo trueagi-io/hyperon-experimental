@@ -118,7 +118,7 @@ impl Grounded for NotOp {
 impl CustomExecute for NotOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::IncorrectArgument;
-        let &Bool(a) = args.get(0).and_then(Atom::as_gnd).ok_or_else(arg_error)?;
+        let Bool(a) = args.get(0).and_then(Bool::from_atom).ok_or_else(arg_error)?;
 
         Ok(vec![Atom::gnd(Bool(!a))])
     }

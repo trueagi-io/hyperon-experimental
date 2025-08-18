@@ -115,7 +115,7 @@ class ExtendGlobalTest(unittest.TestCase):
         # Checking that the object is accessible and its value is correct
         self.assertEqual(
           metta.run('!(get-global)'),
-          metta.run('! 42'))
+          [[ValueAtom(42)]])
         # We may have to reimport g_object, but its value should be set
         # We also can use import with extension.g_object instead of from to make it work without re-importing
         from extension import g_object

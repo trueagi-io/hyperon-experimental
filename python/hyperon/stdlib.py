@@ -88,7 +88,6 @@ def text_ops(metta):
 @register_tokens
 def type_tokens():
     return {
-        r"(?s)^\".*\"$": lambda token: ValueAtom(str(token[1:-1]), 'String'),
         "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
         r'regex:"[^"]*"': lambda token: G(RegexMatchableObject(token),  AtomType.UNDEFINED)
     }

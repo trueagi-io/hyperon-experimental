@@ -16,7 +16,7 @@ if(IS_MULTI_CONFIG)
     set(BUILD_CONFIG "--config $<CONFIG>")
 else()
     message(STATUS "Single-config generator")
-    set(NONEMPTY_BUILD_CONFIG $<IF:$<STREQUAL:"$<CONFIG>","">,Debug,$<CONFIG>>)
+    set(NONEMPTY_BUILD_CONFIG $<IF:$<STREQUAL:"$<CONFIG>","">,Release,$<CONFIG>>)
     set(BUILD_TYPE "-DCMAKE_BUILD_TYPE=${NONEMPTY_BUILD_CONFIG}")
 endif()
 

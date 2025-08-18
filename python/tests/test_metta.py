@@ -72,7 +72,7 @@ class MettaTest(unittest.TestCase):
         runner = MeTTa(env_builder=Environment.test_env())
         result = runner.run(program)
 
-        self.assertEqual([[E(S('Error'), ValueAtom('String'), S('BadType'))]], result)
+        self.assertEqual(runner.run('!(Error "String" BadType)'), result)
 
     def test_runner_error(self):
         program = '''
