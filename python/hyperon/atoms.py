@@ -151,7 +151,10 @@ class GroundedAtom(Atom):
 
     def get_object(self):
         """Returns the GroundedAtom object, or the Space wrapped inside a GroundedAtom,
-           or convert supported Rust grounded objects into corresponding ValueObjects
+           or convert supported Rust grounded objects into corresponding ValueObjects.
+           Function can return TypeError which, without try-except wrapping, could lead
+           to rust panic. So it is highly recommended to use get_object with try-except
+           to catch TypeError.
         """
         # TODO: Here code assumes CGrounded object is always Python object.
         # This is not true in general case. To make code universal we need to
