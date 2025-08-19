@@ -1,5 +1,15 @@
 from hyperon import *
-from hyperon.ext import register_atoms
+from hyperon.ext import register_atoms, register_tokens
+
+@register_tokens
+def arithm_types():
+    return {
+        r"True|False": lambda token: ValueAtom(bool(token), 'Bool'),
+        r"[-+]?\d+": lambda token: ValueAtom(int(token), 'Number'),
+        r"[-+]?\d+\.\d+": lambda token: ValueAtom(float(token), 'Number'),
+        r"[-+]?\d+(\.\d+)?[eE][-+]?\d+": lambda token: ValueAtom(float(token), 'Number'),
+        r"(?s)^\".*\"$": lambda token: ValueAtom(str(token[1:-1]), 'String'),
+    }
 
 @register_atoms
 def arithm_ops():
@@ -20,8 +30,6 @@ def arithm_ops():
 
 @register_atoms
 def bool_ops():
-    equalAtom = OperationAtom('==', lambda a, b: [ValueAtom(a == b, 'Bool')],
-                              ['$t', '$t', 'Bool'], unwrap=False)
     greaterAtom = OperationAtom('>', lambda a, b: a > b) #, ['Number', 'Number', 'Bool'])
     lessAtom = OperationAtom('<', lambda a, b: a < b) #, ['Number', 'Number', 'Bool'])
     greaterEqAtom = OperationAtom('>=', lambda a, b: a >= b) #, ['Number', 'Number', 'Bool'])
@@ -30,7 +38,6 @@ def bool_ops():
     andAtom = OperationAtom('and', lambda a, b: a and b) #, ['Bool', 'Bool', 'Bool'])
     notAtom = OperationAtom('not', lambda a: not a) #, ['Bool', 'Bool'])
     return {
-        r"==": equalAtom,
         r"<": lessAtom,
         r">": greaterAtom,
         r"<=": lessEqAtom,
