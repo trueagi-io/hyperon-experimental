@@ -113,7 +113,7 @@ python3 das-cli/src/das_cli.py qa start
 # Chose a port range (using 52000:52999)
 Enter port range (e.g., 3000:3010): 52000:52999
 Starting Query Agent service...
-Query Agent started on port 35700
+Query Agent started on port 40002
 ```
 
 6. Running DAS tests
