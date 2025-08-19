@@ -30,7 +30,8 @@ hyperon-space = { workspace = true }
 # das deps
 [dependencies.metta-bus-client]
 git = "https://github.com/singnet/das"
-tag = "0.10.3"
+# tag = "0.10.3"
+branch = "artur-rust-inference"
 package = "metta-bus-client"
 optional = true
 
