@@ -10,7 +10,7 @@ wget -O - http://45.77.4.33/apt-repo/setup.sh | sudo bash
 
 sudo apt -y install das-toolbox
 
-sudo das-cli update-version --version 0.5.0
+# >= 0.5.0
 das-cli --version
 ```
 
@@ -94,7 +94,7 @@ Done.
 
 4. Start Attention Broker service
 ```
-das-cli ab start  
+das-cli ab start
 # Or
 python3 das-cli/src/das_cli.py ab start
 
@@ -105,7 +105,7 @@ Attention Broker started on port 37007
 
 5. Start Query Broker service
 ```
-das-cli qa start  
+das-cli qa start
 # Or
 python3 das-cli/src/das_cli.py qa start
 
@@ -135,4 +135,16 @@ cargo b -r
 
 # Optional: use RUST_LOG=das=LEVEL to inspect workflow
 RUST_LOG=das=debug ./target/release/metta-repl lib/tests/das.metta
+```
+
+7. Stop all services (removing their containers)
+```
+das-cli qa stop
+das-cli ab stop
+das-cli db stop
+
+# Or
+python3 das-cli/src/das_cli.py qa stop
+python3 das-cli/src/das_cli.py ab stop
+python3 das-cli/src/das_cli.py db stop
 ```
