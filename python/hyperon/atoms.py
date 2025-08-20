@@ -126,6 +126,7 @@ class AtomType:
     UNIT = Atom._from_catom(hp.CAtomType.UNIT)
     NUMBER = Atom._from_catom(hp.CAtomType.NUMBER)
     BOOL = Atom._from_catom(hp.CAtomType.BOOL)
+    STRING = Atom._from_catom(hp.CAtomType.STRING)
 
 class Atoms:
 
@@ -151,7 +152,11 @@ class GroundedAtom(Atom):
 
     def get_object(self):
         """Returns the GroundedAtom object, or the Space wrapped inside a GroundedAtom,
-           or convert supported Rust grounded objects into corresponding ValueObjects
+           or convert supported Rust grounded objects into corresponding ValueObjects.
+           Function raises TypeError when grounded atom cannot be converted to Python object. Uncatched
+           Python exception can lead to Rust panic in some contexts, for example when exception is thrown
+           from atomspace query unification procedure. It is highly recommended to call get_object method
+           inside try-except block to catch TypeError.
         """
         # TODO: Here code assumes CGrounded object is always Python object.
         # This is not true in general case. To make code universal we need to
@@ -210,13 +215,16 @@ def _priv_atom_gnd(obj, type):
         value = obj.value
         if isinstance(value, bool):
             assert type == AtomType.BOOL or type == AtomType.UNDEFINED, f"Grounded bool {obj} can't have a custom type {type}"
-            catom = hp.atom_bool(value)
+            catom = hp.atom_py(obj, AtomType.BOOL.catom)
         elif isinstance(value, int):
             assert type == AtomType.NUMBER or type == AtomType.UNDEFINED, f"Grounded int {obj} can't have a custom type {type}"
-            catom = hp.atom_int(value)
+            catom = hp.atom_py(obj, AtomType.NUMBER.catom)
         elif isinstance(value, float):
             assert type == AtomType.NUMBER or type == AtomType.UNDEFINED, f"Grounded float {obj} can't have a custom type {type}"
-            catom = hp.atom_float(value)
+            catom = hp.atom_py(obj, AtomType.NUMBER.catom)
+        elif isinstance(value, str):
+            assert type == AtomType.STRING or type == AtomType.UNDEFINED, f"Grounded str {obj} can't have a custom type {type}"
+            catom = hp.atom_py(obj, AtomType.STRING.catom)
     if catom is None:
         assert hasattr(obj, "copy"), f"Method copy should be implemented by grounded object {obj}"
         catom = hp.atom_py(obj, type.catom)

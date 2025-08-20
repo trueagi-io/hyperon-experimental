@@ -1,1 +1,1 @@
-from .pyop import arithm_ops, bool_ops
+from .pyop import arithm_types, arithm_ops, bool_ops
