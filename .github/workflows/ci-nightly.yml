@@ -6,6 +6,7 @@ on:
 
 jobs:
   ci-nightly:
+    if: github.repository == 'trueagi-io/hyperon-experimental'
     strategy:
       fail-fast: false
       matrix:
