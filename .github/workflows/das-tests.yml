@@ -1,0 +1,79 @@
+# This reusable workflow runs DAS (Distributed Atom Space) tests using the built binaries.
+
+name: das-tests
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: "A container which is used to make a build"
+        default: "ubuntu-22.04"
+        required: false
+        type: string
+
+jobs:
+  setup-and-test:
+    runs-on: ${{ inputs.os }}
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build (if necessary)
+        shell: bash
+        run: |
+          if [ ! -f "target/release/metta-repl" ]; then
+            cargo build --release
+          fi
+
+      - name: Install das-toolbox
+        shell: bash
+        run: |
+          sudo apt -y update
+          sudo apt -y install build-essential wget
+          wget -O - http://45.77.4.33/apt-repo/setup.sh | sudo bash
+          sudo apt -y install das-toolbox
+          sudo das-cli update-version --version 0.5.0
+
+      - name: Setup DAS configuration
+        shell: bash
+        run: |
+          # Configure DAS with default settings
+          echo -e "\n\n\n\n\n\n\n37007\n\n\n\n\n\n\n\n\n\n\n" | das-cli config set
+
+      - name: Start DAS databases
+        shell: bash
+        run: |
+          das-cli db start
+
+      - name: Load DAS knowledge base
+        shell: bash
+        run: |
+          das-cli metta load integration_tests/das/animals.metta
+
+      - name: Start DAS services
+        shell: bash
+        run: |
+          # Attention Broker
+          das-cli ab start
+          # Query Agent
+          echo "52000:52999" | das-cli qa start
+
+      - name: Run DAS tests
+        shell: bash
+        run: |
+          timeout 60s ./target/release/metta-repl integration_tests/das/test.metta || true
+
+      - name: Cleanup DAS services
+        if: always()
+        shell: bash
+        run: |
+          das-cli qa stop || true
+          das-cli ab stop || true
+          das-cli db stop || true

@@ -21,3 +21,7 @@ jobs:
       python-version: ${{ matrix.python-version }}
       cmake-version: ${{ matrix.cmake-version }}
       build-type: ${{ matrix.build-type }}
+
+  das-tests:
+    needs: ci-nightly
+    uses: ./.github/workflows/das-tests.yml
