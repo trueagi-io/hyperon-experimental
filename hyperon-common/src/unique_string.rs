@@ -111,11 +111,15 @@ mod test {
     use super::*;
     use std::hint::black_box;
 
+    // unique_string_drop test requires exclusive access to the UNIQUE_STRINGS
+    static SEQUENTIAL_RUN: Mutex<()> = Mutex::new(());
+
     #[test]
     fn unique_string_drop() {
+        let _lock = SEQUENTIAL_RUN.lock();
         {
-            let a = UniqueString::from("test string");
-            let b = UniqueString::from("test string");
+            let a = UniqueString::from("unique_string_drop");
+            let b = UniqueString::from("unique_string_drop");
             let count = UNIQUE_STRINGS.lock().unwrap().strings.len();
             assert_eq!(count, 1);
             black_box(a);
@@ -127,10 +131,11 @@ mod test {
 
     #[test]
     fn unique_string_equal() {
-        let store_a = UniqueString::from("test string");
-        let store_b = UniqueString::from("test string");
-        let const_c = UniqueString::Const("test string");
-        let const_d = UniqueString::Const("test string");
+        let _lock = SEQUENTIAL_RUN.lock();
+        let store_a = UniqueString::from("unique_string_equal");
+        let store_b = UniqueString::from("unique_string_equal");
+        let const_c = UniqueString::Const("unique_string_equal");
+        let const_d = UniqueString::Const("unique_string_equal");
         assert_eq!(store_a, store_b);
         assert_eq!(store_a, const_c);
         assert_eq!(const_c, store_a);
@@ -139,9 +144,10 @@ mod test {
 
     #[test]
     fn unique_string_from() {
-        let store_a = UniqueString::from("test string");
+        let _lock = SEQUENTIAL_RUN.lock();
+        let store_a = UniqueString::from("unique_string_from");
         assert!(matches!(store_a, UniqueString::Store(_)));
-        let store_b = UniqueString::from(String::from("test string"));
+        let store_b = UniqueString::from(String::from("unique_string_from"));
         assert!(matches!(store_b, UniqueString::Store(_)));
     }
 }
