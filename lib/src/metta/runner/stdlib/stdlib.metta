@@ -356,15 +356,14 @@
   (@return "True if type is a function type, False - otherwise"))
 (: is-function (-> Type Bool))
 (= (is-function $type)
-  (function (chain (eval (get-metatype $type)) $meta
-    (eval (switch-minimal ($type $meta) (
-      (($type Expression)
-        (chain (decons-atom $type) $pair
-          (unify ($head $_tail) $pair
-            (unify $head -> (return True) (return False))
-            (return (Error (is-function $type) "is-function non-empty expression as an argument")) )))
-      (($type $meta) (return False))
-    ))))))
+    (let $mtype (get-metatype $type)
+        (unify $mtype Expression
+        (let $size (size-atom $type)
+            (unify $size 0
+                False
+                (let ($h $t) (decons-atom $type)
+                    (unify $h -> True False))))
+        False)))
 
 (@doc type-cast
   (@desc "Casts atom passed as a first argument to the type passed as a second argument using space as a context")
