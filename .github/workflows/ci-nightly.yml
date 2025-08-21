@@ -26,3 +26,5 @@ jobs:
   das-tests:
     needs: ci-nightly
     uses: ./.github/workflows/das-tests.yml
+    with:
+      os: ${{ matrix.os }}

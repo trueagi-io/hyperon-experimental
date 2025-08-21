@@ -25,39 +25,57 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Build (if necessary)
+      - name: Install protobuf-compiler (required by Das)
         shell: bash
         run: |
-          if [ ! -f "target/release/metta-repl" ]; then
-            cargo build --release
+          if [[ "${{ inputs.os }}" == *"ubuntu"* ]]; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif [[ "${{ inputs.os }}" == *"macos"* ]]; then
+            brew install protobuf
+          elif [[ "${{ inputs.os }}" == *"windows"* ]]; then
+            choco install protoc -y
           fi
 
-      - name: Install das-toolbox
+      - name: Build
+        shell: bash
+        run: cargo build --release
+
+      - name: das-toolbox - set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: das-toolbox - install
         shell: bash
         run: |
-          sudo apt -y update
-          sudo apt -y install build-essential wget
-          wget -O - http://45.77.4.33/apt-repo/setup.sh | sudo bash
-          sudo apt -y install das-toolbox
-          sudo das-cli update-version --version 0.5.0
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          git clone https://github.com/singnet/das-toolbox.git
+          cd das-toolbox
+          git checkout tags/0.5.0
+          cd das-cli/src
+          sudo pip3 install -e .
+          cd "$GITHUB_WORKSPACE"
+          rm -rf "$TEMP_DIR"
 
-      - name: Setup DAS configuration
+      - name: das-toolbox - DAS configuration
         shell: bash
         run: |
           # Configure DAS with default settings
           echo -e "\n\n\n\n\n\n\n37007\n\n\n\n\n\n\n\n\n\n\n" | das-cli config set
 
-      - name: Start DAS databases
+      - name: das-toolbox - start databases
         shell: bash
         run: |
           das-cli db start
 
-      - name: Load DAS knowledge base
+      - name: das-toolbox - load knowledge base
         shell: bash
         run: |
           das-cli metta load integration_tests/das/animals.metta
 
-      - name: Start DAS services
+      - name: das-toolbox - start services
         shell: bash
         run: |
           # Attention Broker
@@ -65,12 +83,12 @@ jobs:
           # Query Agent
           echo "52000:52999" | das-cli qa start
 
-      - name: Run DAS tests
+      - name: Run DAS module tests
         shell: bash
         run: |
           timeout 60s ./target/release/metta-repl integration_tests/das/test.metta || true
 
-      - name: Cleanup DAS services
+      - name: das-toolbox - cleanup services
         if: always()
         shell: bash
         run: |
