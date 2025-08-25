@@ -68,6 +68,8 @@ jobs:
           cd das-toolbox
           git checkout tags/0.5.0
           cd das-cli/src
+          # TODO: should be a part of das-cli/setup.py file
+          python3 -m pip install -r requirements.txt
           python3 -m pip install .
           rm -rf "$TEMP_DIR"
           cd "$GITHUB_WORKSPACE"
