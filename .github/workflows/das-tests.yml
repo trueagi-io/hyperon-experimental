@@ -1,0 +1,97 @@
+# This reusable workflow runs DAS (Distributed Atom Space) tests using the built binaries.
+
+name: das-tests
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: "A container which is used to make a build"
+        default: "ubuntu-22.04"
+        required: false
+        type: string
+
+jobs:
+  setup-and-test:
+    runs-on: ${{ inputs.os }}
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install protobuf-compiler (required by Das)
+        shell: bash
+        run: |
+          if [[ "${{ inputs.os }}" == *"ubuntu"* ]]; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif [[ "${{ inputs.os }}" == *"macos"* ]]; then
+            brew install protobuf
+          elif [[ "${{ inputs.os }}" == *"windows"* ]]; then
+            choco install protoc -y
+          fi
+
+      - name: Build
+        shell: bash
+        run: cargo build --release
+
+      - name: das-toolbox - set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: das-toolbox - install
+        shell: bash
+        run: |
+          TEMP_DIR=$(mktemp -d)
+          cd "$TEMP_DIR"
+          git clone https://github.com/singnet/das-toolbox.git
+          cd das-toolbox
+          git checkout tags/0.5.0
+          cd das-cli/src
+          sudo pip3 install -e .
+          sudo rm -rf "$TEMP_DIR"
+          cd "$GITHUB_WORKSPACE"
+
+      - name: das-toolbox - DAS configuration
+        shell: bash
+        run: |
+          # Configure DAS with default settings
+          echo -e "\n\n\n\n\n\n\n37007\n\n\n\n\n\n\n\n\n\n\n" | das-cli config set
+
+      - name: das-toolbox - start databases
+        shell: bash
+        run: |
+          das-cli db start
+
+      - name: das-toolbox - load knowledge base
+        shell: bash
+        run: |
+          das-cli metta load integration_tests/das/animals.metta
+
+      - name: das-toolbox - start services
+        shell: bash
+        run: |
+          # Attention Broker
+          das-cli ab start
+          # Query Agent
+          echo "52000:52999" | das-cli qa start
+
+      - name: Run DAS module tests
+        shell: bash
+        run: |
+          timeout 60s ./target/release/metta-repl integration_tests/das/test.metta || true
+
+      - name: das-toolbox - cleanup services
+        if: always()
+        shell: bash
+        run: |
+          das-cli qa stop || true
+          das-cli ab stop || true
+          das-cli db stop || true
