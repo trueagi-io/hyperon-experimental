@@ -53,38 +53,48 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: das-toolbox - create Python venv
+        shell: bash
+        run: |
+          python3 -m venv dastoolbox
+
       - name: das-toolbox - install
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           TEMP_DIR=$(mktemp -d)
           cd "$TEMP_DIR"
           git clone https://github.com/singnet/das-toolbox.git
           cd das-toolbox
           git checkout tags/0.5.0
           cd das-cli/src
-          sudo pip3 install -e .
-          sudo rm -rf "$TEMP_DIR"
+          python3 -m pip install -e .
+          rm -rf "$TEMP_DIR"
           cd "$GITHUB_WORKSPACE"
 
       - name: das-toolbox - DAS configuration
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           # Configure DAS with default settings
           echo -e "\n\n\n\n\n\n\n37007\n\n\n\n\n\n\n\n\n\n\n" | das-cli config set
 
       - name: das-toolbox - start databases
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           das-cli db start
 
       - name: das-toolbox - load knowledge base
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           das-cli metta load integration_tests/das/animals.metta
 
       - name: das-toolbox - start services
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           # Attention Broker
           das-cli ab start
           # Query Agent
@@ -93,12 +103,14 @@ jobs:
       - name: Run DAS module tests
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           timeout 60s ./target/release/metta-repl integration_tests/das/test.metta || true
 
       - name: das-toolbox - cleanup services
         if: always()
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           das-cli qa stop || true
           das-cli ab stop || true
           das-cli db stop || true
