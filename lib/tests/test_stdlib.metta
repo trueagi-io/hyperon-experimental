@@ -22,6 +22,20 @@
    (case (unify (B C) (C B) ok  Empty) ((ok ok) (Empty nok)))
    (nok))
 
+; case/switch/switch-minimal check if result is being reduced or not
+
+!(assertEqual
+    (case 5 ((4 False) (5 (+ 1 2))))
+    3)
+
+!(assertEqual
+    (switch 5 ((4 False) (5 (+ 1 2))))
+    3)
+
+!(assertEqual
+    (switch-minimal 5 ((4 False) (5 (+ 1 2))))
+    (noeval (+ 1 2)))
+
 ; assertIncludes
 !(assertEqualToResult
    (assertIncludes (superpose (41 42 43)) (42))

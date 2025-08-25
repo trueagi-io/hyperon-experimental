@@ -253,65 +253,6 @@ impl CustomExecute for CaptureOp {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct CaseOp {
-    space: DynSpace,
-    settings: PragmaSettings,
-}
-
-grounded_op!(CaseOp, "case");
-
-impl CaseOp {
-    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
-        Self{ space, settings }
-    }
-}
-
-impl Grounded for CaseOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for CaseOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
-        let cases = args.get(1).ok_or_else(arg_error)?;
-        let atom = args.get(0).ok_or_else(arg_error)?;
-        log::debug!("CaseOp::execute: atom: {}, cases: {:?}", atom, cases);
-
-        let switch = |interpreted: Atom| -> Atom {
-            Atom::expr([sym!("switch"), interpreted, cases.clone()])
-        };
-
-        // Interpreting argument inside CaseOp is required because otherwise `Empty` result
-        // calculated inside interpreter cuts the whole branch of the interpretation. Also we
-        // cannot use `unify` in a unit test because after interpreting `(chain... (chain
-        // (metta (unify ...) Atom <space>)) ...)` `chain` executes `unify` and also gets
-        // `Empty` even if we have `Atom` as a resulting type. It can be solved by different ways.
-        // One way is to invent new type `EmptyType` (type of the `Empty` atom) and use this type
-        // in a function to allow `Empty` atoms as an input. `EmptyType` type should not be
-        // casted to the `%Undefined%` thus one cannot pass `Empty` to the function which accepts
-        // `%Undefined%`. Another way is to introduce "call" level. Thus if function called
-        // returned the result to the `chain` it should stop reducing it and insert it into the
-        // last argument.
-        let results = interpret(self.space.clone(), atom, self.settings.clone());
-        log::debug!("CaseOp::execute: atom results: {:?}", results);
-        let results = match results {
-            Ok(results) if results.is_empty() =>
-                vec![switch(EMPTY_SYMBOL)],
-            Ok(results) =>
-                results.into_iter().map(|atom| switch(atom)).collect(),
-            Err(err) => vec![Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::sym(err)])],
-        };
-        Ok(results)
-    }
-}
-
 fn collapse_add_next_atom_from_collapse_bind_result(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
     let arg0_error = || ExecError::from("Expression is expected as a first argument");
     let list = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg0_error)?).map_err(|_| arg0_error())?;
@@ -347,8 +288,6 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
 }
 
 pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
-    let case_op = Atom::gnd(CaseOp::new(space.clone(), metta.settings().clone()));
-    tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let capture_op = Atom::gnd(CaptureOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
@@ -407,6 +346,18 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
         let result = run_program("!(case (unify (B C) (C B) ok Empty) ( (ok ok) (Empty nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
+    }
+
+    #[test]
+    fn metta_case_error() {
+        let program = "
+            (= (err) (Error (err) \"Test error\"))
+            !(case (err) (
+              ((Error $a \"Test error\") ())
+              ($_ (Error $_ \"Error is expected\"))
+              ))
+        ";
+        assert_eq!(run_program(program), Ok(vec![vec![UNIT_ATOM]]));
     }
 
     #[test]
@@ -503,8 +454,8 @@ mod tests {
         let nested = run_program("!(sealed ($c) (quote (= ($a $x $c) ($b))))");
         let simple_replace = run_program("!(sealed ($z $x) (quote (= ($y $z))))");
 
-        assert!(hyperon_atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("quote" ("=" (a b c) (z)))));
-        assert!(hyperon_atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("quote" ("=" (y z)))));
+        assert!(atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("quote" ("=" (a b c) (z)))));
+        assert!(atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("quote" ("=" (y z)))));
     }
 
     #[test]

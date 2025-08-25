@@ -310,7 +310,7 @@
       (return $then) ))))))
 
 ; Difference between `switch` and `case` is a way how they interpret `Empty`
-; result. `CaseOp` interprets first argument inside itself and then manually
+; result. `case` interprets first argument inside itself and then manually
 ; checks whether result is empty. `switch` is interpreted in a context of
 ; main interpreter. Minimal interpreter correctly passes `Empty` as an
 ; argument to the `switch` but when `switch` is called from MeTTa interpreter
@@ -325,6 +325,10 @@
   (@return "Result which corresponds to the pattern which is matched with the passed atom first"))
 (: switch (-> %Undefined% Expression %Undefined%))
 (= (switch $atom $cases)
+   (id (switch-minimal $atom $cases)))
+
+(: switch-minimal (-> Atom Expression Atom))
+(= (switch-minimal $atom $cases)
   (function (chain (decons-atom $cases) $list
     (chain (eval (switch-internal $atom $list)) $res
       (chain (eval (if-equal $res NotReducible Empty $res)) $x (return $x)) ))))
@@ -335,10 +339,11 @@
     (@param "Atom (it will be evaluated)")
     (@param "Deconsed tuple of pairs mapping condition patterns to results")))
   (@return "Result of evaluating of Atom bound to met condition"))
+(: switch-internal (-> Atom Expression Atom))
 (= (switch-internal $atom (($pattern $template) $tail))
   (function (unify $atom $pattern
     (return $template)
-    (chain (eval (switch $atom $tail)) $ret (return $ret)) )))
+    (chain (eval (switch-minimal $atom $tail)) $ret (return $ret)) )))
 
 ; TODO: Type is used here, but there is no definition for the -> type
 ; constructor for instance, thus in practice it matches because -> has
@@ -351,15 +356,14 @@
   (@return "True if type is a function type, False - otherwise"))
 (: is-function (-> Type Bool))
 (= (is-function $type)
-  (function (chain (eval (get-metatype $type)) $meta
-    (eval (switch ($type $meta) (
-      (($type Expression)
-        (chain (decons-atom $type) $pair
-          (unify ($head $_tail) $pair
-            (unify $head -> (return True) (return False))
-            (return (Error (is-function $type) "is-function non-empty expression as an argument")) )))
-      (($type $meta) (return False))
-    ))))))
+    (let $mtype (get-metatype $type)
+        (unify $mtype Expression
+        (let $size (size-atom $type)
+            (unify $size 0
+                False
+                (let ($h $t) (decons-atom $type)
+                    (unify $h -> True False))))
+        False)))
 
 (@doc type-cast
   (@desc "Casts atom passed as a first argument to the type passed as a second argument using space as a context")
@@ -1168,6 +1172,12 @@
     (@param "Atom (it will be evaluated)")
     (@param "Tuple of pairs mapping condition patterns to results")))
   (@return "Result of evaluating of Atom bound to met condition"))
+(: case (-> Atom Expression %Undefined%))
+(= (case $atom $cases)
+   (let $c (collapse $atom)
+     (if (== (noeval $c) ())
+       (id (switch-minimal Empty $cases))
+       (chain (eval (superpose $c)) $e (id (switch-minimal $e $cases))) )))
 
 (@doc capture
   (@desc "Wraps an atom and capture the current space")
