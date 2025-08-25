@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  ci-auto-unix:
+  ci-auto:
     uses: ./.github/workflows/common.yml
     with:
       python-version: "3.8"
