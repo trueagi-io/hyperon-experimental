@@ -499,6 +499,26 @@
 (= (if True $then $else) $then)
 (= (if False $then $else) $else)
 
+(@doc or
+  (@desc "Logical disjunction of two arguments")
+  (@params (
+    (@param "First argument")
+    (@param "Second argument")))
+  (@return "True if any of input arguments is True, False - otherwise"))
+
+(@doc and
+  (@desc "Logical conjunction of two arguments")
+  (@params (
+    (@param "First argument")
+    (@param "Second argument")))
+  (@return "Returns True if both arguments are True, False - otherwise"))
+
+(@doc not
+  (@desc "Logical negation")
+  (@params (
+    (@param "Argument")))
+  (@return "Negates boolean input argument (False -> True, True -> False)"))
+
 (@doc let
   (@desc "Unify two first argument and apply result of the unification on third argument. Second argument is evaluated before unification.")
   (@params (
