@@ -325,9 +325,9 @@
   (@return "Result which corresponds to the pattern which is matched with the passed atom first"))
 (: switch (-> %Undefined% Expression %Undefined%))
 (= (switch $atom $cases)
-   (switch-minimal $atom $cases))
+   (id (switch-minimal $atom $cases)))
 
-(: switch-minimal (-> Atom Expression %Undefined%))
+(: switch-minimal (-> Atom Expression Atom))
 (= (switch-minimal $atom $cases)
   (function (chain (decons-atom $cases) $list
     (chain (eval (switch-internal $atom $list)) $res
@@ -339,7 +339,7 @@
     (@param "Atom (it will be evaluated)")
     (@param "Deconsed tuple of pairs mapping condition patterns to results")))
   (@return "Result of evaluating of Atom bound to met condition"))
-(: switch-internal (-> Atom Expression %Undefined%))
+(: switch-internal (-> Atom Expression Atom))
 (= (switch-internal $atom (($pattern $template) $tail))
   (function (unify $atom $pattern
     (return $template)
@@ -1176,8 +1176,8 @@
 (= (case $atom $cases)
    (let $c (collapse $atom)
      (if (== (noeval $c) ())
-       (switch-minimal Empty $cases)
-       (chain (eval (superpose $c)) $e (switch-minimal $e $cases)) )))
+       (id (switch-minimal Empty $cases))
+       (chain (eval (superpose $c)) $e (id (switch-minimal $e $cases))) )))
 
 (@doc capture
   (@desc "Wraps an atom and capture the current space")
