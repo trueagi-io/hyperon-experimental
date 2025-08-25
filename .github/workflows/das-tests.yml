@@ -15,6 +15,18 @@ on:
         default: "ubuntu-22.04"
         required: false
         type: string
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: "A version of a python interpreter to use"
+        default: "3.8"
+        required: false
+        type: string
+      os:
+        description: "A container which is used to make a build"
+        default: "ubuntu-22.04"
+        required: false
+        type: string
 
 jobs:
   setup-and-test:
