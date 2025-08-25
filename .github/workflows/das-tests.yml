@@ -29,7 +29,7 @@ on:
         type: string
 
 jobs:
-  setup-and-test:
+  das-tests:
     runs-on: ${{ inputs.os }}
 
     steps:
