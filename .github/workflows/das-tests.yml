@@ -10,6 +10,13 @@ on:
         default: "ubuntu-22.04"
         required: false
         type: string
+  workflow_dispatch:
+    inputs:
+      os:
+        description: "A container which is used to make a build"
+        default: "ubuntu-22.04"
+        required: false
+        type: string
 
 jobs:
   setup-and-test:
