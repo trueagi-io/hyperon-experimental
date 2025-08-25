@@ -739,6 +739,7 @@
   (@return "Expression containing full documentation on function"))
 (: @doc-formal (-> DocItem DocKindFunction DocType DocDescription DocParameters DocReturn DocFormal))
 (: @doc-formal (-> DocItem DocKindAtom DocType DocDescription DocFormal))
+(: @doc-formal (-> DocItem DocKindFunction DocType DocDescription DocFormal))
 
 (@doc @item
   (@desc "Used for documentation purposes. Converts atom/function's name to DocItem")
