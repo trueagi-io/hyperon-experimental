@@ -56,9 +56,11 @@ jobs:
     if: ${{ inputs.run-das-tests }}
     strategy:
       matrix:
+        python-version: ${{ fromJson(inputs.python-version) }}
         os: ${{ fromJson(inputs.os) }}
       max-parallel: 5
     needs: ci-manual
     uses: ./.github/workflows/das-tests.yml
     with:
+      python-version: ${{ matrix.python-version }}
       os: ${{ matrix.os }}

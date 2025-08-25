@@ -5,6 +5,23 @@ name: das-tests
 on:
   workflow_call:
     inputs:
+      python-version:
+        description: "A version of a python interpreter to use"
+        default: "3.8"
+        required: false
+        type: string
+      os:
+        description: "A container which is used to make a build"
+        default: "ubuntu-22.04"
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: "A version of a python interpreter to use"
+        default: "3.8"
+        required: false
+        type: string
       os:
         description: "A container which is used to make a build"
         default: "ubuntu-22.04"
@@ -12,7 +29,7 @@ on:
         type: string
 
 jobs:
-  setup-and-test:
+  das-tests:
     runs-on: ${{ inputs.os }}
 
     steps:
@@ -44,40 +61,52 @@ jobs:
       - name: das-toolbox - set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ inputs.python-version }}
+
+      - name: das-toolbox - create Python venv
+        shell: bash
+        run: |
+          python3 -m venv dastoolbox
 
       - name: das-toolbox - install
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           TEMP_DIR=$(mktemp -d)
           cd "$TEMP_DIR"
           git clone https://github.com/singnet/das-toolbox.git
           cd das-toolbox
           git checkout tags/0.5.0
           cd das-cli/src
-          sudo pip3 install -e .
-          sudo rm -rf "$TEMP_DIR"
+          # TODO: should be a part of das-cli/setup.py file
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install .
+          rm -rf "$TEMP_DIR"
           cd "$GITHUB_WORKSPACE"
 
       - name: das-toolbox - DAS configuration
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           # Configure DAS with default settings
           echo -e "\n\n\n\n\n\n\n37007\n\n\n\n\n\n\n\n\n\n\n" | das-cli config set
 
       - name: das-toolbox - start databases
         shell: bash
         run: |
+          source ${HOME}/dastoolbox/bin/activate
           das-cli db start
 
       - name: das-toolbox - load knowledge base
         shell: bash
         run: |
+          source ${HOME}/dastoolbox/bin/activate
           das-cli metta load integration_tests/das/animals.metta
 
       - name: das-toolbox - start services
         shell: bash
         run: |
+          source ${HOME}/dastoolbox/bin/activate
           # Attention Broker
           das-cli ab start
           # Query Agent
@@ -86,12 +115,14 @@ jobs:
       - name: Run DAS module tests
         shell: bash
         run: |
+          source ${HOME}/dastoolbox/bin/activate
           timeout 60s ./target/release/metta-repl integration_tests/das/test.metta || true
 
       - name: das-toolbox - cleanup services
         if: always()
         shell: bash
         run: |
+          source ${HOME}/dastoolbox/bin/activate
           das-cli qa stop || true
           das-cli ab stop || true
           das-cli db stop || true
