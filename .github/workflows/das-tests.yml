@@ -5,6 +5,11 @@ name: das-tests
 on:
   workflow_call:
     inputs:
+      python-version:
+        description: "A version of a python interpreter to use"
+        default: "3.8"
+        required: false
+        type: string
       os:
         description: "A container which is used to make a build"
         default: "ubuntu-22.04"
@@ -44,7 +49,7 @@ jobs:
       - name: das-toolbox - set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ inputs.python-version }}
 
       - name: das-toolbox - install
         shell: bash
@@ -55,7 +60,7 @@ jobs:
           cd das-toolbox
           git checkout tags/0.5.0
           cd das-cli/src
-          sudo pip3 install -e .
+          sudo python3 -m pip install -e .
           sudo rm -rf "$TEMP_DIR"
           cd "$GITHUB_WORKSPACE"
 
