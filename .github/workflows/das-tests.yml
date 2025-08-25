@@ -56,8 +56,8 @@ jobs:
           git checkout tags/0.5.0
           cd das-cli/src
           sudo pip3 install -e .
+          sudo rm -rf "$TEMP_DIR"
           cd "$GITHUB_WORKSPACE"
-          rm -rf "$TEMP_DIR"
 
       - name: das-toolbox - DAS configuration
         shell: bash
