@@ -777,37 +777,27 @@ impl Iterator for TrieNodeIndexIter<'_> {
 type TrieNodeIter<'a> = std::iter::Chain<TrieNodeIndexIter<'a>, TrieNodeIndexIter<'a>>;
 
 #[derive(Debug)]
-struct Expression {
+struct ExpressionBuilder {
     count: usize,
     children: Vec<Atom>,
 }
 
-// FIXME: split state on expr and single?
-#[derive(Debug)]
-struct TrieNodeAtomIterState<'a> {
-    node: NodeId,
-    iter: TrieNodeIter<'a>,
-    path: Vec<(NodeId, TrieNodeIter<'a>)>,
-    expr: Vec<Expression>,     
-}
-
 struct TrieNodeAtomIter<'a, D: DuplicationStrategy> {
     trie: &'a AtomTrie<D>,
-    // FIXME: insert content of the struct
-    state: TrieNodeAtomIterState<'a>,
+    node_id: NodeId,
+    iter: TrieNodeIter<'a>,
+    path: Vec<(NodeId, TrieNodeIter<'a>)>,
+    expr: Vec<ExpressionBuilder>,
 }
 
 impl<'a, D: DuplicationStrategy> TrieNodeAtomIter<'a, D> {
     fn new(trie: &'a AtomTrie<D>, node_id: NodeId) -> Self {
-        let state = TrieNodeAtomIterState {
-            node: node_id,
+        Self {
+            trie,
+            node_id,
             iter: trie.nodes[node_id].iter_all(),
             path: Vec::new(),
             expr: Vec::new(),
-        };
-        Self {
-            trie,
-            state,
         }
     }
 
@@ -815,67 +805,75 @@ impl<'a, D: DuplicationStrategy> TrieNodeAtomIter<'a, D> {
         match key.as_start_expr() {
             None => {
                 let atom = unsafe{ self.trie.keys.get_atom_unchecked(key) };
-                let expr = self.state.expr.last_mut().unwrap();
+                let expr = self.expr.last_mut().unwrap();
                 expr.children.push(atom.clone());
                 expr.count -= 1;
             },
             Some(expr_size) => {
-                self.state.expr.push(Expression {
+                self.expr.push(ExpressionBuilder {
                     count: expr_size,
                     children: Vec::new(),
                 });
             },
         }
 
+        self.collapse_expressions();
+
+        let prev = std::mem::replace(&mut self.iter, self.trie.nodes[subnode_id].iter_all());
+        self.path.push((self.node_id, prev));
+        self.node_id = subnode_id;
+    }
+
+    fn collapse_expressions(&mut self) {
         loop {
-            if self.state.expr.len() == 1
-                || self.state.expr.last_mut().unwrap().count > 0 {
+            if self.expr.len() == 1
+                || self.expr.last_mut().unwrap().count > 0 {
                     break
             }
-            let expr = self.state.expr.pop().unwrap();
-            let last = self.state.expr.last_mut().unwrap();
+            let expr = self.expr.pop().unwrap();
+            let last = self.expr.last_mut().unwrap();
             last.children.push(Atom::expr(expr.children));
             last.count -= 1;
         }
-        
-        let prev = std::mem::replace(&mut self.state.iter, self.trie.nodes[subnode_id].iter_all());
-        self.state.path.push((self.state.node, prev));
-        self.state.node = subnode_id;
     }
 
     fn pop(&mut self) -> bool {
-        match self.state.path.pop() {
+        match self.path.pop() {
             Some(prev) => {
-                loop {
-                    let last = self.state.expr.last_mut().unwrap();
-                    let children = &mut last.children;
-                    if let Some(Atom::Expression(_)) = children.last() {
-                        last.count += 1;
-                        let atom = children.pop().unwrap();
-                        let vec = ExpressionAtom::try_from(atom).unwrap().into_children();
-                        self.state.expr.push(Expression {
-                            count: 0,
-                            children: vec
-                        });
-                    } else {
-                        break
-                    }
-                }
+                self.expand_expressions();
 
-                let expr = self.state.expr.last_mut().unwrap();
+                let expr = self.expr.last_mut().unwrap();
                 match expr.children.pop() {
                     Some(_) => {
                         expr.count += 1;
                     },
                     None => {
-                        self.state.expr.pop();
+                        self.expr.pop();
                     },
                 }
 
-                (self.state.node, self.state.iter) = prev;
+                (self.node_id, self.iter) = prev;
                 true
             },
             None => false,
+        }
+    }
+
+    fn expand_expressions(&mut self) {
+        loop {
+            let last = self.expr.last_mut().unwrap();
+            let children = &mut last.children;
+            if let Some(Atom::Expression(_)) = children.last() {
+                last.count += 1;
+                let atom = children.pop().unwrap();
+                let vec = ExpressionAtom::try_from(atom).unwrap().into_children();
+                self.expr.push(ExpressionBuilder {
+                    count: 0,
+                    children: vec
+                });
+            } else {
+                break
+            }
         }
     }
 
@@ -886,25 +884,25 @@ impl<'a, D: DuplicationStrategy> Iterator for TrieNodeAtomIter<'a, D> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if self.state.expr.len() == 1 {
-                let expr = self.state.expr.last_mut().unwrap();
+            if self.expr.len() == 1 {
+                let expr = self.expr.last_mut().unwrap();
                 if expr.count == 0 {
                     let atom = Atom::expr(expr.children.clone());
-                    let node = self.state.node;
+                    let node_id = self.node_id;
                     self.pop();
-                    return Some((Cow::Owned(atom), node))
+                    return Some((Cow::Owned(atom), node_id))
                 }
             }
 
-            match self.state.iter.next() {
+            match self.iter.next() {
                 None => {
                     if !self.pop() {
                         return None
                     }
                 },
                 Some((_, key)) => {
-                    let sub_node_id = *self.trie.index.get(&(self.state.node, key)).unwrap();
-                    if self.state.expr.is_empty() && !key.is_start_expr() {
+                    let sub_node_id = *self.trie.index.get(&(self.node_id, key)).unwrap();
+                    if self.expr.is_empty() && !key.is_start_expr() {
                         let atom = unsafe{ self.trie.keys.get_atom_unchecked(key) };
                         return Some((Cow::Borrowed(atom), sub_node_id))
                     } else {
