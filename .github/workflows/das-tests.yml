@@ -70,8 +70,9 @@ jobs:
           cd das-cli/src
           # TODO: should be a part of das-cli/setup.py file
           python3 -m pip install -r requirements.txt
-          python3 -m pip install .
-          rm -rf "$TEMP_DIR"
+          # TODO: -e should not be needed and temporary dir could be cleaned
+          # up after installation
+          python3 -m pip install -e .
           cd "$GITHUB_WORKSPACE"
 
       - name: das-toolbox - DAS configuration
