@@ -92,7 +92,7 @@ jobs:
         shell: bash
         run: |
           source ./dastoolbox/bin/activate
-          das-cli metta load integration_tests/das/animals.metta
+          das-cli metta load ${GITHUB_WORKSPACE}/integration_tests/das/animals.metta
 
       - name: das-toolbox - start services
         shell: bash
@@ -107,7 +107,7 @@ jobs:
         shell: bash
         run: |
           source ./dastoolbox/bin/activate
-          timeout 60s ./target/release/metta-repl integration_tests/das/test.metta || true
+          timeout 60s ./target/release/metta-repl ./integration_tests/das/test.metta || true
 
       - name: das-toolbox - cleanup services
         if: always()
