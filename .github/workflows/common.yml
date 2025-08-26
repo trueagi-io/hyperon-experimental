@@ -48,13 +48,17 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install protobuf-compiler (required by Das)
+      - name: Install protobuf-compiler (required by DAS)
         shell: bash
         run: |
-          sudo apt-get update && \
-          DEBIAN_FRONTEND=noninteractive \
-          TZ=UTC \
-          sudo apt-get install -y protobuf-compiler
+          if [[ "${{ inputs.os }}" == *"ubuntu"* ]]; then
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          elif [[ "${{ inputs.os }}" == *"macos"* ]]; then
+            brew install protobuf
+          elif [[ "${{ inputs.os }}" == *"windows"* ]]; then
+            choco install protoc -y
+          fi
 
       - name: Build Rust library
         working-directory: ./lib
