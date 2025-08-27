@@ -7,15 +7,14 @@ use trie::*;
 use hyperon_atom::*;
 use hyperon_atom::matcher::Bindings;
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::borrow::Cow;
 
 // TODO: should we duplicate structure for an owned and borrowed cases to eliminate Cow
 #[derive(PartialEq, Debug)]
 enum AtomToken<'a> {
     Atom(Cow<'a, Atom>),
-    StartExpr(Option<&'a Atom>), // atom is required to match custom entries from index
-    EndExpr,
+    StartExpr(Option<&'a Atom>, usize), // atom is required to match custom entries from index
 }
 
 #[derive(Default, Debug, Clone)]
@@ -23,7 +22,7 @@ enum AtomIterState<'a> {
     /// Start from a Symbol, Variable or Grounded
     StartSingle(Cow<'a, Atom>),
     /// Start from Expression atom
-    StartExpression(Cow<'a, Atom>),
+    StartExpression(Cow<'a, Atom>, usize),
 
     /// Iterate via Expression recursively
     Iterate {
@@ -56,10 +55,14 @@ impl<'a> AtomIter<'a> {
 
     fn from_cow(atom: Cow<'a, Atom>) -> Self {
         let state = match atom {
-            Cow::Owned(Atom::Expression(_)) =>
-                AtomIterState::StartExpression(atom),
-            Cow::Borrowed(Atom::Expression(_)) =>
-                AtomIterState::StartExpression(atom),
+            Cow::Owned(Atom::Expression(ref e)) => {
+                let size = e.children().len();
+                AtomIterState::StartExpression(atom, size)
+            },
+            Cow::Borrowed(Atom::Expression(e)) => {
+                let size = e.children().len();
+                AtomIterState::StartExpression(atom, size)
+            },
             _ => AtomIterState::StartSingle(atom),
         };
         Self{ state }
@@ -72,73 +75,75 @@ impl<'a> Iterator for AtomIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         type State<'a> = AtomIterState<'a>;
 
-        match std::mem::take(&mut self.state) {
-            State::StartSingle(atom) => {
-                self.state = State::End;
-                Some(AtomToken::Atom(atom))
-            },
-            State::StartExpression(Cow::Owned(Atom::Expression(expr))) => {
-                self.state = State::Iterate {
-                    expr: Cow::Owned(expr),
-                    idx: 0,
-                    next: Box::new(State::End)
-                };
-                Some(AtomToken::StartExpr(None))
-            },
-            State::StartExpression(Cow::Borrowed(atom @ Atom::Expression(expr))) => {
-                self.state = State::Iterate {
-                    expr: Cow::Borrowed(expr),
-                    idx: 0,
-                    next: Box::new(State::End)
-                };
-                Some(AtomToken::StartExpr(Some(atom)))
-            },
-            State::StartExpression(_) => panic!("Only expressions are expected!"),
-            State::Iterate { expr, idx, next } => {
-                if idx < expr.children().len() {
-                    fn extract_atom(mut expr: Cow<'_, ExpressionAtom>, idx: usize) -> (Cow<'_, Atom>, Cow<'_, ExpressionAtom>) {
-                        match expr {
-                            Cow::Owned(ref mut e) => {
-                                let cell = unsafe { e.children_mut().get_unchecked_mut(idx) };
-                                let atom = std::mem::replace(cell, Atom::sym(""));
-                                (Cow::Owned(atom), expr)
+        loop {
+            match std::mem::take(&mut self.state) {
+                State::StartSingle(atom) => {
+                    self.state = State::End;
+                    return Some(AtomToken::Atom(atom))
+                },
+                State::StartExpression(Cow::Owned(Atom::Expression(expr)), size) => {
+                    self.state = State::Iterate {
+                        expr: Cow::Owned(expr),
+                        idx: 0,
+                        next: Box::new(State::End)
+                    };
+                    return Some(AtomToken::StartExpr(None, size))
+                },
+                State::StartExpression(Cow::Borrowed(atom @ Atom::Expression(expr)), size) => {
+                    self.state = State::Iterate {
+                        expr: Cow::Borrowed(expr),
+                        idx: 0,
+                        next: Box::new(State::End)
+                    };
+                    return Some(AtomToken::StartExpr(Some(atom), size))
+                },
+                State::StartExpression(_, _) => panic!("Only expressions are expected!"),
+                State::Iterate { expr, idx, next } => {
+                    if idx < expr.children().len() {
+                        fn extract_atom(mut expr: Cow<'_, ExpressionAtom>, idx: usize) -> (Cow<'_, Atom>, Cow<'_, ExpressionAtom>) {
+                            match expr {
+                                Cow::Owned(ref mut e) => {
+                                    let cell = unsafe { e.children_mut().get_unchecked_mut(idx) };
+                                    let atom = std::mem::replace(cell, Atom::sym(""));
+                                    (Cow::Owned(atom), expr)
+                                },
+                                Cow::Borrowed(e) => {
+                                    let atom = unsafe { e.children().get_unchecked(idx) };
+                                    (Cow::Borrowed(atom), expr)
+                                },
+                            }
+                        }
+                        let (atom, expr) = extract_atom(expr, idx);
+                        let next_state = State::Iterate{ expr, idx: idx + 1, next };
+                        match atom {
+                            Cow::Owned(Atom::Expression(expr)) => {
+                                let size = expr.children().len();
+                                self.state = State::Iterate {
+                                    expr: Cow::Owned(expr),
+                                    idx: 0,
+                                    next: Box::new(next_state)
+                                };
+                                return Some(AtomToken::StartExpr(None, size))
                             },
-                            Cow::Borrowed(e) => {
-                                let atom = unsafe { e.children().get_unchecked(idx) };
-                                (Cow::Borrowed(atom), expr)
+                            Cow::Borrowed(atom @ Atom::Expression(expr)) => {
+                                self.state = State::Iterate {
+                                    expr: Cow::Borrowed(expr),
+                                    idx: 0,
+                                    next: Box::new(next_state)
+                                };
+                                return Some(AtomToken::StartExpr(Some(atom), expr.children().len()))
+                            },
+                            _ => {
+                                self.state = next_state;
+                                return Some(AtomToken::Atom(atom))
                             },
                         }
+                    } else {
+                        self.state = *next;
                     }
-                    let (atom, expr) = extract_atom(expr, idx);
-                    let next_state = State::Iterate{ expr, idx: idx + 1, next };
-                    match atom {
-                        Cow::Owned(Atom::Expression(expr)) => {
-                            self.state = State::Iterate {
-                                expr: Cow::Owned(expr),
-                                idx: 0,
-                                next: Box::new(next_state)
-                            };
-                            Some(AtomToken::StartExpr(None))
-                        },
-                        Cow::Borrowed(atom @ Atom::Expression(expr)) => {
-                            self.state = State::Iterate {
-                                expr: Cow::Borrowed(expr),
-                                idx: 0,
-                                next: Box::new(next_state)
-                            };
-                            Some(AtomToken::StartExpr(Some(atom)))
-                        },
-                        _ => {
-                            self.state = next_state;
-                            Some(AtomToken::Atom(atom))
-                        },
-                    }
-                } else {
-                    self.state = *next;
-                    Some(AtomToken::EndExpr)
-                }
-            },
-            State::End => None,
+                },
+                State::End => return None,
+            }
         }
     }
 }
@@ -174,8 +179,7 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
 
     fn atom_token_to_insert_index_key<'a>(token: AtomToken<'a>) -> InsertKey {
         match token {
-            AtomToken::StartExpr(_) => InsertKey::StartExpr,
-            AtomToken::EndExpr => InsertKey::EndExpr,
+            AtomToken::StartExpr(_, size) => InsertKey::StartExpr(size),
             AtomToken::Atom(Cow::Owned(atom)) => InsertKey::Atom(atom),
             _ => panic!("Only owned atoms are expected to be inserted"),
         }
@@ -190,8 +194,7 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
 
     fn atom_token_to_query_index_key<'a>(token: AtomToken<'a>) -> QueryKey<'a> {
         match token {
-            AtomToken::StartExpr(Some(atom)) => QueryKey::StartExpr(atom),
-            AtomToken::EndExpr => QueryKey::EndExpr,
+            AtomToken::StartExpr(Some(atom), size) => QueryKey::StartExpr(atom, size),
             AtomToken::Atom(Cow::Borrowed(atom)) => QueryKey::Atom(atom),
             _ => panic!("Only borrowed atoms are expected to be queried"),
         }
@@ -212,6 +215,12 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
     /// Returns [true] if index has no atoms.
     pub fn is_empty(&self) -> bool {
         self.trie.is_empty()
+    }
+}
+
+impl<D: DuplicationStrategy + Display> Display for AtomIndex<D> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        Display::fmt(&self.trie, f)
     }
 }
 
@@ -257,12 +266,11 @@ mod test {
         let atom = expr!(("sym" var {Num(42)} ("sym1" var1 {Num(43)})));
         let it = AtomIter::from_ref(&atom);
         let actual: Vec<AtomToken> = it.collect();
-        assert_eq!(vec![AtomToken::StartExpr(Some(&atom)), AtomToken::Atom(Cow::Borrowed(&expr!("sym"))),
+        assert_eq!(vec![AtomToken::StartExpr(Some(&atom), 4), AtomToken::Atom(Cow::Borrowed(&expr!("sym"))),
             AtomToken::Atom(Cow::Borrowed(&expr!(var))), AtomToken::Atom(Cow::Borrowed(&expr!({Num(42)}))),
-            AtomToken::StartExpr(Some(&expr!("sym1" var1 {Num(43)}))),
+            AtomToken::StartExpr(Some(&expr!("sym1" var1 {Num(43)})), 3),
             AtomToken::Atom(Cow::Borrowed(&expr!("sym1"))), AtomToken::Atom(Cow::Borrowed(&expr!(var1))),
-            AtomToken::Atom(Cow::Borrowed(&expr!({Num(43)}))),
-            AtomToken::EndExpr, AtomToken::EndExpr], actual);
+            AtomToken::Atom(Cow::Borrowed(&expr!({Num(43)})))], actual);
     }
 
     fn plain_vars(bind: Bindings) -> Bindings {
@@ -288,7 +296,6 @@ mod test {
                 _ => res.add_var_binding(var, atom),
             }.expect("Not expected");
         }
-        println!("plain_vars: {} -> {}", bind, res);
         res
     }
 
