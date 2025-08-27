@@ -48,7 +48,7 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install protobuf-compiler (required by Das)
+      - name: Install protobuf-compiler (required by DAS)
         shell: bash
         run: |
           if [[ "${{ inputs.os }}" == *"ubuntu"* ]]; then
