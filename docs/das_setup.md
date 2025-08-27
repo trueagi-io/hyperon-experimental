@@ -1,10 +1,10 @@
 
 ## Running DAS module tests locally
 
-### Install `das-toolbox` in order to get `das-cli` (linux users):
+### Install `das-toolbox` in order to get `das-cli` (Debian based Linux users):
 ```
 sudo apt -y update
-sudo apt -y install build-essential wget
+sudo apt -y install wget
 
 wget -O - http://45.77.4.33/apt-repo/setup.sh | sudo bash
 
@@ -118,12 +118,9 @@ Query Agent started on port 40002
 
 6. Running DAS tests
 ```
-# Be sure the REPL is build (from repo's root)
-cargo b -r
-
-# Run it passing a metta file
+# Run it passing a metta file (from repo's root)
 # NOTE: this run will freeze for ~20s as client tries to get all available services from peers
-./target/release/metta-repl lib/tests/das.metta
+cargo run -r --bin metta-repl lib/tests/das.metta
 
 >>>
 [2025-08-19T12:41:03Z WARN  metta_bus_client::bus_node] BusNode::join_network(): Unable to get all services (1/4) from peer localhost:35700
