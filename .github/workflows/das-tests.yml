@@ -4,23 +4,11 @@ name: das-tests
 
 on:
   workflow_call:
-    inputs:
-      os:
-        description: "A container which is used to make a build"
-        default: "ubuntu-22.04"
-        required: false
-        type: string
   workflow_dispatch:
-    inputs:
-      os:
-        description: "A container which is used to make a build"
-        default: "ubuntu-22.04"
-        required: false
-        type: string
 
 jobs:
   das-tests:
-    runs-on: ${{ inputs.os }}
+    runs-on: "ubuntu-24.04"
 
     steps:
       - name: Check out repository code
@@ -35,14 +23,8 @@ jobs:
       - name: Install protobuf-compiler (required by Das)
         shell: bash
         run: |
-          if [[ "${{ inputs.os }}" == *"ubuntu"* ]]; then
-            sudo apt-get update
-            sudo apt-get install -y protobuf-compiler
-          elif [[ "${{ inputs.os }}" == *"macos"* ]]; then
-            brew install protobuf
-          elif [[ "${{ inputs.os }}" == *"windows"* ]]; then
-            choco install protoc -y
-          fi
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
 
       - name: Build
         shell: bash

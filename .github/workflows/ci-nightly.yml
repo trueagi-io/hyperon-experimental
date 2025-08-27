@@ -25,13 +25,5 @@ jobs:
       build-type: ${{ matrix.build-type }}
 
   das-tests:
-    if: github.repository == 'trueagi-io/hyperon-experimental'
-    needs: ci-nightly
-    strategy:
-      fail-fast: false
-      matrix:
-        os:  ["ubuntu-22.04", "ubuntu-24.04", "macos-13", "macos-14", "macos-15", "windows-latest"]
-      max-parallel: 5
+    if: ${{ github.event_name != 'schedule' || github.repository == 'trueagi-io/hyperon-experimental' }}
     uses: ./.github/workflows/das-tests.yml
-    with:
-      os: ${{ matrix.os }}

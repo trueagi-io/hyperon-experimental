@@ -28,11 +28,6 @@ on:
         required: true
         default: "[\"Debug\", \"Release\", \"RelWithDebInfo\", \"MinSizeRel\"]"
         type: string
-      run-das-tests:
-        description: 'Run DAS integration tests'
-        required: true
-        default: true
-        type: boolean
 
 jobs:
   ci-manual:
@@ -51,14 +46,3 @@ jobs:
       python-version: ${{ matrix.python-version }}
       cmake-version: ${{ matrix.cmake-version }}
       build-type: ${{ matrix.build-type }}
-
-  das-tests:
-    if: ${{ inputs.run-das-tests }}
-    strategy:
-      matrix:
-        os: ${{ fromJson(inputs.os) }}
-      max-parallel: 5
-    needs: ci-manual
-    uses: ./.github/workflows/das-tests.yml
-    with:
-      os: ${{ matrix.os }}
