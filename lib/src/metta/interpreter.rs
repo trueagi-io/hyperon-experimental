@@ -6,7 +6,7 @@ use hyperon_atom::matcher::*;
 use hyperon_space::*;
 use crate::metta::*;
 use crate::metta::types::*;
-use crate::metta::runner::stdlib::core::IfEqualOp;
+use crate::metta::runner::{stdlib::core::IfEqualOp, str::Str};
 use hyperon_common::collections::CowArray;
 
 use std::fmt::{Debug, Display, Formatter};
@@ -1303,6 +1303,7 @@ fn match_meta_types(actual: &Atom, expected: &Atom) -> bool {
 }
 
 fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut arg_types: Vec<Atom>, actual_args: &'a[Atom], expected_type: &'a Atom, space: &'a DynSpace, bindings: Bindings) -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + 'a> {
+    let mut arg_id = 0;
     match arg_types.len() {
         0 => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
         1 => {
@@ -1328,6 +1329,7 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
         },
         _ => {
             let formal_arg_type = arg_types.remove(0);
+            arg_id += 1;
             let arg_types_tail = arg_types;
             match actual_args {
                 [] => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
@@ -1345,7 +1347,10 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                             let op_type = op_type.clone();
                             match match_types(&formal_arg_type, &actual_arg_type, bindings.clone()) {
                                 Ok(matches) => Box::new(matches.flat_map(move |bindings| check_if_function_type_is_applicable_(expr, op_type.clone(), arg_types_tail.clone(), args_tail, expected_type, space, bindings))),
-                                Err(nomatch) => Box::new(nomatch.map(|bindings| (Err(error_atom(actual_arg.clone(), BAD_TYPE_SYMBOL)), bindings))),
+                                Err(nomatch) => {
+                                    let formal_arg_type_clone = formal_arg_type.clone();
+                                    Box::new(nomatch.map(move |bindings| (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::gnd(Str::from_string(format!("{}: argument {} expected {} got {}", BAD_TYPE_SYMBOL, arg_id, formal_arg_type_clone.clone(), actual_arg_type.clone())))])), bindings)))
+                                },
                             }
                         });
                         Box::new(iter)

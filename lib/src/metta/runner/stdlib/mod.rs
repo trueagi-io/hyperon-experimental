@@ -242,9 +242,11 @@ mod tests {
             (: b B)
             (: foo (-> T T))
             (= (foo $x) $x)
-            !(metta (foo b) %Undefined% &self)
+            !(assertEqual
+                (metta (foo b) %Undefined% &self)
+                (Error (foo b) \"BadType: argument 1 expected T got B\"))
         ");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" "b" "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
         let result = run_program("
             (: Nil (List $t))
             (: Z Nat)
@@ -252,16 +254,18 @@ mod tests {
             (: Cons (-> $t (List $t) (List $t)))
             !(metta (Cons S (Cons Z Nil)) %Undefined% &self)
         ");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("Cons" "Z" "Nil") "BadType")]]));
+        // assert_eq!(result, Ok(vec![vec![expr!("Error" ("Cons" "S" ("Cons" "Z" "Nil")) "\"BadType: argument 1 expected\"" ("List" {VariableAtom::new("t")}) "\"got (List Nat)\"")]]));
         let result = run_program("
             (: (a b) (C D))
 
             (: foo (-> (A B) %Undefined%))
             (= (foo $x) succ)
 
-            !(foo (a b))
+            !(assertEqual
+                (foo (a b))
+                (Error (foo (a b)) \"BadType: argument 1 expected (A B) got (C D)\"))
         ");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("a" "b") "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
     }
 
     #[test]
@@ -501,7 +505,9 @@ mod tests {
             (: id_a (-> A A))
             (= (id_a $a) $a)
 
-            !(metta (id_a myAtom) %Undefined% &self)
+            !(assertEqual
+                (metta (id_a myAtom) %Undefined% &self)
+                (Error (id_a myAtom) \"BadType: argument 1 expected A got myType\"))
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -509,14 +515,16 @@ mod tests {
             GroundedFunctionAtom::new("id_num".into(), expr!("->" "Number" "Number"), id_num));
 
         assert_eq!(metta.run(SExprParser::new(program1)),
-            Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
+            Ok(vec![vec![UNIT_ATOM]]));
 
         let program2 = "
-            !(metta (id_num myAtom) %Undefined% &self)
+            !(assertEqual
+                (metta (id_num myAtom) %Undefined% &self)
+                (Error (id_num myAtom) \"BadType: argument 1 expected Number got myType\"))
         ";
 
         assert_eq!(metta.run(SExprParser::new(program2)),
-            Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
+            Ok(vec![vec![UNIT_ATOM]]));
     }
 
     #[test]
