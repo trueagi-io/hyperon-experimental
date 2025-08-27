@@ -89,7 +89,7 @@ jobs:
         shell: bash
         run: |
           source ./dastoolbox/bin/activate
-          timeout 60s ./target/release/metta-repl ./integration_tests/das/test.metta || true
+          timeout 60s ./target/release/metta-repl ./integration_tests/das/test.metta
 
       - name: das-toolbox - cleanup services
         if: always()
