@@ -4,16 +4,11 @@ name: das-tests
 
 on:
   workflow_call:
-    inputs:
-      os:
-        description: "A container which is used to make a build"
-        default: "ubuntu-22.04"
-        required: false
-        type: string
+  workflow_dispatch:
 
 jobs:
-  setup-and-test:
-    runs-on: ${{ inputs.os }}
+  das-tests:
+    runs-on: "ubuntu-24.04"
 
     steps:
       - name: Check out repository code
@@ -28,14 +23,8 @@ jobs:
       - name: Install protobuf-compiler (required by Das)
         shell: bash
         run: |
-          if [[ "${{ inputs.os }}" == *"ubuntu"* ]]; then
-            sudo apt-get update
-            sudo apt-get install -y protobuf-compiler
-          elif [[ "${{ inputs.os }}" == *"macos"* ]]; then
-            brew install protobuf
-          elif [[ "${{ inputs.os }}" == *"windows"* ]]; then
-            choco install protoc -y
-          fi
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
 
       - name: Build
         shell: bash
@@ -46,38 +35,51 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: das-toolbox - create Python venv
+        shell: bash
+        run: |
+          python3 -m venv dastoolbox
+
       - name: das-toolbox - install
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           TEMP_DIR=$(mktemp -d)
           cd "$TEMP_DIR"
           git clone https://github.com/singnet/das-toolbox.git
           cd das-toolbox
           git checkout tags/0.5.0
           cd das-cli/src
-          sudo pip3 install -e .
-          sudo rm -rf "$TEMP_DIR"
+          # TODO: should be a part of das-cli/setup.py file
+          python3 -m pip install -r requirements.txt
+          # TODO: -e should not be needed and temporary dir could be cleaned
+          # up after installation
+          python3 -m pip install -e .
           cd "$GITHUB_WORKSPACE"
 
       - name: das-toolbox - DAS configuration
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           # Configure DAS with default settings
           echo -e "\n\n\n\n\n\n\n37007\n\n\n\n\n\n\n\n\n\n\n" | das-cli config set
 
       - name: das-toolbox - start databases
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           das-cli db start
 
       - name: das-toolbox - load knowledge base
         shell: bash
         run: |
-          das-cli metta load integration_tests/das/animals.metta
+          source ./dastoolbox/bin/activate
+          das-cli metta load ${GITHUB_WORKSPACE}/integration_tests/das/animals.metta
 
       - name: das-toolbox - start services
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           # Attention Broker
           das-cli ab start
           # Query Agent
@@ -86,12 +88,14 @@ jobs:
       - name: Run DAS module tests
         shell: bash
         run: |
-          timeout 60s ./target/release/metta-repl integration_tests/das/test.metta || true
+          source ./dastoolbox/bin/activate
+          timeout 60s ./target/release/metta-repl ./integration_tests/das/test.metta
 
       - name: das-toolbox - cleanup services
         if: always()
         shell: bash
         run: |
+          source ./dastoolbox/bin/activate
           das-cli qa stop || true
           das-cli ab stop || true
           das-cli db stop || true
