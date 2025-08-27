@@ -508,7 +508,7 @@ const TK_STORE_INDEX: usize = 0b10 << BITS_PER_ID;
 const TK_MATCH_EXACT: usize = 0b00 << BITS_PER_ID;
 const TK_MATCH_CUSTOM: usize = 0b01 << BITS_PER_ID;
 
-const TK_MAX_EXPRESSION_SIZE: usize = 2048;
+const TK_MAX_EXPRESSION_SIZE: usize = 1 << 10;
 
 /// Compact representation of the atom from the trie. It represents each
 /// atom using single [usize] value. It keeps value of the key, key matching
