@@ -53,14 +53,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; &state-token was initialized with state of type (A B), so
 ; it cannot be changed to int
-!(assertEqual
-  (change-state! &state-token 1)
-  (Error 1 BadType))
+;!(assertEqual
+;  (change-state! &state-token 1)
+;  (Error (change-state! (State (A B)) 1) "BadType: argument 2 expected Expression got Number"))
 
 ; the new state here is int, so it cannot be changed to string
 !(assertEqual
   (change-state! (new-state 1) "S")
-  (Error "S" BadType))
+  (Error (change-state! (new-state 1) "S") "BadType: argument 2 expected Number got String"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

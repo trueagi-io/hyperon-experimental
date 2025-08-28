@@ -252,9 +252,11 @@ mod tests {
             (: Z Nat)
             (: S (-> Nat Nat))
             (: Cons (-> $t (List $t) (List $t)))
-            !(metta (Cons S (Cons Z Nil)) %Undefined% &self)
+            !(assertEqual
+                (metta (Cons S (Cons Z Nil)) %Undefined% &self)
+                (Error (Cons S (Cons Z Nil)) \"BadType: argument 2 expected (List (-> Nat Nat)) got (List Nat)\"))
         ");
-        // assert_eq!(result, Ok(vec![vec![expr!("Error" ("Cons" "S" ("Cons" "Z" "Nil")) "\"BadType: argument 1 expected\"" ("List" {VariableAtom::new("t")}) "\"got (List Nat)\"")]]));
+        assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
         let result = run_program("
             (: (a b) (C D))
 
