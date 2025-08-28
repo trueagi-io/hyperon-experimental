@@ -3,10 +3,11 @@ name: ci nightly
 on:
   schedule:
     - cron: "30 2 * * *"
+  workflow_dispatch:
 
 jobs:
   ci-nightly:
-    if: github.repository == 'trueagi-io/hyperon-experimental'
+    if: ${{ github.event_name != 'schedule' || github.repository == 'trueagi-io/hyperon-experimental' }}
     strategy:
       fail-fast: false
       matrix:
@@ -22,3 +23,7 @@ jobs:
       python-version: ${{ matrix.python-version }}
       cmake-version: ${{ matrix.cmake-version }}
       build-type: ${{ matrix.build-type }}
+
+  das-tests:
+    if: ${{ github.event_name != 'schedule' || github.repository == 'trueagi-io/hyperon-experimental' }}
+    uses: ./.github/workflows/das-tests.yml
