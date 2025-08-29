@@ -35,3 +35,8 @@ fn macros_metta_literal_expression() {
             Atom::gnd(Str::from_str("text"))
     ]));
 }
+
+#[test]
+fn macros_metta_gnd() {
+    assert_eq!(metta!{{Number::Integer(42)}}, Atom::gnd(Number::Integer(42)));
+}

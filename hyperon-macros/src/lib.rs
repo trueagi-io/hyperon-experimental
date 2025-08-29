@@ -73,7 +73,7 @@ enum GndType {
     Bool,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 enum Token {
     ExprStart,
     ExprEnd,
@@ -83,6 +83,7 @@ enum Token {
     Bool(String),
     Variable(String),
     Symbol(String),
+    Gnd(Group),
     End,
 }
 
@@ -148,7 +149,7 @@ impl Tokenizer {
                 (TS::Start, Some(IT::ExprStart(_, _))) => (Some(T::ExprStart), TS::Start),
                 (TS::Start, Some(IT::ExprEnd(_, _))) => (Some(T::ExprEnd), TS::Start),
                 (TS::Start, Some(IT::TokenTree(tt))) => {
-                    match &tt {
+                    match tt {
                         TokenTree::Literal(l) => {
                             let s = l.to_string();
                             let lit = litrs::Literal::parse(s.clone()).expect("Failed to parse literal");
@@ -171,10 +172,13 @@ impl Tokenizer {
                         TokenTree::Punct(p) if p.as_char() == '$' => {
                             (None, TS::Variable(String::new()))
                         },
-                        TokenTree::Punct(p) if p.as_char() == '+'
-                            || p.as_char() == '-'
-                                => (None, TS::Sign(p.to_string())),
-                        _ => (None, TS::Symbol(tt.to_string())), 
+                        TokenTree::Punct(p)
+                            if p.as_char() == '+' || p.as_char() == '-' =>
+                                (None, TS::Sign(p.to_string())),
+                        TokenTree::Group(g)
+                            if g.delimiter() == Delimiter::Brace =>
+                                (Some(T::Gnd(g)), TS::Start),
+                        tt => (None, TS::Symbol(tt.to_string())), 
                     }
                 }
 
@@ -338,6 +342,11 @@ impl Printer {
             .literal(Literal::string(s)).group(')').group(')');
     }
 
+    fn gnd(&mut self, g: Group) {
+        self.ident("Atom").punct("::").ident("gnd")
+            .push(TokenTree::Group(Group::new(Delimiter::Parenthesis, g.stream())));
+    }
+
     fn expr_start(&mut self) {
         self.ident("Atom").punct("::").ident("expr").group('(')
             .group('[');
@@ -388,7 +397,7 @@ impl MettaConverter {
     fn next_state(&mut self) {
         let token = self.input.next();
 
-        if token == Token::End {
+        if matches!(token, Token::End) {
             if !matches!(self.state, State::Start) {
                 panic!("Unexpected expression end");
             }
@@ -397,7 +406,7 @@ impl MettaConverter {
         }
 
         if matches!(self.state, State::Expression(_))
-            && token != Token::ExprEnd {
+            && !matches!(token, Token::ExprEnd) {
                 self.output.expr_delimiter();
         }
 
@@ -410,6 +419,7 @@ impl MettaConverter {
             Token::Float(s) => self.output.float(s.parse::<f64>().unwrap()),
             Token::Str(s) => self.output.str(&s[1..s.len() - 1]),
             Token::Bool(s) => self.output.bool(&s),
+            Token::Gnd(g) => self.output.gnd(g),
 
             Token::ExprStart => {
                 self.output.expr_start();
