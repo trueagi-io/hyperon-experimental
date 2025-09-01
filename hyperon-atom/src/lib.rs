@@ -242,14 +242,22 @@ pub struct VariableAtom {
 }
 
 impl VariableAtom {
-    /// Constructs new variable using `name` provided. Name should not contain
-    /// `#` characted which is reserved for internal name formatting (see
-    /// [VariableAtom::parse_name]). Usually [Atom::var] method should be used
-    /// to create new variable atom instance. But sometimes [VariableAtom]
-    /// instance is required. For example for using as a key in variable bindings
-    /// (see [matcher::Bindings]).
+    /// Constructs new variable using `name` provided.  Usually [Atom::var]
+    /// method should be used to create new variable atom instance. But
+    /// sometimes [VariableAtom] instance is required. For example for using
+    /// as a key in variable bindings (see [matcher::Bindings]).
+    /// Name should not contain `#` characted which is reserved for internal
+    /// name formatting (see [VariableAtom::parse_name]).
     pub fn new<T: Into<UniqueString>>(name: T) -> Self {
         Self{ name: Self::check_name(name), id: 0 }
+    }
+
+    /// Constructs new constant variable instance using `name` provided. Method
+    /// is introduced to support creating constant expressions.
+    /// Name should not contain `#` characted which is reserved for internal
+    /// name formatting (see [VariableAtom::parse_name]).
+    pub const fn new_const(name: UniqueString) -> Self {
+        Self{ name, id: 0 }
     }
 
     /// Constructs new variable using `name` and 'id' provided. This method is
