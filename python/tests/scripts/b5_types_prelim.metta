@@ -28,7 +28,7 @@
 ; Now the result of its evaluation will be a error expression, because `S` is not `Nat`
 !(assertEqualToResult
   (Add S Z)
-  ((Error (Add S Z) "BadType: argument 1 expected Nat got (-> Nat Nat)")))
+  ((Error (Add S Z) (BadType argument 1 expected Nat got (-> Nat Nat)))))
 ; But these other examples works normally
 !(assertEqual
   (Add (S Z) Z)
@@ -84,7 +84,7 @@
 ; This list is badly typed, because S and Z are not the same type
 !(assertEqualToResult
   (Cons S (Cons Z Nil))
-  ((Error (Cons S (Cons Z Nil)) "BadType: argument 2 expected (List (-> Nat Nat)) got (List Nat)")))
+  ((Error (Cons S (Cons Z Nil)) (BadType argument 2 expected (List (-> Nat Nat)) got (List Nat)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -109,7 +109,7 @@
 ; Not accepted, because Z and S are not the same type
 !(assertEqualToResult
   (eq Z S)
-  ((Error (eq Z S) "BadType: argument 2 expected Nat got (-> Nat Nat)")))
+  ((Error (eq Z S) (BadType argument 2 expected Nat got (-> Nat Nat)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -139,10 +139,10 @@
 ; Not accepted
 !(assertEqualToResult
   (of-same-type Green Color)
-  ((Error (of-same-type Green Color) "BadType: argument 2 expected Color got Property")))
+  ((Error (of-same-type Green Color) (BadType argument 2 expected Color got Property))))
 !(assertEqualToResult
   (of-same-type Green Circle)
-  ((Error (of-same-type Green Circle) "BadType: argument 2 expected Color got Shape")))
+  ((Error (of-same-type Green Circle) (BadType argument 2 expected Color got Shape))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

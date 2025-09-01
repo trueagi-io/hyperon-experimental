@@ -89,7 +89,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqualToResult
   (+ 2 "String")
-  ((Error (+ 2 "String") "BadType: argument 2 expected Number got String")))
+  ((Error (+ 2 "String") (BadType argument 2 expected Number got String))))
 
 ; Custom symbols as arguments of grounded operations
 ; work similarly

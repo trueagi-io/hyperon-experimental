@@ -1228,7 +1228,7 @@ pub fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::metta::runner::str::Str;
+    use crate::metta::runner::number::Number;
     use super::*;
     use super::bool::Bool;
 
@@ -1353,7 +1353,7 @@ mod tests {
             !(s (foo b))
         ";
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") {Str::from_str("BadType: argument 1 expected A got B")})]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" "argument" {Number::Integer(1)} "expected" "A" "got" "B"))]]));
     }
 
     #[test]

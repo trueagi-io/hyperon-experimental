@@ -244,7 +244,7 @@ mod tests {
             (= (foo $x) $x)
             !(assertEqual
                 (metta (foo b) %Undefined% &self)
-                (Error (foo b) \"BadType: argument 1 expected T got B\"))
+                (Error (foo b) (BadType argument 1 expected T got B)))
         ");
         assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
         let result = run_program("
@@ -254,7 +254,7 @@ mod tests {
             (: Cons (-> $t (List $t) (List $t)))
             !(assertEqual
                 (metta (Cons S (Cons Z Nil)) %Undefined% &self)
-                (Error (Cons S (Cons Z Nil)) \"BadType: argument 2 expected (List (-> Nat Nat)) got (List Nat)\"))
+                (Error (Cons S (Cons Z Nil)) (BadType argument 2 expected (List (-> Nat Nat)) got (List Nat))))
         ");
         assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
         let result = run_program("
@@ -265,7 +265,7 @@ mod tests {
 
             !(assertEqual
                 (foo (a b))
-                (Error (foo (a b)) \"BadType: argument 1 expected (A B) got (C D)\"))
+                (Error (foo (a b)) (BadType argument 1 expected (A B) got (C D))))
         ");
         assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
     }
@@ -509,7 +509,7 @@ mod tests {
 
             !(assertEqual
                 (metta (id_a myAtom) %Undefined% &self)
-                (Error (id_a myAtom) \"BadType: argument 1 expected A got myType\"))
+                (Error (id_a myAtom) (BadType argument 1 expected A got myType)))
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -522,7 +522,7 @@ mod tests {
         let program2 = "
             !(assertEqual
                 (metta (id_num myAtom) %Undefined% &self)
-                (Error (id_num myAtom) \"BadType: argument 1 expected Number got myType\"))
+                (Error (id_num myAtom) (BadType argument 1 expected Number got myType)))
         ";
 
         assert_eq!(metta.run(SExprParser::new(program2)),

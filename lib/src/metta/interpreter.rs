@@ -6,7 +6,7 @@ use hyperon_atom::matcher::*;
 use hyperon_space::*;
 use crate::metta::*;
 use crate::metta::types::*;
-use crate::metta::runner::{stdlib::core::IfEqualOp, str::Str};
+use crate::metta::runner::stdlib::core::IfEqualOp;
 use hyperon_common::collections::CowArray;
 
 use std::fmt::{Debug, Display, Formatter};
@@ -15,6 +15,7 @@ use std::rc::Rc;
 use std::fmt::Write;
 use std::cell::RefCell;
 use itertools::Itertools;
+use crate::metta::runner::number::Number;
 
 macro_rules! match_atom {
     ($atom:tt ~ $pattern:tt => $succ:tt , _ => $error:tt) => {
@@ -1350,8 +1351,7 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                                     let formal_arg_type_clone = formal_arg_type.clone();
                                     Box::new(nomatch.map(move |bindings| {
                                         let formal_arg_type = apply_bindings_to_atom_move(formal_arg_type_clone.clone(), &bindings);
-                                        let msg = format!("{}: argument {} expected {} got {}", BAD_TYPE_SYMBOL, arg_id, formal_arg_type, actual_arg_type.clone());
-                                        (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::gnd(Str::from_string(msg))])), bindings)
+                                        (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, sym!("argument"), Atom::gnd(Number::Integer(arg_id as i64)), sym!("expected"), formal_arg_type, sym!("got"), actual_arg_type.clone()])])), bindings)
                                     }))
                                 },
                             }
