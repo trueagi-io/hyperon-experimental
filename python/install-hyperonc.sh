@@ -39,7 +39,7 @@ curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v31.1/$PR
 unzip -o $PROTOC_ZIP -d /usr/local
 rm -f $PROTOC_ZIP
 
-python3 -m pip install cmake==3.24 conan==2.16.1 pip==23.1.2
+python3 -m pip install cmake==3.24 conan==2.19.1 pip==23.1.2
 PATH="${PATH}:${HOME}/.local/bin"
 conan profile detect --force
 
