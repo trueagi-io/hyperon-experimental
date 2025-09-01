@@ -30,7 +30,7 @@ hyperon-space = { workspace = true }
 # das deps
 [dependencies.metta-bus-client]
 git = "https://github.com/singnet/das"
-tag = "0.10.3"
+tag = "0.11.1"
 package = "metta-bus-client"
 optional = true
 
