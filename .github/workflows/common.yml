@@ -90,7 +90,7 @@ jobs:
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.2
         with:
-          version: "2.13.0"
+          version: "2.19.1"
 
       - name: Setup Conan profile
         shell: bash
