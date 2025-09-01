@@ -6,6 +6,7 @@ pub mod types;
 pub mod runner;
 
 use hyperon_atom::*;
+use hyperon_macros::*;
 use crate::metta::runner::str::atom_to_string;
 use crate::space::grounding::GroundingSpace;
 
@@ -45,8 +46,8 @@ pub const METTA_SYMBOL : Atom = sym!("metta");
 pub const CALL_NATIVE_SYMBOL : Atom = sym!("call-native");
 pub const CONTEXT_SPACE_SYMBOL : Atom = sym!("context-space");
 
-pub const UNIT_ATOM: Atom = constexpr!();
-pub const UNIT_TYPE: Atom = constexpr!(("->"));
+pub const UNIT_ATOM: Atom = metta!(());
+pub const UNIT_TYPE: Atom = metta!((->));
 
 /// Initializes an error expression atom
 pub fn error_atom(err_atom: Option<Atom>, err_code: Option<Atom>, message: String) -> Atom {

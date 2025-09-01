@@ -91,14 +91,6 @@ macro_rules! expr {
     ($($x:tt)*) => { $crate::Atom::expr([ $( expr!($x) , )* ]) };
 }
 
-#[macro_export]
-macro_rules! constexpr {
-    () => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(&[]))) };
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::unique_string::UniqueString::Const($x))) };
-    (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
-    ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
-}
-
 /// Constructs new symbol atom. Can be used to construct `const` instances.
 ///
 /// # Examples
@@ -171,7 +163,7 @@ pub struct ExpressionAtom {
 
 impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
-    /// used directly, use [expr!], [constexpr!] or [Atom::expr] instead.
+    /// used directly, use [expr!], [metta!] or [Atom::expr] instead.
     pub const fn new(children: CowArray<Atom>) -> Self {
         Self{ children, evaluated: false }
     }
