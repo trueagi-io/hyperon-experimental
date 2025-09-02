@@ -244,7 +244,7 @@ mod tests {
             (= (foo $x) $x)
             !(assertEqual
                 (metta (foo b) %Undefined% &self)
-                (Error (foo b) (BadType argument 1 expected T got B)))
+                (Error (foo b) (BadType 1 T B)))
         ");
         assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
         let result = run_program("
@@ -254,7 +254,7 @@ mod tests {
             (: Cons (-> $t (List $t) (List $t)))
             !(assertEqual
                 (metta (Cons S (Cons Z Nil)) %Undefined% &self)
-                (Error (Cons S (Cons Z Nil)) (BadType argument 2 expected (List (-> Nat Nat)) got (List Nat))))
+                (Error (Cons S (Cons Z Nil)) (BadType 2 (List (-> Nat Nat)) (List Nat))))
         ");
         assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
         let result = run_program("
@@ -265,7 +265,7 @@ mod tests {
 
             !(assertEqual
                 (foo (a b))
-                (Error (foo (a b)) (BadType argument 1 expected (A B) got (C D))))
+                (Error (foo (a b)) (BadType 1 (A B) (C D))))
         ");
         assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
     }
@@ -288,6 +288,12 @@ mod tests {
         assert_eq!(run_program("(= (foo $x) $x) !(metta (foo a) %Undefined% &self)"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("!(metta (foo a) %Undefined% &self)"), Ok(vec![vec![expr!("foo" "a")]]));
         assert_eq!(run_program("!(metta () SomeType &self)"), Ok(vec![vec![expr!(())]]));
+    }
+
+    #[test]
+    fn metta_issue_872() {
+        assert_eq!(run_program("!(bind! &i 0) !(assertEqual (bind! &i 1) (Error (bind! 0 1) (BadType 1 Symbol Number)))"),
+                   Ok(vec![vec![UNIT_ATOM], vec![UNIT_ATOM]]));
     }
 
     #[test]
@@ -509,7 +515,7 @@ mod tests {
 
             !(assertEqual
                 (metta (id_a myAtom) %Undefined% &self)
-                (Error (id_a myAtom) (BadType argument 1 expected A got myType)))
+                (Error (id_a myAtom) (BadType 1 A myType)))
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -522,7 +528,7 @@ mod tests {
         let program2 = "
             !(assertEqual
                 (metta (id_num myAtom) %Undefined% &self)
-                (Error (id_num myAtom) (BadType argument 1 expected Number got myType)))
+                (Error (id_num myAtom) (BadType 1 Number myType)))
         ";
 
         assert_eq!(metta.run(SExprParser::new(program2)),

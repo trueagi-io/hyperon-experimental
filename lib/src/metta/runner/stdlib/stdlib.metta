@@ -12,6 +12,16 @@
 (@doc SpaceType (@desc "Type of the atom which contains space"))
 (: SpaceType Type)
 
+(@doc BadType
+  (@desc "BadType error constructor")
+  (@params (
+    (@param "Index of atom in expression which produced this error")
+    (@param "Expected type")
+    (@param "Actual type")))
+  (@return "Instance of the BadType error atom"))
+(: BadType (-> Number Type Type ErrorDescription))
+(: IncorrectNumberOfArguments ErrorDescription)
+
 (@doc Error
   (@desc "Error constructor")
   (@params (

@@ -1329,7 +1329,8 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
         },
         _ => {
             let formal_arg_type = arg_types.remove(0);
-            let arg_types_tail = arg_types.clone();
+            let arg_types_len = arg_types.len();
+            let arg_types_tail = arg_types;
             match actual_args {
                 [] => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
                 [actual_arg, args_tail @ ..] => {
@@ -1347,11 +1348,11 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                             match match_types(&formal_arg_type, &actual_arg_type, bindings.clone()) {
                                 Ok(matches) => Box::new(matches.flat_map(move |bindings| check_if_function_type_is_applicable_(expr, op_type.clone(), arg_types_tail.clone(), args_tail, expected_type, space, bindings))),
                                 Err(nomatch) => {
-                                    let arg_id = TryInto::<&ExpressionAtom>::try_into(expr).unwrap().children().len() - arg_types.clone().len();
+                                    let arg_id = TryInto::<&ExpressionAtom>::try_into(expr).unwrap().children().len() - arg_types_len;
                                     let formal_arg_type_clone = formal_arg_type.clone();
                                     Box::new(nomatch.map(move |bindings| {
                                         let formal_arg_type = apply_bindings_to_atom_move(formal_arg_type_clone.clone(), &bindings);
-                                        (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, sym!("argument"), Atom::gnd(Number::Integer(arg_id as i64)), sym!("expected"), formal_arg_type, sym!("got"), actual_arg_type.clone()])])), bindings)
+                                        (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(arg_id as i64)), formal_arg_type, actual_arg_type.clone()])])), bindings)
                                     }))
                                 },
                             }

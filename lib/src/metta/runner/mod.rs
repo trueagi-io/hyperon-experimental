@@ -1353,7 +1353,7 @@ mod tests {
             !(s (foo b))
         ";
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" "argument" {Number::Integer(1)} "expected" "A" "got" "B"))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[test]
