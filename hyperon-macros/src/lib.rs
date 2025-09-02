@@ -108,11 +108,11 @@ impl Tokenizer {
         let mut prev_end = (0, 0);
         let input = input.into_iter().flat_map(Self::unroll_group).flat_map(
             move |it| -> Box<dyn Iterator<Item=InternalToken>> {
-                if prev_end != it.start() {
-                    prev_end = it.end();
+                let is_space = prev_end != it.start();
+                prev_end = it.end();
+                if is_space {
                     Box::new(std::iter::once(InternalToken::Space).chain(std::iter::once(it)))
                 } else {
-                    prev_end = it.end();
                     Box::new(std::iter::once(it))
                 }
             });
@@ -157,7 +157,6 @@ impl Tokenizer {
                                 litrs::Literal::Integer(_) => (None, TS::Gnd(s, GndType::Int)),
                                 litrs::Literal::Float(_) => (None, TS::Gnd(s, GndType::Float)),
                                 litrs::Literal::String(_) => (None, TS::Gnd(s, GndType::Str)),
-                                litrs::Literal::Bool(_) => (None, TS::Symbol(s)),
                                 _ => (None, TS::Symbol(s)), 
                             }
                         },
