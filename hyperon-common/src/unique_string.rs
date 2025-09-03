@@ -41,15 +41,21 @@ impl UniqueStringStorage {
 #[derive(Debug, Clone, Eq)]
 pub enum UniqueString {
     Const(&'static str),
-    Store(Arc<ImmutableString>),
+    Store(Arc<ImmutableString>, u64),
 }
 
 impl UniqueString {
     pub fn as_str(&self) -> &str {
         match self {
-            Self::Store(rc) => rc.as_str(),
+            Self::Store(rc, _hash) => rc.as_str(),
             Self::Const(s) => s,
         }
+    }
+
+    #[inline]
+    fn new_store(value: ImmutableString) -> Self {
+        let hash = hash(value.as_str());
+        Self::Store(UNIQUE_STRINGS.lock().unwrap().insert(value), hash)
     }
 }
 
@@ -62,39 +68,45 @@ impl std::fmt::Display for UniqueString {
 impl PartialEq for UniqueString {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Store(a), Self::Store(b)) => Arc::as_ptr(a) == Arc::as_ptr(b),
+            (Self::Store(a, _), Self::Store(b, _)) => Arc::as_ptr(a) == Arc::as_ptr(b),
             (Self::Const(a), Self::Const(b)) => *a == *b,
             _ => self.as_str() == other.as_str(),
         }
     }
 }
 
+#[inline]
+fn hash(s: &str) -> u64 {
+    let mut hasher = std::hash::DefaultHasher::new();
+    s.hash(&mut hasher);
+    hasher.finish()
+}
+
 impl Hash for UniqueString {
     fn hash<H>(&self, state: &mut H) where H: Hasher {
         match self {
-            Self::Const(s) => s.hash(state),
-            Self::Store(rc) => state.write_usize(Arc::as_ptr(rc) as usize),
+            Self::Const(s) => state.write_u64(hash(s)),
+            Self::Store(_rc, hash) => state.write_u64(*hash),
         }
     }
 }
 
 impl From<ImmutableString> for UniqueString {
     fn from(value: ImmutableString) -> Self {
-        Self::Store(UNIQUE_STRINGS.lock().unwrap().insert(value))
+        Self::new_store(value)
     }
 }
 
 impl<I: Into<String>> From<I> for UniqueString {
     fn from(value: I) -> Self {
-        let s: String = value.into();
-        Self::Store(UNIQUE_STRINGS.lock().unwrap().insert(s.into()))
+        Self::new_store(Into::<String>::into(value).into())
     }
 }
 
 impl Drop for UniqueString {
     fn drop(&mut self) {
         match self {
-            Self::Store(rc) => {
+            Self::Store(rc, _hash) => {
                 let lock = UNIQUE_STRINGS.lock();
                 // one instance is inside the storage and second one is inside self
                 if Arc::strong_count(rc) == 2 {
@@ -110,6 +122,7 @@ impl Drop for UniqueString {
 mod test {
     use super::*;
     use std::hint::black_box;
+    use std::collections::HashMap;
 
     // unique_string_drop test requires exclusive access to the UNIQUE_STRINGS
     static SEQUENTIAL_RUN: Mutex<()> = Mutex::new(());
@@ -117,6 +130,7 @@ mod test {
     #[test]
     fn unique_string_drop() {
         let _lock = SEQUENTIAL_RUN.lock();
+
         {
             let a = UniqueString::from("unique_string_drop");
             let b = UniqueString::from("unique_string_drop");
@@ -132,6 +146,7 @@ mod test {
     #[test]
     fn unique_string_equal() {
         let _lock = SEQUENTIAL_RUN.lock();
+
         let store_a = UniqueString::from("unique_string_equal");
         let store_b = UniqueString::from("unique_string_equal");
         let const_c = UniqueString::Const("unique_string_equal");
@@ -145,9 +160,22 @@ mod test {
     #[test]
     fn unique_string_from() {
         let _lock = SEQUENTIAL_RUN.lock();
+
         let store_a = UniqueString::from("unique_string_from");
-        assert!(matches!(store_a, UniqueString::Store(_)));
+        assert!(matches!(store_a, UniqueString::Store(_, _)));
         let store_b = UniqueString::from(String::from("unique_string_from"));
-        assert!(matches!(store_b, UniqueString::Store(_)));
+        assert!(matches!(store_b, UniqueString::Store(_, _)));
+    }
+
+    #[test]
+    fn unique_string_as_a_key() {
+        let _lock = SEQUENTIAL_RUN.lock();
+
+        assert_eq!(UniqueString::Const("text"), UniqueString::new_store("text".into()));
+
+        let mut map = HashMap::new();
+        map.insert(UniqueString::Const("key"), 42);
+        assert_eq!(map.get(&UniqueString::Const("key")), Some(&42));
+        assert_eq!(map.get(&UniqueString::new_store("key".into())), Some(&42));
     }
 }
