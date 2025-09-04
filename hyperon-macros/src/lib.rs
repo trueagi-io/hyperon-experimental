@@ -1,5 +1,6 @@
 use proc_macro::*;
 
+#[cfg(test)]
 #[proc_macro]
 pub fn print_stream(input: TokenStream) -> TokenStream {
     for i in input.into_iter() {
@@ -8,11 +9,20 @@ pub fn print_stream(input: TokenStream) -> TokenStream {
     TokenStream::new()
 }
 
+/// Constructs new Atom using MeTTa S-expressions syntax for expressions. Recognizes grounded
+/// strings, numbers and booleans. For other grounded symbols use braces.
+/// Macros has a performance penalty because it creates and uses an additional
+/// wrapper for grounded atoms.
 #[proc_macro]
 pub fn metta(input: TokenStream) -> TokenStream {
     MettaConverter::new(input, PrinterMut::default()).run()
 }
 
+/// Similar to [metta!] but constructs a constant Atom. Main goal is to be able
+/// writing `const SOME_SYMBOL: Atom = metta_const!(SomeSymbol)`. This macros
+/// uses constant constructors for symbols, variables and expressions internally.
+/// Grounded values are not supported as they cannot be instantiated without
+/// allocating memory.
 #[proc_macro]
 pub fn metta_const(input: TokenStream) -> TokenStream {
     MettaConverter::new(input, PrinterConst::default()).run()
