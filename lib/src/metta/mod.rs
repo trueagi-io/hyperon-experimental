@@ -10,44 +10,44 @@ use hyperon_macros::*;
 use crate::metta::runner::str::atom_to_string;
 use crate::space::grounding::GroundingSpace;
 
-pub const ATOM_TYPE_UNDEFINED : Atom = metta!(%Undefined%);
-pub const ATOM_TYPE_TYPE : Atom = metta!(Type);
-pub const ATOM_TYPE_ATOM : Atom = metta!(Atom);
-pub const ATOM_TYPE_SYMBOL : Atom = metta!(Symbol);
-pub const ATOM_TYPE_VARIABLE : Atom = metta!(Variable);
-pub const ATOM_TYPE_EXPRESSION : Atom = metta!(Expression);
-pub const ATOM_TYPE_GROUNDED : Atom = metta!(Grounded);
+pub const ATOM_TYPE_UNDEFINED : Atom = metta_const!(%Undefined%);
+pub const ATOM_TYPE_TYPE : Atom = metta_const!(Type);
+pub const ATOM_TYPE_ATOM : Atom = metta_const!(Atom);
+pub const ATOM_TYPE_SYMBOL : Atom = metta_const!(Symbol);
+pub const ATOM_TYPE_VARIABLE : Atom = metta_const!(Variable);
+pub const ATOM_TYPE_EXPRESSION : Atom = metta_const!(Expression);
+pub const ATOM_TYPE_GROUNDED : Atom = metta_const!(Grounded);
 
-pub const HAS_TYPE_SYMBOL : Atom = metta!(:);
-pub const SUB_TYPE_SYMBOL : Atom = metta!(:<);
-pub const EQUAL_SYMBOL : Atom = metta!(=);
-pub const ARROW_SYMBOL : Atom = metta!(->);
-pub const ERROR_SYMBOL : Atom = metta!(Error);
-pub const BAD_TYPE_SYMBOL : Atom = metta!(BadType);
-pub const INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL : Atom = metta!(IncorrectNumberOfArguments);
-pub const NOT_REDUCIBLE_SYMBOL : Atom = metta!(NotReducible);
-pub const STACK_OVERFLOW_SYMBOL : Atom = metta!(StackOverflow);
-pub const NO_RETURN_SYMBOL : Atom = metta!(NoReturn);
+pub const HAS_TYPE_SYMBOL : Atom = metta_const!(:);
+pub const SUB_TYPE_SYMBOL : Atom = metta_const!(:<);
+pub const EQUAL_SYMBOL : Atom = metta_const!(=);
+pub const ARROW_SYMBOL : Atom = metta_const!(->);
+pub const ERROR_SYMBOL : Atom = metta_const!(Error);
+pub const BAD_TYPE_SYMBOL : Atom = metta_const!(BadType);
+pub const INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL : Atom = metta_const!(IncorrectNumberOfArguments);
+pub const NOT_REDUCIBLE_SYMBOL : Atom = metta_const!(NotReducible);
+pub const STACK_OVERFLOW_SYMBOL : Atom = metta_const!(StackOverflow);
+pub const NO_RETURN_SYMBOL : Atom = metta_const!(NoReturn);
 
-pub const EMPTY_SYMBOL : Atom = metta!(Empty);
+pub const EMPTY_SYMBOL : Atom = metta_const!(Empty);
 
-pub const EVAL_SYMBOL : Atom = metta!(eval);
-pub const EVALC_SYMBOL : Atom = metta!(evalc);
-pub const CHAIN_SYMBOL : Atom = metta!(chain);
-pub const UNIFY_SYMBOL : Atom = metta!(unify);
-pub const DECONS_ATOM_SYMBOL : Atom = metta!(decons-atom);
-pub const CONS_ATOM_SYMBOL : Atom = metta!(cons-atom);
-pub const FUNCTION_SYMBOL : Atom = metta!(function);
-pub const RETURN_SYMBOL : Atom = metta!(return);
-pub const COLLAPSE_BIND_SYMBOL : Atom = metta!(collapse-bind);
-pub const SUPERPOSE_BIND_SYMBOL : Atom = metta!(superpose-bind);
+pub const EVAL_SYMBOL : Atom = metta_const!(eval);
+pub const EVALC_SYMBOL : Atom = metta_const!(evalc);
+pub const CHAIN_SYMBOL : Atom = metta_const!(chain);
+pub const UNIFY_SYMBOL : Atom = metta_const!(unify);
+pub const DECONS_ATOM_SYMBOL : Atom = metta_const!(decons-atom);
+pub const CONS_ATOM_SYMBOL : Atom = metta_const!(cons-atom);
+pub const FUNCTION_SYMBOL : Atom = metta_const!(function);
+pub const RETURN_SYMBOL : Atom = metta_const!(return);
+pub const COLLAPSE_BIND_SYMBOL : Atom = metta_const!(collapse-bind);
+pub const SUPERPOSE_BIND_SYMBOL : Atom = metta_const!(superpose-bind);
 
-pub const METTA_SYMBOL : Atom = metta!(metta);
-pub const CALL_NATIVE_SYMBOL : Atom = metta!(call-native);
-pub const CONTEXT_SPACE_SYMBOL : Atom = metta!(context-space);
+pub const METTA_SYMBOL : Atom = metta_const!(metta);
+pub const CALL_NATIVE_SYMBOL : Atom = metta_const!(call-native);
+pub const CONTEXT_SPACE_SYMBOL : Atom = metta_const!(context-space);
 
-pub const UNIT_ATOM: Atom = metta!(());
-pub const UNIT_TYPE: Atom = metta!((->));
+pub const UNIT_ATOM: Atom = metta_const!(());
+pub const UNIT_TYPE: Atom = metta_const!((->));
 
 /// Initializes an error expression atom
 pub fn error_atom(err_atom: Option<Atom>, err_code: Option<Atom>, message: String) -> Atom {

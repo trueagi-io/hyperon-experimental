@@ -10,7 +10,12 @@ pub fn print_stream(input: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn metta(input: TokenStream) -> TokenStream {
-    MettaConverter::new(input).run()
+    MettaConverter::new(input, PrinterMut::default()).run()
+}
+
+#[proc_macro]
+pub fn metta_const(input: TokenStream) -> TokenStream {
+    MettaConverter::new(input, PrinterConst::default()).run()
 }
 
 #[derive(Debug)]
@@ -233,17 +238,19 @@ impl Tokenizer {
     }
 }
 
-struct Printer {
+struct PrinterBase {
     output: Vec<(Delimiter, TokenStream)>,
 }
 
-impl Printer {
-    fn new() -> Self {
+impl Default for PrinterBase {
+    fn default() -> Self {
         Self {
             output: vec![(Delimiter::None, TokenStream::new())],
         }
     }
+}
 
+impl PrinterBase {
     fn get_token_stream(&mut self) -> TokenStream {
         assert!(self.output.len() == 1, "Unbalanced group");
         self.output.pop().unwrap().1
@@ -299,22 +306,6 @@ impl Printer {
         self.push(TokenTree::Literal(Literal::string(text)))
     }
 
-    fn symbol(&mut self, name: &str) {
-        self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Symbol").group('(')
-            .ident("hyperon_atom").punct("::").ident("SymbolAtom").punct("::").ident("new").group('(')
-            .ident("hyperon_common").punct("::").ident("unique_string").punct("::").ident("UniqueString").punct("::").ident("Const").group('(')
-            .string(name)
-            .group(')').group(')').group(')');
-    }
-
-    fn variable(&mut self, name: &str) {
-        self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Variable").group('(')
-            .ident("hyperon_atom").punct("::").ident("VariableAtom").punct("::").ident("new_const").group('(')
-            .ident("hyperon_common").punct("::").ident("unique_string").punct("::").ident("UniqueString").punct("::").ident("Const").group('(')
-            .string(name)
-            .group(')').group(')').group(')');
-    }
-
     fn bool(&mut self, b: &str) {
         self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("gnd").group('(')
             .ident("hyperon").punct("::").ident("metta").punct("::").ident("runner").punct("::").ident("bool").punct("::").ident("Bool").group('(')
@@ -350,174 +341,202 @@ impl Printer {
             .punct(".").ident("to_atom").group('(').group(')');
     }
 
-    fn expr_start(&mut self) {
-        self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Expression").group('(')
+    fn expr_delimiter(&mut self) {
+        self.punct(",");
+    }
+}
+
+trait Printer {
+    fn symbol(&mut self, name: &str);
+    fn variable(&mut self, name: &str);
+    fn bool(&mut self, b: &str);
+    fn integer(&mut self, n: i64);
+    fn float(&mut self, f: f64);
+    fn str(&mut self, s: &str);
+    fn gnd(&mut self, g: Group);
+    fn expr_start(&mut self);
+    fn expr_delimiter(&mut self);
+    fn expr_end(&mut self);
+    fn get_token_stream(&mut self) -> TokenStream;
+}
+
+#[repr(transparent)]
+#[derive(Default)]
+struct PrinterMut {
+    base: PrinterBase,
+}
+
+impl Printer for PrinterMut {
+    fn symbol(&mut self, name: &str) {
+        self.base.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Symbol").group('(')
+            .ident("hyperon_atom").punct("::").ident("SymbolAtom").punct("::").ident("new").group('(')
+            .ident("hyperon_common").punct("::").ident("unique_string").punct("::").ident("UniqueString").punct("::").ident("from").group('(')
+            .string(name)
+            .group(')').group(')').group(')');
+    }
+
+    fn variable(&mut self, name: &str) {
+        self.base.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Variable").group('(')
+            .ident("hyperon_atom").punct("::").ident("VariableAtom").punct("::").ident("new").group('(')
+            .ident("hyperon_common").punct("::").ident("unique_string").punct("::").ident("UniqueString").punct("::").ident("from").group('(')
+            .string(name)
+            .group(')').group(')').group(')');
+    }
+
+    fn expr_start(&mut self) { 
+        self.base.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Expression").group('(')
             .ident("hyperon_atom").punct("::").ident("ExpressionAtom").punct("::").ident("new").group('(')
             .ident("hyperon_common").punct("::").ident("collections").punct("::").ident("CowArray").punct("::").ident("from").group('(')
             .group('[');
     }
 
-    fn const_expr_start(&mut self) {
-        self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Expression").group('(')
+    fn expr_end(&mut self) {
+        self.base.group(']')
+            .group(')').group(')').group(')');
+    }
+
+    fn bool(&mut self, b: &str) { self.base.bool(b) }
+    fn integer(&mut self, n: i64) { self.base.integer(n) }
+    fn float(&mut self, f: f64) { self.base.float(f) }
+    fn str(&mut self, s: &str) { self.base.str(s) }
+    fn gnd(&mut self, g: Group) { self.base.gnd(g) }
+    fn expr_delimiter(&mut self) { self.base.expr_delimiter() }
+    fn get_token_stream(&mut self) -> TokenStream { self.base.get_token_stream() }
+}
+
+#[repr(transparent)]
+#[derive(Default)]
+struct PrinterConst {
+    base: PrinterBase,
+}
+
+impl Printer for PrinterConst {
+    fn symbol(&mut self, name: &str) {
+        self.base.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Symbol").group('(')
+            .ident("hyperon_atom").punct("::").ident("SymbolAtom").punct("::").ident("new").group('(')
+            .ident("hyperon_common").punct("::").ident("unique_string").punct("::").ident("UniqueString").punct("::").ident("Const").group('(')
+            .string(name)
+            .group(')').group(')').group(')');
+    }
+
+    fn variable(&mut self, name: &str) {
+        self.base.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Variable").group('(')
+            .ident("hyperon_atom").punct("::").ident("VariableAtom").punct("::").ident("new_const").group('(')
+            .ident("hyperon_common").punct("::").ident("unique_string").punct("::").ident("UniqueString").punct("::").ident("Const").group('(')
+            .string(name)
+            .group(')').group(')').group(')');
+    }
+
+    fn expr_start(&mut self) {
+        self.base.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("Expression").group('(')
             .ident("hyperon_atom").punct("::").ident("ExpressionAtom").punct("::").ident("new").group('(')
             .ident("hyperon_common").punct("::").ident("collections").punct("::").ident("CowArray").punct("::").ident("Literal").group('(')
             .ident("const").group('{').punct("&").group('[');
     }
 
-    fn expr_delimiter(&mut self) {
-        self.punct(",");
-    }
-
     fn expr_end(&mut self) {
-        self.group(']')
+        self.base.group(']').group('}')
             .group(')').group(')').group(')');
     }
 
-    fn const_expr_end(&mut self) {
-        self.group(']').group('}')
-            .group(')').group(')').group(')');
-    }
+    fn bool(&mut self, b: &str) { self.base.bool(b) }
+    fn integer(&mut self, n: i64) { self.base.integer(n) }
+    fn float(&mut self, f: f64) { self.base.float(f) }
+    fn str(&mut self, s: &str) { self.base.str(s) }
+    fn gnd(&mut self, g: Group) { self.base.gnd(g) }
+    fn expr_delimiter(&mut self) { self.base.expr_delimiter() }
+    fn get_token_stream(&mut self) -> TokenStream { self.base.get_token_stream() }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum State {
-    Continue,
+    Start,
+    ExprStart(usize),
+    Expression(usize),
     Final,
 }
 
-enum ExprItem {
-    Token(Token),
-    TokenStream(TokenStream),
-}
-
-struct ExprState {
-    is_const: bool,
-    tokens: Vec<ExprItem>
-}
-
-impl ExprState {
-    fn new() -> Self {
-        Self {
-            is_const: true,
-            tokens: Vec::new(),
-        }
-    }
-}
-
-struct MettaConverter {
+struct MettaConverter<P: Printer> {
+    state: State,
     input: Tokenizer,
-    output: Printer,
-    expr: Vec<ExprState>,
+    output: P,
 }
 
-impl MettaConverter {
-    fn new(input: TokenStream) -> Self {
+impl<P: Printer> MettaConverter<P> {
+    fn new(input: TokenStream, output: P) -> Self {
         Self{
+            state: State::Start,
             input: Tokenizer::new(input),
-            output: Printer::new(),
-            expr: Vec::new(),
+            output,
         }
     }
 
     fn run(&mut self) -> TokenStream {
         loop {
-            if State::Final == self.next_state() {
-                break;
+            if self.state == State::Final {
+                break
             }
+            self.next_state();
         }
         self.output.get_token_stream()
     }
 
-    fn next_state(&mut self) -> State {
+    fn next_state(&mut self) {
         let token = self.input.next();
 
         if matches!(token, Token::End) {
-            if !self.expr.is_empty() {
+            if !matches!(self.state, State::Start) {
                 panic!("Unexpected expression end");
             }
-            return State::Final;
+            self.state = State::Final;
+            return;
         }
 
-        match self.expr.last_mut() {
-            None => 
-                match token {
-                    Token::Symbol(s) => self.output.symbol(&s),
-                    Token::Variable(v) => self.output.variable(&v),
-                    Token::Int(s) => self.output.integer(s.parse::<i64>().unwrap()),
-                    Token::Float(s) => self.output.float(s.parse::<f64>().unwrap()),
-                    Token::Str(s) => self.output.str(&s[1..s.len() - 1]),
-                    Token::Bool(s) => self.output.bool(&s),
-                    Token::Gnd(g) => self.output.gnd(g),
-                    Token::ExprStart => self.expr.push(ExprState::new()),
-                    Token::ExprEnd => panic!("Expression end without expression start"),
-                    Token::End => return State::Final,
-                },
-            Some(expr) =>
-                match token {
-                    Token::Symbol(_) | Token::Variable(_) => expr.tokens.push(ExprItem::Token(token)),
-                    Token::Int(_) | Token::Float(_) | Token::Str(_)
-                        | Token::Bool(_) | Token::Gnd(_) => {
-                            expr.tokens.push(ExprItem::Token(token));
-                            expr.is_const = false;
-                        },
-                    Token::ExprStart => self.expr.push(ExprState::new()),
-                    Token::ExprEnd => {
-                        let expr = self.expr.pop().unwrap();
-                        match self.expr.last_mut() {
-                            Some(outer) => {
-                                let mut printer = Printer::new();
-                                let expr_is_const = expr.is_const;
-                                Self::output_expression(expr, &mut printer);
-                                outer.is_const = outer.is_const && expr_is_const;
-                                outer.tokens.push(ExprItem::TokenStream(printer.get_token_stream()));
-                            }
-                            None => Self::output_expression(expr, &mut self.output),
-                        }
-                    },
-                    Token::End => panic!("Unexpected atom end"),
-                },
-        }
-        return State::Continue;
-    }
-
-    fn output_expression(expr: ExprState, printer: &mut Printer) {
-        if expr.is_const {
-            printer.const_expr_start();
-        } else {
-            printer.expr_start();
+        if matches!(self.state, State::Expression(_))
+            && !matches!(token, Token::ExprEnd) {
+                self.output.expr_delimiter();
         }
 
-        let mut delimiter = false;
-        for item in expr.tokens {
-            if delimiter {
-                printer.expr_delimiter();
-            } else {
-                delimiter = true;
-            }
-            match item {
-                ExprItem::Token(token) =>
-                    match token {
-                        Token::Symbol(s) => printer.symbol(&s),
-                        Token::Variable(v) => printer.variable(&v),
-                        Token::Int(s) => printer.integer(s.parse::<i64>().unwrap()),
-                        Token::Float(s) => printer.float(s.parse::<f64>().unwrap()),
-                        Token::Str(s) => printer.str(&s[1..s.len() - 1]),
-                        Token::Bool(s) => printer.bool(&s),
-                        Token::Gnd(g) => printer.gnd(g),
-                        _ => unreachable!(),
-                    }
-                ExprItem::TokenStream(ts) => {
-                    for tt in ts {
-                        printer.push(tt);
-                    }
-                }
+        let mut next_state = self.state;
+
+        match token {
+            Token::Symbol(s) => self.output.symbol(&s),
+            Token::Variable(v) => self.output.variable(&v),
+            Token::Int(s) => self.output.integer(s.parse::<i64>().unwrap()),
+            Token::Float(s) => self.output.float(s.parse::<f64>().unwrap()),
+            Token::Str(s) => self.output.str(&s[1..s.len() - 1]),
+            Token::Bool(s) => self.output.bool(&s),
+            Token::Gnd(g) => self.output.gnd(g),
+
+            Token::ExprStart => {
+                self.output.expr_start();
+                next_state = match self.state {
+                    State::Start => State::ExprStart(1),
+                    State::ExprStart(n) => State::ExprStart(n + 1),
+                    State::Expression(n) => State::ExprStart(n + 1),
+                    State::Final => unreachable!(),
+                };
+            },
+            Token::ExprEnd => {
+                next_state = match self.state {
+                    State::Start => panic!("Unexpected end of expression"),
+                    State::ExprStart(1) => State::Start,
+                    State::ExprStart(n) => State::Expression(n - 1),
+                    State::Expression(1) => State::Start,
+                    State::Expression(n) => State::Expression(n - 1),
+                    State::Final => unreachable!(),
+                };
+                self.output.expr_end();
+            },
+
+            Token::End => unreachable!(),
+        }
+
+        if let State::ExprStart(n) = self.state {
+            if next_state == self.state {
+                next_state = State::Expression(n);
             }
         }
-
-        if expr.is_const {
-            printer.const_expr_end();
-        } else {
-            printer.expr_end();
-        }
+        self.state = next_state;
     }
 }
