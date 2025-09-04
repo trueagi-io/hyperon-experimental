@@ -449,11 +449,11 @@ impl Printer for PrinterConst {
             .group(')').group(')').group(')');
     }
 
-    fn bool(&mut self, b: &str) { self.base.bool(b) }
-    fn integer(&mut self, n: i64) { self.base.integer(n) }
-    fn float(&mut self, f: f64) { self.base.float(f) }
-    fn str(&mut self, s: &str) { self.base.str(s) }
-    fn gnd(&mut self, g: Group) { self.base.gnd(g) }
+    fn bool(&mut self, _b: &str) { panic!("Grounded atoms cannot be instantiated as const") }
+    fn integer(&mut self, _n: i64) { panic!("Grounded atoms cannot be instantiated as const") }
+    fn float(&mut self, _f: f64) { panic!("Grounded atoms cannot be instantiated as const") }
+    fn str(&mut self, _s: &str) { panic!("Grounded atoms cannot be instantiated as const") }
+    fn gnd(&mut self, _g: Group) { panic!("Grounded atoms cannot be instantiated as const") }
     fn expr_delimiter(&mut self) { self.base.expr_delimiter() }
     fn get_token_stream(&mut self) -> TokenStream { self.base.get_token_stream() }
 }
