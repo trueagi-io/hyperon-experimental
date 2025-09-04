@@ -163,7 +163,7 @@ pub struct ExpressionAtom {
 
 impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
-    /// used directly, use [expr!], [metta!] or [Atom::expr] instead.
+    /// used directly, use [expr!], [metta!], [metta_const!] or [Atom::expr] instead.
     pub const fn new(children: CowArray<Atom>) -> Self {
         Self{ children, evaluated: false }
     }
