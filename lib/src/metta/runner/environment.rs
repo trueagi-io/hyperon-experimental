@@ -111,7 +111,6 @@ impl Environment {
 /// NOTE: It is not necessary to use the EnvBuilder if the default environment is acceptable
 pub struct EnvBuilder {
     env: Environment,
-    no_cfg_dir: bool,
     create_cfg_dir: bool,
     caches_dir: Option<PathBuf>,
     #[cfg(feature = "pkg_mgmt")]
@@ -135,8 +134,8 @@ impl EnvBuilder {
     /// NOTE: Unless otherwise specified, the default working directory will be the current process
     /// working dir (`cwd`)
     ///
-    /// NOTE: Unless otherwise specified by calling either [Self::set_no_config_dir] or [Self::set_config_dir], the
-    ///   [Environment] will be configured using files in the OS-Specific configuration file locations.
+    /// NOTE: Unless otherwise specified by calling either [Self::set_default_config_dir] or [Self::set_config_dir], the
+    ///   [Environment] will be configured using no configuration directory.
     ///
     /// Depending on the host OS, the config directory locations will be:
     /// * Linux: ~/.config/metta/
@@ -147,9 +146,8 @@ impl EnvBuilder {
     pub fn new() -> Self {
         Self {
             env: Environment::new(),
-            no_cfg_dir: false,
             caches_dir: None,
-            create_cfg_dir: true,
+            create_cfg_dir: false,
             #[cfg(feature = "pkg_mgmt")]
             proto_catalogs: vec![],
             #[cfg(feature = "pkg_mgmt")]
@@ -162,7 +160,7 @@ impl EnvBuilder {
     /// The `test_env` Environment will not load or create any files.  Additionally
     /// this method will initialize the logger for the test environment
     pub fn test_env() -> Self {
-        EnvBuilder::new().set_working_dir(None).set_is_test(true).set_no_config_dir()
+        EnvBuilder::new().set_working_dir(None).set_is_test(true)
     }
 
     /// Sets (or unsets) the working_dir for the environment
@@ -174,10 +172,7 @@ impl EnvBuilder {
     /// Sets the `config_dir` that the environment will load
     pub fn set_config_dir(mut self, config_dir: &Path) -> Self {
         self.env.config_dir = Some(config_dir.into());
-        if self.no_cfg_dir {
-            panic!("Fatal Error: set_config_dir is incompatible with set_no_config_dir");
-        }
-        self
+        self.set_create_config_dir(true)
     }
 
     /// Sets the directory used for caching files, such as those fetched from remote catalogs
@@ -193,20 +188,21 @@ impl EnvBuilder {
     /// NOTE: If the config directory exists but some config files are missing, default files will *not* be created.
     pub fn set_create_config_dir(mut self, should_create: bool) -> Self {
         self.create_cfg_dir = should_create;
-        if self.no_cfg_dir && should_create {
-            panic!("Fatal Error: set_create_config_dir(true) is incompatible with set_no_config_dir");
+        if self.env.config_dir.is_none() && should_create {
+            panic!("Fatal Error: call set_default_config_dir() or set_config_dir(<path>) before calling set_create_config_dir(true)");
         }
         self
     }
 
-    /// Configures the Environment not to load nor create any config files
-    pub fn set_no_config_dir(mut self) -> Self {
-        self.no_cfg_dir = true;
-        self.create_cfg_dir = false;
-        if self.env.config_dir.is_some() {
-            panic!("Fatal Error: set_config_dir is incompatible with set_no_config_dir");
+    /// Sets the `config_dir` to the default configuration directory path
+    pub fn set_default_config_dir(self) -> Self {
+        match ProjectDirs::from("io", "TrueAGI",  "metta") {
+            Some(proj_dirs) => self.set_config_dir(proj_dirs.config_dir()),
+            None => {
+                eprint!("Failed to initialize config with OS config directory!");
+                self
+            }
         }
-        self
     }
 
     /// Sets the `is_test` flag for the environment, to specify whether the environment is a unit-test
@@ -281,21 +277,6 @@ impl EnvBuilder {
         #[cfg(feature = "pkg_mgmt")]
         if let Some(working_dir) = &env.working_dir {
             proto_catalogs.insert(0, ProtoCatalog::Path(working_dir.into()));
-        }
-
-        //Construct the platform-specific config dir location, if an explicit location wasn't provided
-        if !self.no_cfg_dir {
-            if env.config_dir.is_none() {
-                match ProjectDirs::from("io", "TrueAGI",  "metta") {
-                    Some(proj_dirs) => {
-                        let cfg_dir: PathBuf = proj_dirs.config_dir().into();
-                        env.config_dir = Some(cfg_dir);
-                    },
-                    None => {
-                        eprint!("Failed to initialize config with OS config directory!");
-                    }
-                }
-            }
         }
 
         if let Some(config_dir) = &env.config_dir {

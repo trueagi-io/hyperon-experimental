@@ -116,6 +116,7 @@ class MeTTa:
                 space = GroundingSpaceRef()
             if env_builder is None:
                 env_builder = hp.env_builder_start()
+                hp.env_builder_set_default_config_dir(env_builder)
             hp.env_builder_push_fs_module_format(env_builder, _PyFileMeTTaModFmt)
             #LP-TODO-Next, add an fs_module_fmt arg to the standardized way to init environments, so that
             # the Python user can define additional formats without tweaking any hyperon files.  To make
@@ -233,28 +234,53 @@ class Environment:
         else:
             return None
 
-    def init_common_env(working_dir = None, config_dir = None, create_config = True, disable_config = False, is_test = False, include_paths = []):
-        """Initialize the common environment with the supplied args"""
-        builder = Environment.custom_env(working_dir, config_dir, create_config, disable_config, is_test, include_paths)
+    def init_common_env(working_dir = None, config_dir = None, create_config = None, is_test = None, include_paths = []):
+        """Initialize the common environment with the supplied args
+
+        Keyword arguments:
+            working_dir -- working directory for the environment (default None)
+            config_dir -- path to the configuration directory, None - no
+            configuration directory, "" - default configuration directory
+            (default None)
+            create_config -- create configuration directory if it doesn't exist
+            (default None)
+            is_test -- is environment used in unit-test flag (default None)
+            include_paths -- additional search paths to search for MeTTa
+            modules in the file system (default [])
+        """
+        builder = Environment.custom_env(working_dir, config_dir, create_config, is_test, include_paths)
         return hp.env_builder_init_common_env(builder)
 
     def test_env():
         """Returns an EnvBuilder object specifying a unit-test environment, that can be used to init a MeTTa runner"""
         return hp.env_builder_use_test_env()
 
-    def custom_env(working_dir = None, config_dir = None, create_config = True, disable_config = False, is_test = False, include_paths = []):
-        """Returns an EnvBuilder object that can be used to init a MeTTa runner, if you need multiple environments to coexist in the same process"""
+    def custom_env(working_dir = None, config_dir = None, create_config = None, is_test = None, include_paths = []):
+        """Returns an EnvBuilder object that can be used to init a MeTTa runner, if you need multiple environments to coexist in the same process
+
+        Keyword arguments:
+            working_dir -- working directory for the environment (default None)
+            config_dir -- path to the configuration directory, None - no
+            configuration directory, "" - default configuration directory
+            (default None)
+            create_config -- create configuration directory if not found
+            (default None)
+            is_test -- is environment used in unit-test flag (default None)
+            include_paths -- additional search paths to search for MeTTa
+            modules in the file system (default [])
+        """
         builder = hp.env_builder_start()
-        if (working_dir is not None):
+        if working_dir is not None:
             hp.env_builder_set_working_dir(builder, working_dir)
-        if (config_dir is not None):
-            hp.env_builder_set_config_dir(builder, config_dir)
-        if (create_config is False):
-            hp.env_builder_create_config_dir(builder, False) #Pass False to disable "create if missing" behavior
-        if (disable_config):
-            hp.env_builder_disable_config_dir(builder)
-        if (is_test):
-            hp.env_builder_set_is_test(builder, True)
+        if config_dir is not None:
+            if config_dir == "":
+                hp.env_builder_set_default_config_dir(builder)
+            else:
+                hp.env_builder_set_config_dir(builder, config_dir)
+        if create_config is not None:
+            hp.env_builder_create_config_dir(builder, create_config)
+        if is_test is not None:
+            hp.env_builder_set_is_test(builder, is_test)
         for path in include_paths:
             hp.env_builder_push_include_path(builder, path)
         return builder

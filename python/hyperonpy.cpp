@@ -1159,8 +1159,8 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_set_working_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_working_dir(builder.ptr(), path.c_str()); }, "Sets the working dir in the environment");
     m.def("env_builder_set_config_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_config_dir(builder.ptr(), path.c_str()); }, "Sets the config dir in the environment");
     m.def("env_builder_create_config_dir", [](EnvBuilder& builder, bool should_create) { env_builder_create_config_dir(builder.ptr(), should_create); }, "Creates the config dir if it doesn't exist");
-    m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
-    m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
+    m.def("env_builder_set_default_config_dir", [](EnvBuilder& builder) { env_builder_set_default_config_dir(builder.ptr()); }, "Sets default config directory location");
+    m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Set true if this environment is used in unit test");
     m.def("env_builder_push_include_path", [](EnvBuilder& builder, std::string path) { env_builder_push_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
     m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface) {
         //TODO. We end up leaking this object, but it's a non-issue in practice because environments usually live the life of the program.

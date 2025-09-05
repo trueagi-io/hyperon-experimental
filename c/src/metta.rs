@@ -1525,8 +1525,7 @@ pub extern "C" fn env_builder_set_working_dir(builder: *mut env_builder_t, path:
     *builder_arg_ref = builder.into();
 }
 
-/// @brief Sets the config directory for the environment.  A directory at the specified path
-/// will be created, and its contents populated with default values, if one does not already exist
+/// @brief Sets the config directory for the environment.
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
 /// @param[in]  path  A C-style string specifying a path to the config directory
@@ -1556,15 +1555,15 @@ pub extern "C" fn env_builder_create_config_dir(builder: *mut env_builder_t, sho
     *builder_arg_ref = builder.into();
 }
 
-/// @brief Configures the environment so that no config directory will be read nor created
+/// @brief Sets the default config directory for the environment.
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
 ///
 #[no_mangle]
-pub extern "C" fn env_builder_disable_config_dir(builder: *mut env_builder_t) {
+pub extern "C" fn env_builder_set_default_config_dir(builder: *mut env_builder_t) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
-    let builder = builder.set_no_config_dir();
+    let builder = builder.set_default_config_dir();
     *builder_arg_ref = builder.into();
 }
 

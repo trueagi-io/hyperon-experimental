@@ -11,4 +11,4 @@ class HyperonTestCase(unittest.TestCase):
         self.assertTrue(Environment.init_common_env(config_dir = "/tmp/hyperon-test", create_config = True))
         self.assertEqual(Environment.config_dir(), "/tmp/hyperon-test")
 
-        self.assertFalse(Environment.init_common_env(disable_config = True))
+        self.assertFalse(Environment.init_common_env())
