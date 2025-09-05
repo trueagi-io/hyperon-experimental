@@ -9,6 +9,7 @@ smallvec = "1.10.0"
 bitset = "0.1.2"
 
 hyperon-common = { workspace = true }
+hyperon-macros = { workspace = true }
 
 [lib]
 path = "src/lib.rs"

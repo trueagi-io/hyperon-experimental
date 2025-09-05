@@ -6,47 +6,48 @@ pub mod types;
 pub mod runner;
 
 use hyperon_atom::*;
+use hyperon_macros::*;
 use crate::metta::runner::str::atom_to_string;
 use crate::space::grounding::GroundingSpace;
 
-pub const ATOM_TYPE_UNDEFINED : Atom = sym!("%Undefined%");
-pub const ATOM_TYPE_TYPE : Atom = sym!("Type");
-pub const ATOM_TYPE_ATOM : Atom = sym!("Atom");
-pub const ATOM_TYPE_SYMBOL : Atom = sym!("Symbol");
-pub const ATOM_TYPE_VARIABLE : Atom = sym!("Variable");
-pub const ATOM_TYPE_EXPRESSION : Atom = sym!("Expression");
-pub const ATOM_TYPE_GROUNDED : Atom = sym!("Grounded");
+pub const ATOM_TYPE_UNDEFINED : Atom = metta_const!(%Undefined%);
+pub const ATOM_TYPE_TYPE : Atom = metta_const!(Type);
+pub const ATOM_TYPE_ATOM : Atom = metta_const!(Atom);
+pub const ATOM_TYPE_SYMBOL : Atom = metta_const!(Symbol);
+pub const ATOM_TYPE_VARIABLE : Atom = metta_const!(Variable);
+pub const ATOM_TYPE_EXPRESSION : Atom = metta_const!(Expression);
+pub const ATOM_TYPE_GROUNDED : Atom = metta_const!(Grounded);
 
-pub const HAS_TYPE_SYMBOL : Atom = sym!(":");
-pub const SUB_TYPE_SYMBOL : Atom = sym!(":<");
-pub const EQUAL_SYMBOL : Atom = sym!("=");
-pub const ARROW_SYMBOL : Atom = sym!("->");
-pub const ERROR_SYMBOL : Atom = sym!("Error");
-pub const BAD_TYPE_SYMBOL : Atom = sym!("BadType");
-pub const INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL : Atom = sym!("IncorrectNumberOfArguments");
-pub const NOT_REDUCIBLE_SYMBOL : Atom = sym!("NotReducible");
-pub const STACK_OVERFLOW_SYMBOL : Atom = sym!("StackOverflow");
-pub const NO_RETURN_SYMBOL : Atom = sym!("NoReturn");
+pub const HAS_TYPE_SYMBOL : Atom = metta_const!(:);
+pub const SUB_TYPE_SYMBOL : Atom = metta_const!(:<);
+pub const EQUAL_SYMBOL : Atom = metta_const!(=);
+pub const ARROW_SYMBOL : Atom = metta_const!(->);
+pub const ERROR_SYMBOL : Atom = metta_const!(Error);
+pub const BAD_TYPE_SYMBOL : Atom = metta_const!(BadType);
+pub const INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL : Atom = metta_const!(IncorrectNumberOfArguments);
+pub const NOT_REDUCIBLE_SYMBOL : Atom = metta_const!(NotReducible);
+pub const STACK_OVERFLOW_SYMBOL : Atom = metta_const!(StackOverflow);
+pub const NO_RETURN_SYMBOL : Atom = metta_const!(NoReturn);
 
-pub const EMPTY_SYMBOL : Atom = sym!("Empty");
+pub const EMPTY_SYMBOL : Atom = metta_const!(Empty);
 
-pub const EVAL_SYMBOL : Atom = sym!("eval");
-pub const EVALC_SYMBOL : Atom = sym!("evalc");
-pub const CHAIN_SYMBOL : Atom = sym!("chain");
-pub const UNIFY_SYMBOL : Atom = sym!("unify");
-pub const DECONS_ATOM_SYMBOL : Atom = sym!("decons-atom");
-pub const CONS_ATOM_SYMBOL : Atom = sym!("cons-atom");
-pub const FUNCTION_SYMBOL : Atom = sym!("function");
-pub const RETURN_SYMBOL : Atom = sym!("return");
-pub const COLLAPSE_BIND_SYMBOL : Atom = sym!("collapse-bind");
-pub const SUPERPOSE_BIND_SYMBOL : Atom = sym!("superpose-bind");
+pub const EVAL_SYMBOL : Atom = metta_const!(eval);
+pub const EVALC_SYMBOL : Atom = metta_const!(evalc);
+pub const CHAIN_SYMBOL : Atom = metta_const!(chain);
+pub const UNIFY_SYMBOL : Atom = metta_const!(unify);
+pub const DECONS_ATOM_SYMBOL : Atom = metta_const!(decons-atom);
+pub const CONS_ATOM_SYMBOL : Atom = metta_const!(cons-atom);
+pub const FUNCTION_SYMBOL : Atom = metta_const!(function);
+pub const RETURN_SYMBOL : Atom = metta_const!(return);
+pub const COLLAPSE_BIND_SYMBOL : Atom = metta_const!(collapse-bind);
+pub const SUPERPOSE_BIND_SYMBOL : Atom = metta_const!(superpose-bind);
 
-pub const METTA_SYMBOL : Atom = sym!("metta");
-pub const CALL_NATIVE_SYMBOL : Atom = sym!("call-native");
-pub const CONTEXT_SPACE_SYMBOL : Atom = sym!("context-space");
+pub const METTA_SYMBOL : Atom = metta_const!(metta);
+pub const CALL_NATIVE_SYMBOL : Atom = metta_const!(call-native);
+pub const CONTEXT_SPACE_SYMBOL : Atom = metta_const!(context-space);
 
-pub const UNIT_ATOM: Atom = constexpr!();
-pub const UNIT_TYPE: Atom = constexpr!(("->"));
+pub const UNIT_ATOM: Atom = metta_const!(());
+pub const UNIT_TYPE: Atom = metta_const!((->));
 
 /// Initializes an error expression atom
 pub fn error_atom(err_atom: Option<Atom>, err_code: Option<Atom>, message: String) -> Atom {
