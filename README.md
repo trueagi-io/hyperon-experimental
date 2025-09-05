@@ -299,6 +299,19 @@ Please ensure you are using the latest stable version:
 rustup update stable
 ```
 
+If you see  the following error:
+```
+failed to select a version for `libc` 
+    ... required by package `tokio v1.43.0`
+    ... which satisfies dependency `tokio = "^1.43.0"` of package `metta-bus-client v0.3.0 (https://github.com/singnet/das?tag=0.11.1#aeafbddf)`
+    ... which satisfies git dependency `metta-bus-client` of package `hyperon v0.2.6 (/media/sveta/hdisk4/singnet/hyperon-experimental-vit/lib)`
+    ... which satisfies path dependency `hyperon` of package `hyperonc v0.2.6 (/media/sveta/hdisk4/singnet/hyperon-experimental-vit/c)`
+versions that meet the requirements `^0.2.168` are: 0.2.175, 0.2.174, 0.2.173, 0.2.172, 0.2.171, 0.2.170, 0.2.169, 0.2.168
+
+all possible versions conflict with previously selected packages.
+```
+then remove `Cargo.lock` file.
+
 ### Importing hyperon Python module fails
 
 If importing the hyperon module in Python
