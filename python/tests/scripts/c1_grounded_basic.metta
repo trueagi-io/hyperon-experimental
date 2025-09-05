@@ -89,7 +89,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqualToResult
   (+ 2 "String")
-  ((Error "String" BadType)))
+  ((Error (+ 2 "String") (BadType 2 Number String))))
 
 ; Custom symbols as arguments of grounded operations
 ; work similarly
