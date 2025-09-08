@@ -4,7 +4,7 @@ from hyperon.ext import register_atoms, register_tokens
 @register_tokens
 def arithm_types():
     return {
-        r"True|False": lambda token: ValueAtom(bool(token), 'Bool'),
+        r"True|False": lambda token: ValueAtom(token == "True", 'Bool'),
         r"[-+]?\d+": lambda token: ValueAtom(int(token), 'Number'),
         r"[-+]?\d+\.\d+": lambda token: ValueAtom(float(token), 'Number'),
         r"[-+]?\d+(\.\d+)?[eE][-+]?\d+": lambda token: ValueAtom(float(token), 'Number'),
