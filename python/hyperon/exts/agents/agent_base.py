@@ -144,7 +144,7 @@ class AgentObject:
         # the caller space is not directly accessible as a context,
         # except the case when _metta is set via get_agent_atom with parent MeTTa
         if self._include_paths is not None:
-            env_builder = Environment.custom_env(include_paths=self._include_paths)
+            env_builder = Environment.custom_env(include_paths=self._include_paths, config_dir="")
             metta = MeTTa(env_builder=env_builder)
         else:
             metta = MeTTa()

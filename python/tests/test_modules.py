@@ -10,7 +10,7 @@ class ModulesTest(HyperonTestCase):
         Tests that a MeTTa module, implemented as a '.py', file will be correctly identified when the
         module system searches in the include directory, and then that it will be sucessfully loaded
         """
-        runner = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        runner = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), is_test=True))
 
         #Make sure the `import!` operation finds the pyfile_test_mod.py file, recognizes it as a
         # MeTTa module using the PythonFileModuleFormat, and loads the MeTTa module it sucessfully
@@ -24,7 +24,7 @@ class ModulesTest(HyperonTestCase):
         self.assertEqual(result[0].get_object().content, 3.14159)
 
     def test_include(self):
-        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), is_test=True))
         result = metta.run("""
             (three isprime)
             !(match &self ($x isprime) $x)
@@ -43,7 +43,7 @@ class PyOpsTest(HyperonTestCase):
         """
         Tests that a MeTTa module from exts can be imported
         """
-        runner = MeTTa(env_builder=Environment.custom_env())
+        runner = MeTTa(env_builder=Environment.custom_env(config_dir=""))
         runner.run("!(import! &self py_ops)")
         result = runner.run('!(* "a" 4)')
         self.assertEqual(result[0][0], ValueAtom('aaaa'))

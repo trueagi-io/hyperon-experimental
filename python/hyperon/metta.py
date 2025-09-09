@@ -31,7 +31,7 @@ def main():
     elif args.file:
         parent_dir = os.path.dirname(args.file)
         with open(args.file) as f: program = f.read()
-        metta = hyperon.MeTTa(env_builder=hyperon.Environment.custom_env(working_dir=parent_dir))
+        metta = hyperon.MeTTa(env_builder=hyperon.Environment.custom_env(working_dir=parent_dir, config_dir=""))
         for result in metta.run(program):
             print(result)
     else:
