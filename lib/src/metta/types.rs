@@ -24,6 +24,8 @@ use hyperon_space::DynSpace;
 
 use std::fmt::{Display, Debug};
 use itertools::Itertools;
+use hyperon_common::collections::CowArray;
+use crate::metta::runner::number::Number;
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
     Atom::expr(vec![HAS_TYPE_SYMBOL, atom.clone(), typ.clone()])
@@ -160,6 +162,7 @@ pub struct AtomType {
     is_function: bool,
     is_error: bool,
     is_application: bool,
+    error_message: Atom,
 }
 
 impl AtomType {
@@ -171,17 +174,19 @@ impl AtomType {
             is_function,
             is_error: false,
             is_application: false,
+            error_message: expr![()],
         }
     }
 
     #[inline]
-    pub fn application(typ: Atom, is_error: bool) -> Self {
+    pub fn application(typ: Atom, is_error: bool, err_message: Atom) -> Self {
         let is_function = is_func(&typ);
         Self {
             typ,
             is_function,
             is_error,
             is_application: true,
+            error_message: err_message,
         }
     }
 
@@ -207,6 +212,9 @@ impl AtomType {
     pub fn into_atom(self) -> Atom {
         self.typ
     }
+
+    #[inline]
+    pub fn get_err_message(&self) -> &Atom {&self.error_message}
 }
 
 impl Display for AtomType {
@@ -242,23 +250,24 @@ impl Display for AtomType {
 /// ")).unwrap();
 ///
 /// let space = metta.space();
-/// assert_eq_no_order!(get_atom_types(&space, &expr!(x)), vec![ATOM_TYPE_UNDEFINED]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!({1})), vec![expr!("i32")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("na")), vec![ATOM_TYPE_UNDEFINED]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("a")), vec![expr!("A"), expr!("B")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("a" "b")), vec![expr!("A" "B"), expr!("B" "B")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "a")), vec![expr!("B")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "b")), Vec::<Atom>::new());
+/// assert_eq_no_order!(get_atom_types(&space, &expr!(x)).0, vec![ATOM_TYPE_UNDEFINED]);
+/// assert_eq_no_order!(get_atom_types(&space, &expr!({1})).0, vec![expr!("i32")]);
+/// assert_eq_no_order!(get_atom_types(&space, &expr!("na")).0, vec![ATOM_TYPE_UNDEFINED]);
+/// assert_eq_no_order!(get_atom_types(&space, &expr!("a")).0, vec![expr!("A"), expr!("B")]);
+/// assert_eq_no_order!(get_atom_types(&space, &expr!("a" "b")).0, vec![expr!("A" "B"), expr!("B" "B")]);
+/// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "a")).0, vec![expr!("B")]);
+/// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "b")).0, Vec::<Atom>::new());
 /// ```
-pub fn get_atom_types(space: &DynSpace, atom: &Atom) -> Vec<Atom> {
+pub fn get_atom_types(space: &DynSpace, atom: &Atom) -> (Vec<Atom>, Atom) {
     let atom_types = get_atom_types_v2(space, atom);
     if atom_types.is_empty() {
-        vec![ATOM_TYPE_UNDEFINED]
+        (vec![ATOM_TYPE_UNDEFINED], expr!())
     } else {
-        atom_types.into_iter()
+        let err_msg = atom_types.iter().nth(0).unwrap().get_err_message().clone();
+        (atom_types.into_iter()
             .filter(|t| !t.is_error())
             .map(AtomType::into_atom)
-            .collect()
+            .collect(), err_msg)
     }
 }
 
@@ -445,10 +454,12 @@ fn get_application_types(atom: &Atom, expr: &ExpressionAtom, type_info: ExprType
         let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
         let correct = check_arg_types(&type_info.arg_types, meta_arg_types.as_slice(), expected_arg_types);
         if correct.is_empty() {
-            types.push(AtomType::application(fn_type.into_atom(), true));
+            let expected_types_expr = Atom::Expression(ExpressionAtom::new(CowArray::from(expected_arg_types.iter().map(|a| a.clone()).collect_vec())));
+            let actual_types_expr = Atom::Expression(ExpressionAtom::new(CowArray::from(type_info.arg_types.iter().map(|a| a.iter().nth(0).unwrap().typ.clone()).collect_vec())));
+            types.push(AtomType::application(fn_type.into_atom(), true, Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(0)), actual_types_expr, expected_types_expr])])));
         } else {
             for bindings in correct {
-                types.push(AtomType::application(apply_bindings_to_atom_move(ret_typ.clone(), &bindings), false));
+                types.push(AtomType::application(apply_bindings_to_atom_move(ret_typ.clone(), &bindings), false, expr![]));
             }
         }
     }
@@ -508,7 +519,7 @@ fn replace_undefined_types(atom: &Atom) -> Atom {
 }
 
 fn get_matched_types(space: &DynSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
-    let types = get_atom_types(space, atom);
+    let types = get_atom_types(space, atom).0;
     types.into_iter().flat_map(|t| {
         // TODO: write a unit test
         let t = make_variables_unique(t);
@@ -599,7 +610,7 @@ fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
 /// assert!(!validate_atom(&space, &expr!("foo" "b")));
 /// ```
 pub fn validate_atom(space: &DynSpace, atom: &Atom) -> bool {
-    !get_atom_types(space, atom).is_empty()
+    !get_atom_types(space, atom).0.is_empty()
 }
 
 #[cfg(test)]
@@ -893,20 +904,20 @@ mod tests {
             (: a A)
             (: a AA)
         ");
-        assert_eq_no_order!(get_atom_types(&space, &atom("a")), vec![expr!("A"), expr!("AA")]);
-        assert_eq_no_order!(get_atom_types(&space, &atom("b")), vec![ATOM_TYPE_UNDEFINED]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("a")).0, vec![expr!("A"), expr!("AA")]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("b")).0, vec![ATOM_TYPE_UNDEFINED]);
     }
 
     #[test]
     fn get_atom_types_variable() {
         let space = DynSpace::new(GroundingSpace::new());
-        assert_eq!(get_atom_types(&space, &atom("$x")), vec![ATOM_TYPE_UNDEFINED]);
+        assert_eq!(get_atom_types(&space, &atom("$x")).0, vec![ATOM_TYPE_UNDEFINED]);
     }
 
     #[test]
     fn get_atom_types_grounded_atom() {
         let space = DynSpace::new(GroundingSpace::new());
-        assert_eq!(get_atom_types(&space, &Atom::value(3)), vec![atom("i32")]);
+        assert_eq!(get_atom_types(&space, &Atom::value(3)).0, vec![atom("i32")]);
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -928,7 +939,7 @@ mod tests {
     fn get_atom_types_variables_are_substituted_for_grounded_atom_type() {
         let actual_type = Atom::var("t");
         let gnd = GroundedAtomWithParameterizedType(actual_type.clone());
-        let resolved_type = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd));
+        let resolved_type = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd)).0;
         assert_eq!(resolved_type.len(), 1);
         assert_ne!(resolved_type[0], actual_type);
         assert!(atoms_are_equivalent(&resolved_type[0], &actual_type));
@@ -939,8 +950,8 @@ mod tests {
         let actual_type = Atom::expr([ARROW_SYMBOL, Atom::var("t"), Atom::var("t")]);
         let gnd_1 = GroundedAtomWithParameterizedType(actual_type.clone());
         let gnd_2 = GroundedAtomWithParameterizedType(actual_type.clone());
-        let resolved_type_1 = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd_1));
-        let resolved_type_2 = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd_2));
+        let resolved_type_1 = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd_1)).0;
+        let resolved_type_2 = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd_2)).0;
 
         //Types of gnd_1 and gnd_2 are different in the space
         assert_ne!(resolved_type_1, resolved_type_2);
@@ -961,11 +972,11 @@ mod tests {
             (: b B)
             (: b BB)
         ");
-        assert_eq_no_order!(get_atom_types(&space, &atom("(a b)")),
+        assert_eq_no_order!(get_atom_types(&space, &atom("(a b)")).0,
             vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)")]);
-        assert_eq_no_order!(get_atom_types(&space, &atom("(a c)")),
+        assert_eq_no_order!(get_atom_types(&space, &atom("(a c)")).0,
             vec![ATOM_TYPE_UNDEFINED]);
-        assert_eq_no_order!(get_atom_types(&space, &atom("(c d)")), vec![ATOM_TYPE_UNDEFINED]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("(c d)")).0, vec![ATOM_TYPE_UNDEFINED]);
     }
 
     #[test]
@@ -975,13 +986,13 @@ mod tests {
             (: a A)
             (: b B)
         ");
-        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![atom("(A B)"), atom("C")]);
+        assert_eq!(get_atom_types(&space, &atom("(a b)")).0, vec![atom("(A B)"), atom("C")]);
     }
 
     #[test]
     fn get_atom_types_empty_expression() {
         let space = DynSpace::new(GroundingSpace::new());
-        assert_eq!(get_atom_types(&space, &Atom::expr([])), vec![ATOM_TYPE_UNDEFINED]);
+        assert_eq!(get_atom_types(&space, &Atom::expr([])).0, vec![ATOM_TYPE_UNDEFINED]);
     }
 
     #[test]
@@ -990,8 +1001,8 @@ mod tests {
             (: f (-> B C))
             (: b B)
         ");
-        assert_eq!(get_atom_types(&space, &atom("(f b)")), vec![atom("C")]);
-        assert_eq!(get_atom_types(&space, &atom("(f a)")), vec![atom("C")]);
+        assert_eq!(get_atom_types(&space, &atom("(f b)")).0, vec![atom("C")]);
+        assert_eq!(get_atom_types(&space, &atom("(f a)")).0, vec![atom("C")]);
     }
 
     #[test]
@@ -1004,32 +1015,32 @@ mod tests {
             (: f_gnd (-> Grounded D))
             (: b B)
         ");
-        assert_eq!(get_atom_types(&space, &expr!("f_atom" "b")), vec![atom("D")]);
-        assert_eq!(get_atom_types(&space, &expr!("f_sym" "b")), vec![atom("D")]);
-        assert_eq!(get_atom_types(&space, &expr!("f_expr" "b")), vec![]);
-        assert_eq!(get_atom_types(&space, &expr!("f_var" "b")), vec![]);
-        assert_eq!(get_atom_types(&space, &expr!("f_gnd" "b")), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_atom" "b")).0, vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_sym" "b")).0, vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_expr" "b")).0, vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" "b")).0, vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_gnd" "b")).0, vec![]);
 
-        assert_eq!(get_atom_types(&space, &expr!("f_atom" b)), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_atom" b)).0, vec![atom("D")]);
         //assert_eq!(get_atom_types(&space, &expr!("f_sym" b)), vec![]);
         //assert_eq!(get_atom_types(&space, &expr!("f_expr" b)), vec![]);
-        assert_eq!(get_atom_types(&space, &expr!("f_var" b)), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" b)).0, vec![atom("D")]);
         //assert_eq!(get_atom_types(&space, &expr!("f_gnd" b)), vec![]);
 
-        assert_eq!(get_atom_types(&space, &expr!("f_atom" ("b"))), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_atom" ("b"))).0, vec![atom("D")]);
         // Here and below: when interpreter cannot find a function type for
         // expression it evaluates it. Thus any argument expression without
         // a function type can potentially suit as a legal argument.
-        assert_eq!(get_atom_types(&space, &expr!("f_sym" ("b"))), vec![]);
-        assert_eq!(get_atom_types(&space, &expr!("f_expr" ("b"))), vec![atom("D")]);
-        assert_eq!(get_atom_types(&space, &expr!("f_var" ("b"))), vec![]);
-        assert_eq!(get_atom_types(&space, &expr!("f_gnd" ("b"))), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_sym" ("b"))).0, vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_expr" ("b"))).0, vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" ("b"))).0, vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_gnd" ("b"))).0, vec![]);
 
-        assert_eq!(get_atom_types(&space, &expr!("f_atom" {1})), vec![atom("D")]);
-        assert_eq!(get_atom_types(&space, &expr!("f_sym" {1})), vec![]);
-        assert_eq!(get_atom_types(&space, &expr!("f_expr" {1})), vec![]);
-        assert_eq!(get_atom_types(&space, &expr!("f_var" {1})), vec![]);
-        assert_eq!(get_atom_types(&space, &expr!("f_gnd" {1})), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_atom" {1})).0, vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_sym" {1})).0, vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_expr" {1})).0, vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" {1})).0, vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_gnd" {1})).0, vec![atom("D")]);
     }
 
     #[test]
@@ -1038,7 +1049,7 @@ mod tests {
             (: a (-> C D))
             (: b B)
         ");
-        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![]);
+        assert_eq!(get_atom_types(&space, &atom("(a b)")).0, vec![]);
     }
 
     #[test]
@@ -1051,7 +1062,7 @@ mod tests {
             (: p X)
             (: p P)
         ");
-        assert_eq!(get_atom_types(&space, &atom("(= (foo) (bar p))")),
+        assert_eq!(get_atom_types(&space, &atom("(= (foo) (bar p))")).0,
             vec![expr!("Type")]);
     }
 

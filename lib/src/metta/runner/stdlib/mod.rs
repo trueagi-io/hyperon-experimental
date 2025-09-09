@@ -201,6 +201,11 @@ mod tests {
     }
 
     #[test]
+    fn metta_check_bad_type_from_function_type_is_applicable_match_branch_1() {
+        assert_eq!(run_program("!(assertEqual (metta (+ 1 2) (-> Atom Atom $t) &self) (Error (+ 1 2) (BadType 1 Number (-> Atom Atom $t))))"), Ok(vec![vec![UNIT_ATOM]]));
+    }
+
+    #[test]
     fn metta_interpret_symbol_or_grounded_value_as_type() {
         assert_eq!(run_program("(: a A) !(metta a A &self)"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("(: a A) !(metta a B &self)"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));

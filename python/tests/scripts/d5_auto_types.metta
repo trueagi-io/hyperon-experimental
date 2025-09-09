@@ -63,4 +63,4 @@ Auto type-checking can be enabled
 (: f (-> $t Number))
 !(assertEqualToResult
    (f (+ 5 "S"))
-   ((Error (+ 5 "S") BadType)))
+   ((Error (+ 5 "S") (BadType 0 (Number String) (Number Number)))))

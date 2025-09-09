@@ -96,7 +96,7 @@
 (: ln LN)
 !(assertEqualToResult
   (== 4 (+ ln 2))
-  ((Error (+ ln 2) BadType)))
+  ((Error (+ ln 2) (BadType 0 (LN Number) (Number Number)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
