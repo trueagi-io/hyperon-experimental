@@ -48,5 +48,16 @@ class PyOpsTest(HyperonTestCase):
         result = runner.run('!(* "a" 4)')
         self.assertEqual(result[0][0], ValueAtom('aaaa'))
 
+    def test_bool(self):
+        """
+        Tests that boolean value is properly parsed by py_ops
+        """
+        runner = MeTTa(env_builder=Environment.custom_env())
+        runner.run("!(import! &self py_ops)")
+        result = runner.run('!(id False)')
+        self.assertEqual(result[0][0], ValueAtom(False))
+        result = runner.run('!(id True)')
+        self.assertEqual(result[0][0], ValueAtom(True))
+
 if __name__ == "__main__":
     unittest.main()
