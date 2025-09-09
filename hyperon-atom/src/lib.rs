@@ -656,32 +656,6 @@ pub fn match_by_string_equality(this: &str, other: &Atom) -> matcher::MatchResul
     }
 }
 
-/// A more thorough version of [match_by_equality], which will attempt the match in reverse order
-/// if the `other` atom doesn't wrap the same type as `this`
-pub fn match_by_bidirectional_equality<T>(this: &T, other: &Atom) -> matcher::MatchResultIter
-    where T: 'static + PartialEq + Clone + Grounded + Debug
-{
-    log::trace!("match_by_bidirectional_equality: this: {:?}, other: {}", this, other);
-    if let Some(other_obj) = other.as_gnd::<T>() {
-        match this == other_obj {
-            true => Box::new(std::iter::once(matcher::Bindings::new())),
-            false => Box::new(std::iter::empty()),
-        }
-    } else {
-        let temp_atom = Atom::gnd(this.clone());
-        match other {
-            Atom::Grounded(gnd) => {
-                if let Some(matchable) = gnd.as_grounded().as_match() {
-                    matchable.match_(&temp_atom)
-                } else {
-                    Box::new(std::iter::empty())
-                }
-            },
-            _ => Box::new(std::iter::empty()),
-        }
-    }
-}
-
 /// Alias for the list of traits required for the standard Rust types to be
 /// automatically wrapped into [GroundedAtom]. It is implemented automatically
 /// when type implements `'static + PartialEq + Clone + Debug`. No need

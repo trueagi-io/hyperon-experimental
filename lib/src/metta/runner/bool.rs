@@ -43,18 +43,8 @@ impl Grounded for Bool {
         ATOM_TYPE_BOOL
     }
 
-    fn as_match(&self) -> Option<&dyn CustomMatch> {
-        Some(self)
-    }
-
     fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         serializer.serialize_bool(self.0)
-    }
-}
-
-impl CustomMatch for Bool {
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        match_by_bidirectional_equality(self, other)
     }
 }
 
