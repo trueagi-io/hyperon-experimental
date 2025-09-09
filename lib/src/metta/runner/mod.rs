@@ -1430,4 +1430,9 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![]]));
     }
 
+    #[test]
+    fn metta_no_config_dir_by_default() {
+        let metta = Metta::new(None);
+        assert_eq!(metta.environment().config_dir(), None);
+    }
 }

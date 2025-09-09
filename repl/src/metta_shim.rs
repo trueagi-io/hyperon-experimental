@@ -301,7 +301,7 @@ pub mod metta_interface_mod {
         pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
             let mut builder = EnvBuilder::new()
                 .set_working_dir(Some(&working_dir))
-                .set_create_config_dir(true);
+                .set_default_config_dir();
 
             for path in include_paths.into_iter().rev() {
                 builder = builder.push_include_path(path);

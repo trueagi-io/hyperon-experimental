@@ -26,6 +26,7 @@ git2 = { version="0.18.3", features=["vendored-libgit2"], optional=true }
 hyperon-common = { workspace = true }
 hyperon-atom = { workspace = true }
 hyperon-space = { workspace = true }
+hyperon-macros = { workspace = true }
 
 # das deps
 [dependencies.metta-bus-client]

@@ -1,0 +1,10 @@
+[package]
+name = "hyperon-macros"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+litrs = "0.5.1"
+
+[lib]
+proc-macro = true

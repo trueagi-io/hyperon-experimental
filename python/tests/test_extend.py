@@ -13,7 +13,7 @@ class ExtendTest(unittest.TestCase):
         '''
         This test verifies that importing from a python-implemnted module along with @register_atoms and @register_tokens works
         '''
-        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), is_test=True))
         self.assertEqual(
             metta.run('''
               !(import! &self extension)
@@ -30,7 +30,7 @@ class ExtendTest(unittest.TestCase):
             [[ValueAtom(12)]])
 
     def test_grounded_noext(self):
-        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), is_test=True))
 
         @grounded(metta)
         def abs_dif(x, y):
@@ -47,7 +47,7 @@ class ExtendTestDirMod(unittest.TestCase):
         '''
         This test verifies that importing from a python module directory also works
         '''
-        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), is_test=True))
         self.assertEqual(
             metta.run('''
               !(import! &self ext_dir)
@@ -67,7 +67,7 @@ class ExtendTestDirMod(unittest.TestCase):
     #     '''
     #     This test verifies that importing from a module that imports its own sub-module also works
     #     '''
-    #     metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+    #     metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), is_test=True))
     #     self.assertEqual(
     #         metta.run('''
     #           !(import! &self ext_sub)
@@ -84,7 +84,7 @@ class ExtendTestDirMod(unittest.TestCase):
         '''
         This test verifies that importing from a sub-module will cause the necessary parents to be imported as well
         '''
-        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), is_test=True))
         self.assertEqual(
             metta.run('''
               !(import! &self ext_recursive:level-2:ext_nested)
@@ -107,7 +107,7 @@ class ExtendGlobalTest(unittest.TestCase):
         from extension import g_object
         # Sanity check
         self.assertEqual(g_object, None)
-        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), is_test=True))
         metta.run('''
           !(import! &self extension)
           !(set-global! 42)
@@ -127,7 +127,7 @@ class ExtendErrorTest(unittest.TestCase):
         '''
         This test verifies that an error from a Python extension is properly propagated
         '''
-        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), is_test=True))
         result = metta.run("!(import! &self error_pyext)")
         self.assertEqual(S('Error'), result[0][0].get_children()[0])
 
