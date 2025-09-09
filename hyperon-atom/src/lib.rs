@@ -91,14 +91,6 @@ macro_rules! expr {
     ($($x:tt)*) => { $crate::Atom::expr([ $( expr!($x) , )* ]) };
 }
 
-#[macro_export]
-macro_rules! constexpr {
-    () => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(&[]))) };
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::unique_string::UniqueString::Const($x))) };
-    (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
-    ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
-}
-
 /// Constructs new symbol atom. Can be used to construct `const` instances.
 ///
 /// # Examples
@@ -171,7 +163,7 @@ pub struct ExpressionAtom {
 
 impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
-    /// used directly, use [expr!], [constexpr!] or [Atom::expr] instead.
+    /// used directly, use [expr!], [metta!], [metta_const!] or [Atom::expr] instead.
     pub const fn new(children: CowArray<Atom>) -> Self {
         Self{ children, evaluated: false }
     }
@@ -242,14 +234,22 @@ pub struct VariableAtom {
 }
 
 impl VariableAtom {
-    /// Constructs new variable using `name` provided. Name should not contain
-    /// `#` characted which is reserved for internal name formatting (see
-    /// [VariableAtom::parse_name]). Usually [Atom::var] method should be used
-    /// to create new variable atom instance. But sometimes [VariableAtom]
-    /// instance is required. For example for using as a key in variable bindings
-    /// (see [matcher::Bindings]).
+    /// Constructs new variable using `name` provided.  Usually [Atom::var]
+    /// method should be used to create new variable atom instance. But
+    /// sometimes [VariableAtom] instance is required. For example for using
+    /// as a key in variable bindings (see [matcher::Bindings]).
+    /// Name should not contain `#` characted which is reserved for internal
+    /// name formatting (see [VariableAtom::parse_name]).
     pub fn new<T: Into<UniqueString>>(name: T) -> Self {
         Self{ name: Self::check_name(name), id: 0 }
+    }
+
+    /// Constructs new constant variable instance using `name` provided. Method
+    /// is introduced to support creating constant expressions.
+    /// Name should not contain `#` characted which is reserved for internal
+    /// name formatting (see [VariableAtom::parse_name]).
+    pub const fn new_const(name: UniqueString) -> Self {
+        Self{ name, id: 0 }
     }
 
     /// Constructs new variable using `name` and 'id' provided. This method is
