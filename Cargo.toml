@@ -11,25 +11,25 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.2.6"
+version = "0.2.7"
 edition = "2021"
 
 [workspace.dependencies]
-hyperon = { path = "./lib", version = "0.2.6" }
-hyperon-common = { path = "./hyperon-common", version = "0.2.6" }
-hyperon-atom = { path = "./hyperon-atom", version = "0.2.6" }
-hyperon-space = { path = "./hyperon-space", version = "0.2.6" }
-hyperon-macros = { path = "./hyperon-macros", version = "0.2.6" }
+hyperon = { path = "./lib", version = "0.2.7" }
+hyperon-common = { path = "./hyperon-common", version = "0.2.7" }
+hyperon-atom = { path = "./hyperon-atom", version = "0.2.7" }
+hyperon-space = { path = "./hyperon-space", version = "0.2.7" }
+hyperon-macros = { path = "./hyperon-macros", version = "0.2.7" }
 
 regex = "1.11.0"
 log = "0.4.0"
 env_logger = "0.8.4"
 
 [patch.'https://github.com/trueagi-io/hyperon-experimental.git']
-hyperon-common = { path = "./hyperon-common", version = "0.2.6" }
-hyperon-atom = { path = "./hyperon-atom", version = "0.2.6" }
-hyperon-space = { path = "./hyperon-space", version = "0.2.6" }
-hyperon-macros = { path = "./hyperon-macros", version = "0.2.6" }
+hyperon-common = { path = "./hyperon-common", version = "0.2.7" }
+hyperon-atom = { path = "./hyperon-atom", version = "0.2.7" }
+hyperon-space = { path = "./hyperon-space", version = "0.2.7" }
+hyperon-macros = { path = "./hyperon-macros", version = "0.2.7" }
 
 [profile.release]
 strip = "symbols"
