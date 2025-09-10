@@ -31,6 +31,10 @@ sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
 export PATH="${PATH}:${HOME}/.cargo/bin"
 cargo install cbindgen
 
+python3 -m pip install cmake==3.24 conan==2.19.1 pip==23.1.2
+PATH="${PATH}:${HOME}/.local/bin"
+conan profile detect --force
+
 # protobuf-compiler (v3) is required by Das
 OS=$(uname)
 ARCH=$(uname -m)
@@ -52,12 +56,8 @@ case "$ARCH" in
 esac
 PROTOC_ZIP=protoc-31.1-$OS_TAG-$ARCH_TAG.zip
 curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v31.1/$PROTOC_ZIP
-unzip -o $PROTOC_ZIP -d /usr/local
+unzip -o $PROTOC_ZIP -d ${HOME}/.local
 rm -f $PROTOC_ZIP
-
-python3 -m pip install cmake==3.24 conan==2.19.1 pip==23.1.2
-PATH="${PATH}:${HOME}/.local/bin"
-conan profile detect --force
 
 mkdir -p ${HOME}/hyperonc
 cd ${HOME}/hyperonc
