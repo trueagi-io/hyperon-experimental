@@ -32,9 +32,25 @@ export PATH="${PATH}:${HOME}/.cargo/bin"
 cargo install cbindgen
 
 # protobuf-compiler (v3) is required by Das
+OS=$(uname)
 ARCH=$(uname -m)
-ARCH_TAG=$([ "$ARCH" == "aarch64" ] && echo "aarch_64" || echo "$ARCH")
-PROTOC_ZIP=protoc-31.1-linux-$ARCH_TAG.zip
+echo "machine OS: $OS"
+echo "machine ARCH: $ARCH"
+case "$OS" in
+    Linux*)     OS_TAG=linux;;
+    Darwin*)    OS_TAG=osx;;
+    CYGWIN*)    OS_TAG=win64;;
+    MINGW*)     OS_TAG=win64;;
+    MSYS_NT*)   OS_TAG=win64;;
+    *)          OS_TAG=$OS
+esac
+case "$ARCH" in
+    aarch64)    ARCH_TAG=aarch_64;;
+    arm64)      ARCH_TAG=aarch_64;;
+    i686)       ARCH_TAG=x86_32;;
+    *)          ARCH_TAG=$ARCH
+esac
+PROTOC_ZIP=protoc-31.1-$OS_TAG-$ARCH_TAG.zip
 curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v31.1/$PROTOC_ZIP
 unzip -o $PROTOC_ZIP -d /usr/local
 rm -f $PROTOC_ZIP
