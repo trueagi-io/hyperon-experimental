@@ -83,9 +83,9 @@ jobs:
           python-version: ${{ inputs.python-version }}
 
       - name: Install CMake
-        uses: jwlawson/actions-setup-cmake@v2
+        uses: lukka/get-cmake@v4.1.1
         with:
-          cmake-version: ${{ inputs.cmake-version }}
+          cmakeVersion: ${{ inputs.cmake-version }}
 
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.2
