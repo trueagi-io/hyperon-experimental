@@ -17,7 +17,7 @@ pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_m
 pub(crate) use mod_names::{module_name_is_legal, module_name_make_legal, decompose_name_path, compose_name_path};
 
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
-use crate::metta::types::get_atom_types;
+use crate::metta::types::{AtomType, get_atom_types};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
 //
@@ -286,9 +286,10 @@ impl MettaMod {
     /// A convenience to add an an atom to a module's Space, if it passes type-checking
     pub(crate) fn add_atom(&self, atom: Atom, type_check: bool) -> Result<(), Atom> {
         if type_check {
-            let (check, err_msg) = get_atom_types(&self.space, &atom);
-            if check.is_empty() {
-                return Err(err_msg);
+            let types = get_atom_types(&self.space, &atom);
+            if types.iter().all(AtomType::is_error) {
+                // FIXME: return list of errors
+                return Err(types.into_iter().map(|t| t.into_err_message()).next().unwrap());
             }
         }
         self.space.borrow_mut().add(atom);

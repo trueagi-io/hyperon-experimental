@@ -62,7 +62,7 @@ use hyperon_common::shared::Shared;
 use super::*;
 use hyperon_space::*;
 use super::text::{Tokenizer, Parser, SExprParser};
-use super::types::{get_atom_types, get_atom_types_v2, validate_atom};
+use super::types::{AtomType, get_atom_types, get_atom_types_v2, validate_atom};
 
 pub mod modules;
 use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, Resource, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name};
@@ -475,9 +475,9 @@ impl Metta {
             wrap_atom_by_metta_interpreter(self.module_space(ModId::TOP), atom)
         };
         if self.type_check_is_enabled()  {
-            let (check, err_msg) = get_atom_types(&self.module_space(ModId::TOP), &atom);
-            if check.is_empty() {
-                return Ok(vec![err_msg]);
+            let types = get_atom_types(&self.module_space(ModId::TOP), &atom);
+            if types.iter().all(AtomType::is_error) {
+                return Ok(types.into_iter().map(|t| t.into_err_message()).collect());
             }
         }
         interpret(self.space().clone(), &atom)
