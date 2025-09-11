@@ -88,6 +88,9 @@ a production release then proceed with `Publish to PyPi` block.
 
 ## How to check release job in fork
 
+If you don't need to test publishing or Docker building procedures just run
+release workflow manually. Otherwise you need to trigger release as usual.
+
 First you need to select the test release version. It should contain an
 additional version digit after the latest officially released version. Let's
 say the latest released version is `0.1.7`. Then the test release version
