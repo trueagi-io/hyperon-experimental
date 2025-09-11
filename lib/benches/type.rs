@@ -32,7 +32,7 @@ fn bench_get_atom_types_complex(bencher: &mut Bencher) {
     let space = metta_space("(: b B) (: b BB)");
     let atom = atom_with_depth(3);
     bencher.iter(|| {
-        let types = get_atom_types(&space, &atom);
+        let types = get_atom_types(&space, &atom).0;
         assert!(!types.is_empty());
     })
 }

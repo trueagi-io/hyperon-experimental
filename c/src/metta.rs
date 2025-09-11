@@ -666,7 +666,7 @@ pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
     let dyn_space = unsafe{ &*space }.borrow();
     let atom = unsafe{ (&*atom).borrow() };
-    let types = hyperon::metta::types::get_atom_types(dyn_space, atom);
+    let types = hyperon::metta::types::get_atom_types(dyn_space, atom).0;
     return_atoms(&types, callback, context);
 }
 
