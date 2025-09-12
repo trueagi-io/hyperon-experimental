@@ -156,7 +156,7 @@ impl MettaMod {
             let src_atom = src_atom_vec.into_iter().next().unwrap();
 
             // Add the atom to our module's space
-            self.add_atom(src_atom.clone(), false).map_err(|a| a.to_string())?;
+            self.add_atom(src_atom.clone(), false).expect("Unexpected type check error");
 
             // Finally, Add a Tokenizer entry to access this atom, if one is needed
             let name = match name {
@@ -284,12 +284,11 @@ impl MettaMod {
     }
 
     /// A convenience to add an an atom to a module's Space, if it passes type-checking
-    pub(crate) fn add_atom(&self, atom: Atom, type_check: bool) -> Result<(), Atom> {
+    pub(crate) fn add_atom(&self, atom: Atom, type_check: bool) -> Result<(), Vec<Atom>> {
         if type_check {
             let types = get_atom_types(&self.space, &atom);
             if types.iter().all(AtomType::is_error) {
-                // FIXME: return list of errors
-                return Err(types.into_iter().map(AtomType::into_error_unchecked).next().unwrap());
+                return Err(types.into_iter().map(AtomType::into_error_unchecked).collect());
             }
         }
         self.space.borrow_mut().add(atom);

@@ -1079,8 +1079,8 @@ impl<'input> RunContext<'_, 'input> {
                     }
                     match self.i_wrapper.mode {
                         MettaRunnerMode::ADD => {
-                            if let Err(atom) = self.module().add_atom(atom, self.metta.type_check_is_enabled()) {
-                                self.i_wrapper.results.push(vec![atom]);
+                            if let Err(errors) = self.module().add_atom(atom, self.metta.type_check_is_enabled()) {
+                                self.i_wrapper.results.push(errors);
                                 self.i_wrapper.mode = MettaRunnerMode::TERMINATE;
                                 return Ok(());
                             }
