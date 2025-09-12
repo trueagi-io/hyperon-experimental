@@ -1140,12 +1140,10 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
             let actual_types = get_atom_types_v2(space_ref, op);
 
             let only_error_types = !actual_types.is_empty() && actual_types.iter().all(AtomType::is_error);
-            let err = if only_error_types {
+            if only_error_types {
                 log::debug!("interpret_expression: op type check: expr: {}, op types: [{}]", expr, actual_types.iter().format(", "));
-                once((return_atom(actual_types.iter().nth(0).unwrap().get_err_message().clone()), bindings.clone()))
-            } else {
-                empty()
-            };
+                return Box::new(actual_types.into_iter().map(move |t| (return_atom(t.into_error_unchecked()), bindings.clone())))
+            }
 
             let has_tuple_type = actual_types.is_empty() || actual_types.iter()
                 .filter(|t| t.is_valid() && !t.is_function())
@@ -1194,7 +1192,7 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
                 empty()
             };
 
-            Box::new(tuple.chain(func).chain(err))
+            Box::new(tuple.chain(func))
         },
         _ => type_cast(space, expr, expr_typ, bindings),
     }
@@ -1344,23 +1342,23 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                             .into_iter()
                             .inspect(move |typ| log::trace!("check_if_function_type_is_applicable_: function type check: expr: {}, actual_arg: {}, actual_type: {}", expr, actual_arg, typ));
                         let iter = actual_arg_types.flat_map(move |actual_arg_type| -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + '_> {
-                            if actual_arg_type.is_valid() {
-                                let arg_types_tail = arg_types_tail.clone();
-                                let op_type = op_type.clone();
-                                let actual_arg_type = actual_arg_type.into_atom();
-                                match match_types(&formal_arg_type, &actual_arg_type, bindings.clone()) {
-                                    Ok(matches) => Box::new(matches.flat_map(move |bindings| check_if_function_type_is_applicable_(expr, op_type.clone(), arg_types_tail.clone(), args_tail, expected_type, space, bindings))),
-                                    Err(nomatch) => {
-                                        let arg_id = TryInto::<&ExpressionAtom>::try_into(expr).unwrap().children().len() - arg_types_len;
-                                        let formal_arg_type_clone = formal_arg_type.clone();
-                                        Box::new(nomatch.map(move |bindings| {
-                                            let formal_arg_type = apply_bindings_to_atom_move(formal_arg_type_clone.clone(), &bindings);
-                                            (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(arg_id as i64)), formal_arg_type, actual_arg_type.clone()])])), bindings)
-                                        }))
-                                    },
-                                }
-                            } else {
-                                once((Err(actual_arg_type.into_err_message().clone()), bindings.clone()))
+                            match actual_arg_type.into_atom_or_error() {
+                                Ok(actual_arg_type) => {
+                                    let arg_types_tail = arg_types_tail.clone();
+                                    let op_type = op_type.clone();
+                                    match match_types(&formal_arg_type, &actual_arg_type, bindings.clone()) {
+                                        Ok(matches) => Box::new(matches.flat_map(move |bindings| check_if_function_type_is_applicable_(expr, op_type.clone(), arg_types_tail.clone(), args_tail, expected_type, space, bindings))),
+                                        Err(nomatch) => {
+                                            let arg_id = TryInto::<&ExpressionAtom>::try_into(expr).unwrap().children().len() - arg_types_len;
+                                            let formal_arg_type_clone = formal_arg_type.clone();
+                                            Box::new(nomatch.map(move |bindings| {
+                                                let formal_arg_type = apply_bindings_to_atom_move(formal_arg_type_clone.clone(), &bindings);
+                                                (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(arg_id as i64)), formal_arg_type, actual_arg_type.clone()])])), bindings)
+                                            }))
+                                        },
+                                    }
+                                },
+                                Err(error) => once((Err(error), bindings.clone())),
                             }
                         });
                         Box::new(iter)

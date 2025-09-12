@@ -289,7 +289,7 @@ impl MettaMod {
             let types = get_atom_types(&self.space, &atom);
             if types.iter().all(AtomType::is_error) {
                 // FIXME: return list of errors
-                return Err(types.into_iter().map(|t| t.into_err_message()).next().unwrap());
+                return Err(types.into_iter().map(AtomType::into_error_unchecked).next().unwrap());
             }
         }
         self.space.borrow_mut().add(atom);

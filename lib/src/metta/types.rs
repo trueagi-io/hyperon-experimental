@@ -160,9 +160,16 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 pub struct AtomType {
     typ: Atom,
     is_function: bool,
-    is_error: bool,
-    is_application: bool,
-    error_message: Atom,
+    info: TypeInfo,
+}
+
+#[derive(Debug, PartialEq)]
+enum TypeInfo {
+    Application,
+    ApplicationError {
+        error: Atom,
+    },
+    Value,
 }
 
 impl AtomType {
@@ -172,9 +179,7 @@ impl AtomType {
         Self {
             typ: ATOM_TYPE_UNDEFINED,
             is_function: false,
-            is_error: false,
-            is_application: false,
-            error_message: expr![()],
+            info: TypeInfo::Value,
         }
     }
 
@@ -184,9 +189,7 @@ impl AtomType {
         Self {
             typ,
             is_function,
-            is_error: false,
-            is_application: false,
-            error_message: expr![()],
+            info: TypeInfo::Value,
         }
     }
 
@@ -196,32 +199,30 @@ impl AtomType {
         Self {
             typ,
             is_function,
-            is_error: false,
-            is_application: true,
-            error_message: Atom::expr([]),
+            info: TypeInfo::Application,
         }
     }
 
     #[inline]
-    pub fn error(typ: Atom, err_message: Atom) -> Self {
+    pub fn error(typ: Atom, error: Atom) -> Self {
         let is_function = is_func(&typ);
         Self {
             typ,
             is_function,
-            is_error: true,
-            is_application: true,
-            error_message: err_message,
+            info: TypeInfo::ApplicationError {
+                error,
+            }
         }
     }
 
     #[inline]
     pub fn is_error(&self) -> bool {
-        self.is_error
+        matches!(self.info, TypeInfo::ApplicationError{..})
     }
 
     #[inline]
     pub fn is_valid(&self) -> bool {
-        !self.is_error
+        !self.is_error()
     }
 
     #[inline]
@@ -230,7 +231,7 @@ impl AtomType {
     }
     #[inline]
     pub fn is_application(&self) -> bool {
-        self.is_application
+        matches!(self.info, TypeInfo::Application)
     }
 
     #[inline]
@@ -244,14 +245,35 @@ impl AtomType {
     }
 
     #[inline]
-    pub fn get_err_message(&self) -> &Atom {
-        &self.error_message
+    pub fn get_error(&self) -> Option<&Atom> {
+        match &self.info {
+            TypeInfo::ApplicationError { error } => Some(error),
+            _ => None,
+        }
     }
 
-    // FIXME: think about better interface, for example into_type() -> Result<Atom, Atom>
     #[inline]
-    pub fn into_err_message(self) -> Atom {
-        self.error_message
+    pub fn into_error(self) -> Option<Atom> {
+        match self.info {
+            TypeInfo::ApplicationError { error } => Some(error),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn into_error_unchecked(self) -> Atom {
+        match self.info {
+            TypeInfo::ApplicationError { error } => error,
+            _ => panic!("Unexpected state"),
+        }
+    }
+
+    #[inline]
+    pub fn into_atom_or_error(self) -> Result<Atom, Atom>  {
+        match self.info {
+            TypeInfo::ApplicationError { error } => Err(error),
+            _ => Ok(self.typ),
+        }
     }
 }
 
@@ -485,7 +507,7 @@ fn get_application_types(atom: &Atom, expr: &ExpressionAtom, type_info: ExprType
         if correct.is_empty() {
             let expected_types_expr = Atom::Expression(ExpressionAtom::new(CowArray::from(expected_arg_types.iter().map(|a| a.clone()).collect_vec())));
             let actual_types_expr = Atom::Expression(ExpressionAtom::new(CowArray::from(type_info.arg_types.iter().map(|a| a.iter().nth(0).unwrap().typ.clone()).collect_vec())));
-            types.push(AtomType::error(fn_type.into_atom(), Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(0)), actual_types_expr, expected_types_expr])])));
+            types.push(AtomType::error(fn_type.into_atom(), Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(0i64)), actual_types_expr, expected_types_expr])])));
         } else {
             for bindings in correct {
                 types.push(AtomType::application(apply_bindings_to_atom_move(ret_typ.clone(), &bindings)));
