@@ -1137,18 +1137,15 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
     match atom_as_slice(&expr) {
         Some([op, _args @ ..]) => {
             let space_ref = space.as_gnd::<DynSpace>().unwrap();
-            let actual_types = get_atom_types_v2(space_ref, op);
+            let actual_types = get_atom_types(space_ref, op);
 
-            let only_error_types = !actual_types.is_empty() && actual_types.iter().all(AtomType::is_error);
+            let only_error_types = actual_types.iter().all(AtomType::is_error);
             if only_error_types {
                 log::debug!("interpret_expression: op type check: expr: {}, op types: [{}]", expr, actual_types.iter().format(", "));
                 return Box::new(actual_types.into_iter().map(move |t| (return_atom(t.into_error_unchecked()), bindings.clone())))
             }
 
-            let has_tuple_type = actual_types.is_empty() || actual_types.iter()
-                .filter(|t| t.is_valid() && !t.is_function())
-                .next()
-                .is_some();
+            let has_tuple_type = actual_types.iter().any(|t| (t.is_valid() && !t.is_function()) || t.as_atom() == &ATOM_TYPE_UNDEFINED);
             let tuple = if has_tuple_type {
                 let reduced = Atom::Variable(VariableAtom::new("reduced").make_unique());
                 let result = Atom::Variable(VariableAtom::new("result").make_unique());

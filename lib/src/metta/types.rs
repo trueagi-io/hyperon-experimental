@@ -314,7 +314,7 @@ impl Display for AtomType {
 /// assert_eq_no_order!(get_atom_types(&space, &metta!((f b))), vec![AtomType::error(metta!((-> A B)), metta!((Error (f b) (BadType 0 (B) (A)))))]);
 /// ```
 pub fn get_atom_types(space: &DynSpace, atom: &Atom) -> Vec<AtomType> {
-    let atom_types = get_atom_types_v2(space, atom);
+    let atom_types = get_atom_types_internal(space, atom);
     if atom_types.is_empty() {
         vec![AtomType::undefined()]
     } else {
@@ -331,7 +331,7 @@ struct ExprTypeInfo {
 impl ExprTypeInfo {
     fn new(space: &DynSpace, expr: &ExpressionAtom) -> Self {
         let (op, args) = expr.children().split_first().unwrap();
-        let op_types = get_atom_types_v2(space, op);
+        let op_types = get_atom_types_internal(space, op);
         let mut op_func_types = Vec::with_capacity(op_types.len());
         let mut op_value_types = Vec::with_capacity(op_types.len());
         op_types.into_iter().for_each(|t| {
@@ -342,12 +342,12 @@ impl ExprTypeInfo {
             }
         });
         let arg_types: Vec<Vec<AtomType>> = args.iter()
-            .map(|a| get_atom_types_v2(space, a)).collect();
+            .map(|a| get_atom_types_internal(space, a)).collect();
             // Code below allows returning partially defined tuples
             // for example (a c) where (: a A) has type (A %Undefined%)
             // see get_atom_types_tuple test
             //.map(|a| {
-                //let mut types = get_atom_types_v2(space, a);
+                //let mut types = get_atom_types_internal(space, a);
                 //if types.is_empty() {
                     //types.push(AtomType::value(ATOM_TYPE_UNDEFINED));
                 //}
@@ -362,8 +362,8 @@ impl ExprTypeInfo {
     }
 }
 
-pub fn get_atom_types_v2(space: &DynSpace, atom: &Atom) -> Vec<AtomType> {
-    log::trace!("get_atom_types_v2: atom: {}", atom);
+fn get_atom_types_internal(space: &DynSpace, atom: &Atom) -> Vec<AtomType> {
+    log::trace!("get_atom_types_internal: atom: {}", atom);
     let types = match atom {
         // TODO: type of the variable could be actually a type variable,
         // in this case inside each variant of type for the atom we should
@@ -393,7 +393,7 @@ pub fn get_atom_types_v2(space: &DynSpace, atom: &Atom) -> Vec<AtomType> {
             types
         },
     };
-    log::debug!("get_atom_types_v2: return atom {} types {}", atom, types.iter().format(", "));
+    log::debug!("get_atom_types_internal: return atom {} types {}", atom, types.iter().format(", "));
     types
 }
 
@@ -661,7 +661,7 @@ fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
 /// assert!(!validate_atom(&space, &expr!("foo" "b")));
 /// ```
 pub fn validate_atom(space: &DynSpace, atom: &Atom) -> bool {
-    get_atom_types_v2(space, atom).iter().all(AtomType::is_valid)
+    get_atom_types_internal(space, atom).iter().all(AtomType::is_valid)
 }
 
 #[cfg(test)]
@@ -1337,10 +1337,10 @@ mod tests {
     #[test]
     fn tuple_with_undefined_member() {
         let space = metta_space("(: F %Undefined%)");
-        assert_eq!(get_atom_types_v2(&space, &atom("(F arg)")), vec![]);
+        assert_eq!(get_atom_types_internal(&space, &atom("(F arg)")), vec![]);
 
         let gnd = GroundedAtomWithParameterizedType(ATOM_TYPE_UNDEFINED);
-        assert_eq!(get_atom_types_v2(&space, &expr!({gnd} "a")), vec![]);
+        assert_eq!(get_atom_types_internal(&space, &expr!({gnd} "a")), vec![]);
     }
 
 }

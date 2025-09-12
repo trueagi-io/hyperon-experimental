@@ -62,7 +62,7 @@ use hyperon_common::shared::Shared;
 use super::*;
 use hyperon_space::*;
 use super::text::{Tokenizer, Parser, SExprParser};
-use super::types::{AtomType, get_atom_types, get_atom_types_v2};
+use super::types::{AtomType, get_atom_types};
 
 pub mod modules;
 use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, Resource, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name};
@@ -1088,7 +1088,7 @@ impl<'input> RunContext<'_, 'input> {
                         MettaRunnerMode::INTERPRET => {
 
                             if self.metta.type_check_is_enabled() {
-                                let types = get_atom_types_v2(&self.module().space(), &atom);
+                                let types = get_atom_types(&self.module().space(), &atom);
                                 if types.iter().all(AtomType::is_error) {
                                     self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(),
                                         types.into_iter().map(AtomType::into_error_unchecked).collect()));
