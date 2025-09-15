@@ -383,7 +383,8 @@ fn get_atom_types_internal(space: &DynSpace, atom: &Atom) -> Vec<AtomType> {
         },
         Atom::Symbol(_) => query_types(space, atom).into_iter()
             .map(AtomType::value).collect(),
-        // FIXME: incorrect type
+        // TODO: empty expression should have unit type (->), but type checking
+        // code cannot handle functional type which doesn't return value
         Atom::Expression(expr) if expr.children().len() == 0 => vec![],
         Atom::Expression(expr) => {
             let type_info = ExprTypeInfo::new(space, expr);
