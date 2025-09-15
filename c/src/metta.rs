@@ -669,7 +669,9 @@ pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
     let dyn_space = unsafe{ &*space }.borrow();
     let atom = unsafe{ (&*atom).borrow() };
     // TODO: errors should be returned as well, this API should correspond to
-    // the get_atom_types API
+    // the get_atom_types API. When it is done, `validate_atom` function can be removed
+    // from the Python and Rust interface as it can be replaced by
+    // `get_atom_types().iter().all(AtomType::is_valid)`
     let types: Vec<Atom> = hyperon::metta::types::get_atom_types(dyn_space, atom)
         .into_iter().filter(AtomType::is_valid).map(AtomType::into_atom).collect();
     return_atoms(&types, callback, context);
