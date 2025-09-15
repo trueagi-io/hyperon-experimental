@@ -62,7 +62,7 @@ use hyperon_common::shared::Shared;
 use super::*;
 use hyperon_space::*;
 use super::text::{Tokenizer, Parser, SExprParser};
-use super::types::{get_atom_types, get_atom_types_v2, validate_atom};
+use super::types::{AtomType, get_atom_types};
 
 pub mod modules;
 use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, Resource, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name};
@@ -475,9 +475,9 @@ impl Metta {
             wrap_atom_by_metta_interpreter(self.module_space(ModId::TOP), atom)
         };
         if self.type_check_is_enabled()  {
-            let (check, err_msg) = get_atom_types(&self.module_space(ModId::TOP), &atom);
-            if check.is_empty() {
-                return Ok(vec![err_msg]);
+            let types = get_atom_types(&self.module_space(ModId::TOP), &atom);
+            if types.iter().all(AtomType::is_error) {
+                return Ok(types.into_iter().map(AtomType::into_error_unchecked).collect());
             }
         }
         interpret(self.space().clone(), &atom)
@@ -1079,29 +1079,31 @@ impl<'input> RunContext<'_, 'input> {
                     }
                     match self.i_wrapper.mode {
                         MettaRunnerMode::ADD => {
-                            if let Err(atom) = self.module().add_atom(atom, self.metta.type_check_is_enabled()) {
-                                self.i_wrapper.results.push(vec![atom]);
+                            if let Err(errors) = self.module().add_atom(atom, self.metta.type_check_is_enabled()) {
+                                self.i_wrapper.results.push(errors);
                                 self.i_wrapper.mode = MettaRunnerMode::TERMINATE;
                                 return Ok(());
                             }
                         },
                         MettaRunnerMode::INTERPRET => {
 
-                            if self.metta.type_check_is_enabled() && !validate_atom(&self.module().space(), &atom) {
-                                let typ = get_atom_types_v2(&self.module().space(), &atom);
-                                let type_err_exp = typ.iter().nth(0).unwrap().get_err_message().clone();
-                                self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(), vec![type_err_exp]));
-                            } else {
-                                let atom = if is_bare_minimal_interpreter(self.metta) {
-                                    atom
-                                } else {
-                                    wrap_atom_by_metta_interpreter(self.module().space().clone(), atom)
-                                };
-                                self.i_wrapper.interpreter_state = Some(interpret_init(self.module().space().clone(), &atom));
-                                if let Some(depth) = self.metta.settings().get_string("max-stack-depth") {
-                                    let depth = depth.parse::<usize>().unwrap();
-                                    self.i_wrapper.interpreter_state.as_mut().map(|state| state.set_max_stack_depth(depth));
+                            if self.metta.type_check_is_enabled() {
+                                let types = get_atom_types(&self.module().space(), &atom);
+                                if types.iter().all(AtomType::is_error) {
+                                    self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(),
+                                        types.into_iter().map(AtomType::into_error_unchecked).collect()));
                                 }
+                                return Ok(())
+                            }
+                            let atom = if is_bare_minimal_interpreter(self.metta) {
+                                atom
+                            } else {
+                                wrap_atom_by_metta_interpreter(self.module().space().clone(), atom)
+                            };
+                            self.i_wrapper.interpreter_state = Some(interpret_init(self.module().space().clone(), &atom));
+                            if let Some(depth) = self.metta.settings().get_string("max-stack-depth") {
+                                let depth = depth.parse::<usize>().unwrap();
+                                self.i_wrapper.interpreter_state.as_mut().map(|state| state.set_max_stack_depth(depth));
                             }
                         },
                         MettaRunnerMode::TERMINATE => {

@@ -2,7 +2,7 @@ use hyperon_atom::*;
 use hyperon_space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use crate::metta::types::{get_atom_types, get_meta_type};
+use crate::metta::types::{AtomType, get_atom_types, get_meta_type};
 use hyperon_common::multitrie::{MultiTrie, TrieKey, TrieToken};
 use super::{grounded_op, regex};
 use crate::metta::runner::number::*;
@@ -380,11 +380,11 @@ impl CustomExecute for GetTypeOp {
                 .ok_or("match expects a space as the first argument"),
             None => Ok(&self.space),
         }?;
-        let types = get_atom_types(space, atom).0;
-        if types.is_empty() {
+        let types = get_atom_types(space, atom);
+        if types.iter().all(AtomType::is_error) {
             Ok(vec![EMPTY_SYMBOL])
         } else {
-            Ok(types)
+            Ok(types.into_iter().filter(AtomType::is_valid).map(AtomType::into_atom).collect())
         }
     }
 }
@@ -435,7 +435,12 @@ impl CustomExecute for GetTypeSpaceOp {
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-type-space expects a space as the first argument")?;
         let atom = args.get(1).ok_or_else(arg_error)?;
         log::debug!("GetTypeSpaceOp::execute: space: {}, atom: {}", space, atom);
-        Ok(get_atom_types(space, atom).0)
+        let types = get_atom_types(space, atom);
+        if types.iter().all(AtomType::is_error) {
+            Ok(vec![EMPTY_SYMBOL])
+        } else {
+            Ok(types.into_iter().filter(AtomType::is_valid).map(AtomType::into_atom).collect())
+        }
     }
 }
 
