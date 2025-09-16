@@ -1092,8 +1092,8 @@ impl<'input> RunContext<'_, 'input> {
                                 if types.iter().all(AtomType::is_error) {
                                     self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(),
                                         types.into_iter().map(AtomType::into_error_unchecked).collect()));
+                                    return Ok(())
                                 }
-                                return Ok(())
                             }
                             let atom = if is_bare_minimal_interpreter(self.metta) {
                                 atom
