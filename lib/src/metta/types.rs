@@ -89,8 +89,11 @@ fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expect
             };
             let mut matches = matches.peekable();
             if matches.peek().is_none() {
-                let idx = start_len - actual_tail.len();
-                types.push(AtomType::error(fn_type_atom.clone(), Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(idx as i64)), expected.clone(), actual.iter().nth(0).unwrap().typ.clone()])])));
+                let idx = (start_len - actual_tail.len()) as i64;
+                for typ in actual {
+                    let error = Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(idx)), expected.clone(), typ.as_atom().clone()])]);
+                    types.push(AtomType::error(fn_type_atom.clone(), error));
+                }
             } else {
                 for b in matches {
                     check_arg_types_internal(actual_tail, meta_tail, expected_tail, b, types, fn_type_atom, atom, ret_typ, start_len);
