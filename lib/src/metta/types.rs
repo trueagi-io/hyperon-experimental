@@ -24,7 +24,6 @@ use hyperon_space::DynSpace;
 
 use std::fmt::{Display, Debug};
 use itertools::Itertools;
-use hyperon_common::collections::CowArray;
 use crate::metta::runner::number::Number;
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
@@ -63,19 +62,20 @@ fn add_super_types(space: &DynSpace, sub_types: &mut Vec<Atom>, from: usize) {
     }
 }
 
-fn check_arg_types(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expected: &[Atom]) -> BindingsSet {
+fn check_arg_types(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], types: &mut Vec<AtomType>, expected: &[Atom], ret_typ: &Atom, atom: &Atom, fn_type_atom: &Atom) -> () {
     if actual.len() != expected.len() {
-        BindingsSet::empty()
+        types.push(AtomType::error(fn_type_atom.clone(), Atom::expr([ERROR_SYMBOL, atom.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL])));
     } else {
-        check_arg_types_internal(actual, meta, expected, Bindings::new())
+        check_arg_types_internal(actual, meta, expected, Bindings::new(), types, fn_type_atom, atom, ret_typ, actual.len());
     }
 }
 
-fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> BindingsSet {
+fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings, types: &mut Vec<AtomType>, fn_type_atom: &Atom, atom: &Atom, ret_typ: &Atom, start_len: usize) -> () {
     log::trace!("check_arg_types: actual: {}, expected: {}",
         actual.iter().format_with(", ", |v, f| f(&format_args!("{}", v.iter().format(", ")))),
         expected.iter().format(", "));
-    let matched = match (actual, meta, expected) {
+
+    match (actual, meta, expected) {
         ([actual, actual_tail @ ..], [meta, meta_tail @ ..], [expected, expected_tail @ ..]) => {
             let undefined_or_meta = actual.is_empty()
                 || *expected == ATOM_TYPE_UNDEFINED
@@ -85,19 +85,28 @@ fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expect
             } else {
                 &mut actual.into_iter().flat_map(|typ| match_reducted_types(typ.as_atom(), expected))
             };
-            matches
-                .flat_map(|b| b.merge(&bindings))
-                .flat_map(|b| check_arg_types_internal(actual_tail, meta_tail, expected_tail, b))
-                .collect()
+            let mut matches = matches
+                .flat_map(|b| b.merge(&bindings)).peekable();
+            if matches.peek().is_none() {
+                let idx = start_len - actual_tail.len();
+                types.push(AtomType::error(fn_type_atom.clone(), Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(idx as i64)), expected.clone(), actual.iter().nth(0).unwrap().typ.clone()])])));
+            } else {
+                for b in matches {
+                    check_arg_types_internal(actual_tail, meta_tail, expected_tail, b, types, fn_type_atom, atom, ret_typ, start_len);
+                }
+            }
         },
-        ([], [], []) => BindingsSet::from(bindings),
+        ([], [], []) => {
+            let ret = BindingsSet::from(bindings);
+            for binding in ret.clone() {
+                types.push(AtomType::application(apply_bindings_to_atom_move(ret_typ.clone(), &binding)));
+            };
+        },
         _ => unreachable!(),
     };
-    log::trace!("check_arg_types: actual: {}, expected: {}, matched: {}",
+    log::trace!("check_arg_types: actual: {}, expected: {}",
         actual.iter().format_with(", ", |v, f| f(&format_args!("{}", v.iter().format(", ")))),
-        expected.iter().format(", "),
-        matched);
-    matched
+        expected.iter().format(", "));
 }
 
 /// Returns true if passed type is a type of function.
@@ -311,7 +320,7 @@ impl Display for AtomType {
 /// assert_eq_no_order!(get_atom_types(&space, &metta!(a)), vec![AtomType::value(metta!(A)), AtomType::value(metta!(B))]);
 /// assert_eq_no_order!(get_atom_types(&space, &metta!((a b))), vec![AtomType::value(metta!((A B))), AtomType::value(metta!((B B)))]);
 /// assert_eq_no_order!(get_atom_types(&space, &metta!((f a))), vec![AtomType::application(metta!(B))]);
-/// assert_eq_no_order!(get_atom_types(&space, &metta!((f b))), vec![AtomType::error(metta!((-> A B)), metta!((Error (f b) (BadType 0 (B) (A)))))]);
+/// assert_eq_no_order!(get_atom_types(&space, &metta!((f b))), vec![AtomType::error(metta!((-> A B)), metta!((Error (f b) (BadType 1 A B))))]);
 /// ```
 pub fn get_atom_types(space: &DynSpace, atom: &Atom) -> Vec<AtomType> {
     let atom_types = get_atom_types_internal(space, atom);
@@ -503,17 +512,9 @@ fn get_application_types(atom: &Atom, expr: &ExpressionAtom, type_info: ExprType
     let meta_arg_types: Vec<Vec<Atom>> = args.iter().map(|a| vec![get_meta_type(a), ATOM_TYPE_ATOM]).collect();
     let mut types = Vec::with_capacity(type_info.op_func_types.len());
     for fn_type in type_info.op_func_types.into_iter() {
-        let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-        let correct = check_arg_types(&type_info.arg_types, meta_arg_types.as_slice(), expected_arg_types);
-        if correct.is_empty() {
-            let expected_types_expr = Atom::Expression(ExpressionAtom::new(CowArray::from(expected_arg_types.iter().map(|a| a.clone()).collect_vec())));
-            let actual_types_expr = Atom::Expression(ExpressionAtom::new(CowArray::from(type_info.arg_types.iter().map(|a| a.iter().nth(0).unwrap().typ.clone()).collect_vec())));
-            types.push(AtomType::error(fn_type.into_atom(), Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(0i64)), actual_types_expr, expected_types_expr])])));
-        } else {
-            for bindings in correct {
-                types.push(AtomType::application(apply_bindings_to_atom_move(ret_typ.clone(), &bindings)));
-            }
-        }
+        let (expected, ret_typ) = get_arg_types(&fn_type);
+        let fn_type_atom = fn_type.as_atom();
+        check_arg_types(&type_info.arg_types, meta_arg_types.as_slice(), &mut types, expected, ret_typ, atom, fn_type_atom);
     }
     log::trace!("get_application_types: function application {} types {}", atom, types.iter().format(", "));
     types
@@ -522,7 +523,7 @@ fn get_application_types(atom: &Atom, expr: &ExpressionAtom, type_info: ExprType
 #[derive(Clone, PartialEq, Debug)]
 struct UndefinedTypeMatch { }
 
-impl std::fmt::Display for UndefinedTypeMatch {
+impl Display for UndefinedTypeMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", ATOM_TYPE_UNDEFINED)
     }
@@ -873,7 +874,7 @@ mod tests {
         assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Time))")));
         assert!(!validate_atom(&space, &atom("(HumansAreMortal Human)")));
         assert!(!check_type(&space, &atom("(HumansAreMortal (Human Socrates))"),
-                           &atom("(Mortal Socrates)")));
+                            &atom("(Mortal Socrates)")));
         assert!(check_type(&space, &atom("(HumansAreMortal SocratesIsHuman)"),
                            &atom("(Mortal Socrates)")));
 
@@ -1084,9 +1085,9 @@ mod tests {
         ");
         assert_eq!(get_atom_types(&space, &metta!((f_atom b))), vec![typ_app!(D)]);
         assert_eq!(get_atom_types(&space, &metta!((f_sym b))), vec![typ_app!(D)]);
-        assert_eq!(get_atom_types(&space, &metta!((f_expr b))), vec![typ_err!((-> Expression D) , (Error (f_expr b) (BadType 0 (B) (Expression))))]);
-        assert_eq!(get_atom_types(&space, &metta!((f_var b))), vec![typ_err!((-> Variable D) , (Error (f_var b) (BadType 0 (B) (Variable))))]);
-        assert_eq!(get_atom_types(&space, &metta!((f_gnd b))), vec![typ_err!((-> Grounded D) , (Error (f_gnd b) (BadType 0 (B) (Grounded))))]);
+        assert_eq!(get_atom_types(&space, &metta!((f_expr b))), vec![typ_err!((-> Expression D) , (Error (f_expr b) (BadType 1 Expression B)))]);
+        assert_eq!(get_atom_types(&space, &metta!((f_var b))), vec![typ_err!((-> Variable D) , (Error (f_var b) (BadType 1 Variable B)))]);
+        assert_eq!(get_atom_types(&space, &metta!((f_gnd b))), vec![typ_err!((-> Grounded D) , (Error (f_gnd b) (BadType 1 Grounded B)))]);
 
         assert_eq!(get_atom_types(&space, &metta!((f_atom $b))), vec![typ_app!(D)]);
         //assert_eq!(get_atom_types(&space, &metta!((f_sym $b))), vec![]);
@@ -1098,15 +1099,15 @@ mod tests {
         // Here and below: when interpreter cannot find a function type for
         // expression it evaluates it. Thus any argument expression without
         // a function type can potentially suit as a legal argument.
-        assert_eq!(get_atom_types(&space, &metta!((f_sym (b)))), vec![typ_err!((-> Symbol D) , (Error (f_sym (b)) (BadType 0 ((B)) (Symbol))))]);
+        assert_eq!(get_atom_types(&space, &metta!((f_sym (b)))), vec![typ_err!((-> Symbol D) , (Error (f_sym (b)) (BadType 1 Symbol (B))))]);
         assert_eq!(get_atom_types(&space, &metta!((f_expr (b)))), vec![typ_app!(D)]);
-        assert_eq!(get_atom_types(&space, &metta!((f_var (b)))), vec![typ_err!((-> Variable D) , (Error (f_var (b)) (BadType 0 ((B)) (Variable))))]);
-        assert_eq!(get_atom_types(&space, &metta!((f_gnd (b)))), vec![typ_err!((-> Grounded D) , (Error (f_gnd (b)) (BadType 0 ((B)) (Grounded))))]);
+        assert_eq!(get_atom_types(&space, &metta!((f_var (b)))), vec![typ_err!((-> Variable D) , (Error (f_var (b)) (BadType 1 Variable (B))))]);
+        assert_eq!(get_atom_types(&space, &metta!((f_gnd (b)))), vec![typ_err!((-> Grounded D) , (Error (f_gnd (b)) (BadType 1 Grounded (B))))]);
 
         assert_eq!(get_atom_types(&space, &metta!((f_atom 1))), vec![typ_app!(D)]);
-        assert_eq!(get_atom_types(&space, &metta!((f_sym 1))), vec![typ_err!((-> Symbol D) , (Error (f_sym 1) (BadType 0 (Number) (Symbol))))]);
-        assert_eq!(get_atom_types(&space, &metta!((f_expr 1))), vec![typ_err!((-> Expression D) , (Error (f_expr 1) (BadType 0 (Number) (Expression))))]);
-        assert_eq!(get_atom_types(&space, &metta!((f_var 1))), vec![typ_err!((-> Variable D) , (Error (f_var 1) (BadType 0 (Number) (Variable))))]);
+        assert_eq!(get_atom_types(&space, &metta!((f_sym 1))), vec![typ_err!((-> Symbol D) , (Error (f_sym 1) (BadType 1 Symbol Number)))]);
+        assert_eq!(get_atom_types(&space, &metta!((f_expr 1))), vec![typ_err!((-> Expression D) , (Error (f_expr 1) (BadType 1 Expression Number)))]);
+        assert_eq!(get_atom_types(&space, &metta!((f_var 1))), vec![typ_err!((-> Variable D) , (Error (f_var 1) (BadType 1 Variable Number)))]);
         assert_eq!(get_atom_types(&space, &metta!((f_gnd 1))), vec![typ_app!(D)]);
     }
 
@@ -1116,7 +1117,7 @@ mod tests {
             (: a (-> C D))
             (: b B)
         ");
-        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![typ_err!((-> C D), (Error (a b) (BadType 0 (B) (C))))]);
+        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![typ_err!((-> C D), (Error (a b) (BadType 1 C B)))]);
     }
 
     #[test]

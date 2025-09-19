@@ -1256,6 +1256,19 @@ mod tests {
     }
 
     #[test]
+    fn metta_type_check_incorrect_number_of_arguments() {
+        let program = "
+            (: foo (-> A B))
+            (foo)
+        ";
+
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
+        metta.settings().set("type-check".into(), sym!("auto"));
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo") "IncorrectNumberOfArguments")]]));
+    }
+
+    #[test]
     fn metta_add_type_check() {
         let program = "
             (: foo (-> A B))
@@ -1266,7 +1279,7 @@ mod tests {
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(0)} ("B") ("A")))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[test]
@@ -1280,7 +1293,7 @@ mod tests {
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(0)} ("B") ("A")))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[derive(Clone, Debug)]
@@ -1332,7 +1345,7 @@ mod tests {
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(0)} ("B") ("A")))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[test]
@@ -1370,7 +1383,7 @@ mod tests {
             !((foo b) s)
         ";
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(0)} ("B") ("A")))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
     }
 
 

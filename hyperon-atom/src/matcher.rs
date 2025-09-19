@@ -431,7 +431,7 @@ impl Bindings {
         }
     }
 
-    /// Merges `b` bindings into self if they are compatible.  May return a [BindingsSet] containings
+    /// Merges `b` bindings into self if they are compatible.  May return a [BindingsSet] containing
     /// multiple [Bindings] if appropriate.  If no compatible bindings can be merged, [BindingsSet::empty()]
     /// will be returned.
     ///
