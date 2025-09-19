@@ -2,7 +2,6 @@
 use std::path::Path;
 use std::cell::RefCell;
 
-use crate::metta::*;
 use crate::metta::runner::*;
 use crate::space::module::ModuleSpace;
 
@@ -18,6 +17,7 @@ pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_m
 pub(crate) use mod_names::{module_name_is_legal, module_name_make_legal, decompose_name_path, compose_name_path};
 
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
+use crate::metta::types::{AtomType, get_atom_types};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
 //
@@ -156,7 +156,7 @@ impl MettaMod {
             let src_atom = src_atom_vec.into_iter().next().unwrap();
 
             // Add the atom to our module's space
-            self.add_atom(src_atom.clone(), false).map_err(|a| a.to_string())?;
+            self.add_atom(src_atom.clone(), false).expect("Unexpected type check error");
 
             // Finally, Add a Tokenizer entry to access this atom, if one is needed
             let name = match name {
@@ -284,9 +284,12 @@ impl MettaMod {
     }
 
     /// A convenience to add an an atom to a module's Space, if it passes type-checking
-    pub(crate) fn add_atom(&self, atom: Atom, type_check: bool) -> Result<(), Atom> {
-        if type_check && !validate_atom(&self.space, &atom) {
-            return Err(Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]));
+    pub(crate) fn add_atom(&self, atom: Atom, type_check: bool) -> Result<(), Vec<Atom>> {
+        if type_check {
+            let types = get_atom_types(&self.space, &atom);
+            if types.iter().all(AtomType::is_error) {
+                return Err(types.into_iter().map(AtomType::into_error_unchecked).collect());
+            }
         }
         self.space.borrow_mut().add(atom);
         Ok(())

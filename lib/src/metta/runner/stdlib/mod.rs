@@ -201,6 +201,11 @@ mod tests {
     }
 
     #[test]
+    fn metta_check_bad_type_from_function_type_is_applicable_match_branch_1() {
+        assert_eq!(run_program("!(assertEqual (metta (+ 1 2) (-> Atom Atom $t) &self) (Error (+ 1 2) (BadType 1 Number (-> Atom Atom $t))))"), Ok(vec![vec![UNIT_ATOM]]));
+    }
+
+    #[test]
     fn metta_interpret_symbol_or_grounded_value_as_type() {
         assert_eq!(run_program("(: a A) !(metta a A &self)"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("(: a A) !(metta a B &self)"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));
@@ -242,26 +247,32 @@ mod tests {
             (: b B)
             (: foo (-> T T))
             (= (foo $x) $x)
-            !(metta (foo b) %Undefined% &self)
+            !(assertEqual
+                (metta (foo b) %Undefined% &self)
+                (Error (foo b) (BadType 1 T B)))
         ");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" "b" "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
         let result = run_program("
             (: Nil (List $t))
             (: Z Nat)
             (: S (-> Nat Nat))
             (: Cons (-> $t (List $t) (List $t)))
-            !(metta (Cons S (Cons Z Nil)) %Undefined% &self)
+            !(assertEqual
+                (metta (Cons S (Cons Z Nil)) %Undefined% &self)
+                (Error (Cons S (Cons Z Nil)) (BadType 2 (List (-> Nat Nat)) (List Nat))))
         ");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("Cons" "Z" "Nil") "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
         let result = run_program("
             (: (a b) (C D))
 
             (: foo (-> (A B) %Undefined%))
             (= (foo $x) succ)
 
-            !(foo (a b))
+            !(assertEqual
+                (foo (a b))
+                (Error (foo (a b)) (BadType 1 (A B) (C D))))
         ");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("a" "b") "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
     }
 
     #[test]
@@ -282,6 +293,12 @@ mod tests {
         assert_eq!(run_program("(= (foo $x) $x) !(metta (foo a) %Undefined% &self)"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("!(metta (foo a) %Undefined% &self)"), Ok(vec![vec![expr!("foo" "a")]]));
         assert_eq!(run_program("!(metta () SomeType &self)"), Ok(vec![vec![expr!(())]]));
+    }
+
+    #[test]
+    fn metta_issue_872() {
+        assert_eq!(run_program("!(bind! &i 0) !(assertEqual (bind! &i 1) (Error (bind! 0 1) (BadType 1 Symbol Number)))"),
+                   Ok(vec![vec![UNIT_ATOM], vec![UNIT_ATOM]]));
     }
 
     #[test]
@@ -501,7 +518,9 @@ mod tests {
             (: id_a (-> A A))
             (= (id_a $a) $a)
 
-            !(metta (id_a myAtom) %Undefined% &self)
+            !(assertEqual
+                (metta (id_a myAtom) %Undefined% &self)
+                (Error (id_a myAtom) (BadType 1 A myType)))
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -509,14 +528,16 @@ mod tests {
             GroundedFunctionAtom::new("id_num".into(), expr!("->" "Number" "Number"), id_num));
 
         assert_eq!(metta.run(SExprParser::new(program1)),
-            Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
+            Ok(vec![vec![UNIT_ATOM]]));
 
         let program2 = "
-            !(metta (id_num myAtom) %Undefined% &self)
+            !(assertEqual
+                (metta (id_num myAtom) %Undefined% &self)
+                (Error (id_num myAtom) (BadType 1 Number myType)))
         ";
 
         assert_eq!(metta.run(SExprParser::new(program2)),
-            Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
+            Ok(vec![vec![UNIT_ATOM]]));
     }
 
     #[test]
