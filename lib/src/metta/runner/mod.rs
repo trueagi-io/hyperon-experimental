@@ -1236,6 +1236,8 @@ mod tests {
     use crate::metta::runner::number::Number;
     use super::*;
     use super::bool::Bool;
+    use hyperon_macros::metta;
+    use crate as hyperon;
 
     #[test]
     fn test_space() {
@@ -1449,5 +1451,27 @@ mod tests {
     fn metta_no_config_dir_by_default() {
         let metta = Metta::new(None);
         assert_eq!(metta.environment().config_dir(), None);
+    }
+
+    #[test]
+    fn metta_enable_auto_type_check() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+
+        let program = "
+            (: a A)
+            (: b B)
+            (: foo (-> A A))
+            (= (foo $x) $x)
+
+            !(pragma! type-check auto)
+            !(foo a)
+            !(foo b)
+        ";
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![
+                vec![UNIT_ATOM],
+                vec![metta!(a)],
+                vec![metta!((Error (foo b) (BadArgType 1 A B)))]
+        ]));
     }
 }
