@@ -165,14 +165,14 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children()[1..]
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AtomType {
     typ: Atom,
     is_function: bool,
     info: TypeInfo,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum TypeInfo {
     Application,
     ApplicationError {

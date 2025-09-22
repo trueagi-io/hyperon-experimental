@@ -1049,22 +1049,24 @@ fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -
     } else {
         let space = space.as_gnd::<DynSpace>().unwrap();
         let types = get_atom_types(space, &atom);
-        let first_match = types.into_iter()
+        let actual_types = types.clone().into_iter()
             .filter(AtomType::is_valid)
-            .map(AtomType::into_atom)
-            .map(|actual_type| match_types(&expected_type, &actual_type, bindings.clone()))
-            .filter(|res| res.is_ok())
-            .flat_map(|res| {
-                match res {
+            .map(AtomType::into_atom);
+        let mut idx: i64 = 0;
+        let mut first_match: MatchResultIter;
+        for actual_type in actual_types {
+            idx += 1;
+            let matched = match_types(&expected_type, &actual_type, bindings.clone());
+            if matched.is_ok() {
+                first_match = match matched {
                     Ok(it) => it,
                     Err(_) => unreachable!(),
-                }
-            })
-            .next();
-        match first_match {
-            Some(bindings) => once((return_atom(atom), bindings)),
-            None => once((return_atom(error_atom(atom, BAD_TYPE_SYMBOL)), bindings)),
+                };
+                return once((return_atom(atom), first_match.next().unwrap()));
+            }
         }
+        let actual_type = types.iter().nth((idx-1) as usize).unwrap();
+        once((return_atom(Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(idx)), actual_type.as_atom().clone(), expected_type.clone()])])), bindings))
     }
 }
 

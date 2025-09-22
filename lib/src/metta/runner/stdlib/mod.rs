@@ -147,6 +147,7 @@ mod tests {
     use hyperon_common::assert_eq_metta_results;
 
     use std::fmt::Display;
+    use crate::metta::runner::number::Number::Integer;
 
     #[test]
     fn metta_switch() {
@@ -208,8 +209,8 @@ mod tests {
     #[test]
     fn metta_interpret_symbol_or_grounded_value_as_type() {
         assert_eq!(run_program("(: a A) !(metta a A &self)"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("(: a A) !(metta a B &self)"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));
-        assert_eq!(run_program("!(metta 42 Number &self)"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
+        assert_eq!(run_program("(: a A) !(metta a B &self)"), Ok(vec![vec![expr!("Error" "a" ("BadType" {Integer(1)} "A" "B"))]]));
+        assert_eq!(run_program("!(metta 42 Number &self)"), Ok(vec![vec![expr!({Integer(42)})]]));
     }
 
     #[test]
