@@ -1066,7 +1066,7 @@ fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -
             }
         }
         let actual_type = types.iter().nth((idx-1) as usize).unwrap();
-        once((return_atom(Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(idx)), actual_type.as_atom().clone(), expected_type.clone()])])), bindings))
+        once((return_atom(Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(idx)), expected_type.clone(), actual_type.as_atom().clone()])])), bindings))
     }
 }
 
@@ -1321,7 +1321,7 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                     // expression's meta-type and type check finishes.
                     match match_types(&ret_type, expected_type, bindings) {
                         Ok(matches) => Box::new(matches.map(move |bindings| (Ok(op_type.clone()), bindings))),
-                        Err(nomatch) => Box::new(nomatch.map(move |bindings| (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(1)), ret_type.clone(), expected_type.clone()])])), bindings))),
+                        Err(nomatch) => Box::new(nomatch.map(move |bindings| (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(1)), expected_type.clone(), ret_type.clone()])])), bindings))),
                     }
                 },
                 _ => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
