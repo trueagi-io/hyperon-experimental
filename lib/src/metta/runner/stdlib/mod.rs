@@ -541,6 +541,14 @@ mod tests {
     }
 
     #[test]
+    fn test_check_if_function_type_is_applicable_returns_bad_type() {
+        let program = "!(assertEqual (metta (+ 1 2) (-> Atom Atom $t) &self) (Error (+ 1 2) (BadType 1 Number (-> Atom Atom $t))))";
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        assert_eq!(metta.run(SExprParser::new(program)),
+                   Ok(vec![vec![UNIT_ATOM]]));
+    }
+
+    #[test]
     fn test_return_incorrect_number_of_args_error() {
         let program1 = "
             (: a A)
