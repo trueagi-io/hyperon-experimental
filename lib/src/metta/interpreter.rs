@@ -1039,7 +1039,7 @@ fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -
     for actual_type in types.into_iter().filter(AtomType::is_valid).map(AtomType::into_atom) {
         let res = match_types(&expected_type, &actual_type, bindings.clone());
         match res {
-            Ok(mut it) => return once((return_atom(atom), it.next().unwrap())),
+            Ok(it) => return Box::new(it.map(move |b| (return_atom(atom.clone()), b))),
             Err(_) => errors.push(actual_type),
         }
     }
