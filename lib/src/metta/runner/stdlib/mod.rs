@@ -264,7 +264,7 @@ mod tests {
         ");
         assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
         let result = run_program("
-            (: (a b) (C D))
+            (: (c d) (C D))
 
             (: foo (-> (A B) %Undefined%))
             (= (foo $x) succ)
