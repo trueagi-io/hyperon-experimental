@@ -270,8 +270,8 @@ mod tests {
             (= (foo $x) succ)
 
             !(assertEqual
-                (foo (a b))
-                (Error (foo (a b)) (BadType 1 (A B) (C D))))
+                (foo (c d))
+                (Error (foo (c d)) (BadType 1 (A B) (C D))))
         ");
         assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
     }
