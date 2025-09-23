@@ -1168,12 +1168,24 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
                 for res in type_check_results {
                     log::debug!("interpret_expression: function type check: expr: {} type: {:?}", expr, res);
                     match res {
-                        (Ok(op_type), bindings) => {
+                        (Ok((op_type, mut ret_type)), bindings) => {
+                            // TODO: it is a hack to prevent Expression working
+                            // like Atom return type. On the one hand we could
+                            // remove old code to prevent Atom results being
+                            // interpreted after the fix of return type-check
+                            // on the other hand may be it is logical to make
+                            // Expression have the same semantics. It would be
+                            // useful to provide the manner to execute funciton
+                            // body before returning the Atom (or Expression)
+                            // as is.
+                            if ret_type == ATOM_TYPE_EXPRESSION {
+                                ret_type = ATOM_TYPE_UNDEFINED;
+                            }
                             let reduced = Atom::Variable(VariableAtom::new("reduced").make_unique());
                             let result = Atom::Variable(VariableAtom::new("result").make_unique());
                             let stop_eval = TryInto::<&ExpressionAtom>::try_into(&op_type).is_ok_and(|e| e.children().last() == Some(&ATOM_TYPE_ATOM));
-                            return once((Atom::expr([CHAIN_SYMBOL, call_native!(interpret_function, Atom::expr([expr.clone(), op_type, expr_typ.clone(), space.clone()])), reduced.clone(),
-                                Atom::expr([CHAIN_SYMBOL, call_native!(metta_call, Atom::expr([reduced, expr_typ, Atom::value(stop_eval), space.clone()])), result.clone(),
+                            return once((Atom::expr([CHAIN_SYMBOL, call_native!(interpret_function, Atom::expr([expr.clone(), op_type, expr_typ, space.clone()])), reduced.clone(),
+                                Atom::expr([CHAIN_SYMBOL, call_native!(metta_call, Atom::expr([reduced, ret_type, Atom::value(stop_eval), space.clone()])), result.clone(),
                                     return_atom(result)
                                 ])
                             ]), bindings));
@@ -1266,7 +1278,7 @@ fn interpret_function(args: Atom, bindings: Bindings) -> MettaResult {
         ]), bindings))
 }
 
-fn check_if_function_type_is_applicable<'a>(expr: &'a Atom, op_type: Atom, expected_type: &'a Atom, space: &'a DynSpace, bindings: Bindings) -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + 'a> {
+fn check_if_function_type_is_applicable<'a>(expr: &'a Atom, op_type: Atom, expected_type: &'a Atom, space: &'a DynSpace, bindings: Bindings) -> Box<dyn Iterator<Item=(Result<(Atom, Atom), Atom>, Bindings)> + 'a> {
     log::trace!("check_if_function_type_is_applicable: function type check: expr: {}, op_type: {}, expected_type: {}", expr, op_type, expected_type);
     let actual_args = match atom_as_slice(expr) {
         Some([_op, actual_args @ ..]) => actual_args,
@@ -1299,7 +1311,7 @@ fn match_meta_types(actual: &Atom, expected: &Atom) -> bool {
     }
 }
 
-fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut arg_types: Vec<Atom>, actual_args: &'a[Atom], expected_type: &'a Atom, space: &'a DynSpace, bindings: Bindings) -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + 'a> {
+fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut arg_types: Vec<Atom>, actual_args: &'a[Atom], expected_type: &'a Atom, space: &'a DynSpace, bindings: Bindings) -> Box<dyn Iterator<Item=(Result<(Atom, Atom), Atom>, Bindings)> + 'a> {
     match arg_types.len() {
         0 => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
         1 => {
@@ -1316,7 +1328,7 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                     // meta-type. Thus if expected_type is meta-type it is always first compared to the
                     // expression's meta-type and type check finishes.
                     match match_types(&ret_type, expected_type, bindings) {
-                        Ok(matches) => Box::new(matches.map(move |bindings| (Ok(op_type.clone()), bindings))),
+                        Ok(matches) => Box::new(matches.map(move |bindings| (Ok((op_type.clone(), ret_type.clone())), bindings))),
                         Err(nomatch) => Box::new(nomatch.map(move |bindings| (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, expected_type.clone(), ret_type.clone()])])), bindings))),
                     }
                 },
@@ -1336,7 +1348,7 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                         let actual_arg_types = get_atom_types(space, actual_arg)
                             .into_iter()
                             .inspect(move |typ| log::trace!("check_if_function_type_is_applicable_: function type check: expr: {}, actual_arg: {}, actual_type: {}", expr, actual_arg, typ));
-                        let iter = actual_arg_types.flat_map(move |actual_arg_type| -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + '_> {
+                        let iter = actual_arg_types.flat_map(move |actual_arg_type| -> Box<dyn Iterator<Item=(Result<(Atom, Atom), Atom>, Bindings)> + '_> {
                             match actual_arg_type.into_atom_or_error() {
                                 Ok(actual_arg_type) => {
                                     let arg_types_tail = arg_types_tail.clone();
@@ -1498,6 +1510,7 @@ mod tests {
     use crate::metta::text::metta_atom;
     use crate::space::grounding::metta_space;
     use hyperon_common::assert_eq_no_order;
+    use hyperon_macros::metta;
 
     #[test]
     fn interpret_atom_evaluate_incorrect_args() {
@@ -2165,5 +2178,17 @@ mod tests {
         let result = interpret(space.clone(), &Atom::expr([METTA_SYMBOL, expr!("one" ({counter.clone()})), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]));
         assert_eq!(result, Ok(vec![Atom::sym("ok")]));
         assert_eq!(*counter.0.borrow(), 1);
+    }
+
+    #[test]
+    fn type_check_returned_value() {
+        let space = space("
+            (: foo (-> Number))
+            (= (foo) 1)
+            (: bar (-> Bool))
+            (= (bar) (foo))
+        ");
+        let result = interpret(space.clone(), &metta!((metta (bar) %Undefined% {space.clone()})));
+        assert_eq!(result, Ok(vec![metta!((Error (foo) (BadType Bool Number)))]));
     }
 }
