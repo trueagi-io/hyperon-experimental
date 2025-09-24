@@ -29,14 +29,6 @@
   (@return "Instance of the BadArgType error atom"))
 (: BadArgType (-> Number Type Type ErrorDescription))
 
-(@doc BadRetType
-  (@desc "BadRetType error constructor")
-  (@params (
-    (@param "Expected type")
-    (@param "Actual type")))
-  (@return "Instance of the BadRetType error atom"))
-(: BadRetType (-> Type Type ErrorDescription))
-
 (: IncorrectNumberOfArguments ErrorDescription)
 
 (@doc Error
