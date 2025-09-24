@@ -1383,7 +1383,7 @@ fn interpret_args(args_: Atom, bindings: Bindings) -> MettaResult {
         if types_tail.is_empty() {
             match match_types(&types_head, &ret_type, bindings) {
                 Ok(matches) => Box::new(matches.map(move |bindings| (return_atom(Atom::expr([Atom::sym("Ok"), Atom::Expression(args.clone())])), bindings))),
-                Err(nomatch) => Box::new(nomatch.map(move |bindings| (return_atom(error_atom(atom.clone(), BAD_RET_TYPE_SYMBOL)), bindings))),
+                Err(nomatch) => Box::new(nomatch.map(move |bindings| (return_atom(error_atom(atom.clone(), BAD_TYPE_SYMBOL)), bindings))),
             }
         } else {
             once((return_atom(error_atom(atom, INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings))

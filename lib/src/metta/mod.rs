@@ -25,7 +25,6 @@ pub const ARROW_SYMBOL : Atom = metta_const!(->);
 pub const ERROR_SYMBOL : Atom = metta_const!(Error);
 pub const BAD_TYPE_SYMBOL : Atom = metta_const!(BadType);
 pub const BAD_ARG_TYPE_SYMBOL : Atom = metta_const!(BadArgType);
-pub const BAD_RET_TYPE_SYMBOL : Atom = metta_const!(BadRetType);
 pub const INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL : Atom = metta_const!(IncorrectNumberOfArguments);
 pub const NOT_REDUCIBLE_SYMBOL : Atom = metta_const!(NotReducible);
 pub const STACK_OVERFLOW_SYMBOL : Atom = metta_const!(StackOverflow);
