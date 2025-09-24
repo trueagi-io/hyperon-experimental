@@ -358,7 +358,7 @@ grounded_op!(IsNanMathOp, "isnan-math");
 
 impl Grounded for IsNanMathOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_BOOL])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -385,7 +385,7 @@ grounded_op!(IsInfMathOp, "isinf-math");
 
 impl Grounded for IsInfMathOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_BOOL])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {

@@ -143,7 +143,7 @@ impl ModuleLoader for FileioModLoader {
 
         tref.register_function(GroundedFunctionAtom::new(
             r"file-read-exact!".into(),
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_NUMBER, UNIT_ATOM]),
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_NUMBER, ATOM_TYPE_STRING]),
             file_read_exact));
 
         tref.register_function(GroundedFunctionAtom::new(
