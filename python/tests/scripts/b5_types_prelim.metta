@@ -28,7 +28,7 @@
 ; Now the result of its evaluation will be a error expression, because `S` is not `Nat`
 !(assertEqualToResult
   (Add S Z)
-  ((Error S BadType)))
+  ((Error (Add S Z) (BadArgType 1 Nat (-> Nat Nat)))))
 ; But these other examples works normally
 !(assertEqual
   (Add (S Z) Z)
@@ -84,7 +84,7 @@
 ; This list is badly typed, because S and Z are not the same type
 !(assertEqualToResult
   (Cons S (Cons Z Nil))
-  ((Error (Cons Z Nil) BadType)))
+  ((Error (Cons S (Cons Z Nil)) (BadArgType 2 (List (-> Nat Nat)) (List Nat)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -109,7 +109,7 @@
 ; Not accepted, because Z and S are not the same type
 !(assertEqualToResult
   (eq Z S)
-  ((Error S BadType)))
+  ((Error (eq Z S) (BadArgType 2 Nat (-> Nat Nat)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -139,10 +139,10 @@
 ; Not accepted
 !(assertEqualToResult
   (of-same-type Green Color)
-  ((Error Color BadType)))
+  ((Error (of-same-type Green Color) (BadArgType 2 Color Property))))
 !(assertEqualToResult
   (of-same-type Green Circle)
-  ((Error Circle BadType)))
+  ((Error (of-same-type Green Circle) (BadArgType 2 Color Shape))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

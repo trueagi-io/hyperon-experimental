@@ -62,7 +62,7 @@ use hyperon_common::shared::Shared;
 use super::*;
 use hyperon_space::*;
 use super::text::{Tokenizer, Parser, SExprParser};
-use super::types::validate_atom;
+use super::types::{AtomType, get_atom_types};
 
 pub mod modules;
 use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, Resource, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name};
@@ -474,11 +474,13 @@ impl Metta {
         } else {
             wrap_atom_by_metta_interpreter(self.module_space(ModId::TOP), atom)
         };
-        if self.type_check_is_enabled() && !validate_atom(&self.module_space(ModId::TOP), &atom) {
-            Ok(vec![Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL])])
-        } else {
-            interpret(self.space().clone(), &atom)
+        if self.type_check_is_enabled()  {
+            let types = get_atom_types(&self.module_space(ModId::TOP), &atom);
+            if types.iter().all(AtomType::is_error) {
+                return Ok(types.into_iter().map(AtomType::into_error_unchecked).collect());
+            }
         }
+        interpret(self.space().clone(), &atom)
     }
 
     fn type_check_is_enabled(&self) -> bool {
@@ -1077,28 +1079,31 @@ impl<'input> RunContext<'_, 'input> {
                     }
                     match self.i_wrapper.mode {
                         MettaRunnerMode::ADD => {
-                            if let Err(atom) = self.module().add_atom(atom, self.metta.type_check_is_enabled()) {
-                                self.i_wrapper.results.push(vec![atom]);
+                            if let Err(errors) = self.module().add_atom(atom, self.metta.type_check_is_enabled()) {
+                                self.i_wrapper.results.push(errors);
                                 self.i_wrapper.mode = MettaRunnerMode::TERMINATE;
                                 return Ok(());
                             }
                         },
                         MettaRunnerMode::INTERPRET => {
 
-                            if self.metta.type_check_is_enabled() && !validate_atom(&self.module().space(), &atom) {
-                                let type_err_exp = Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]);
-                                self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(), vec![type_err_exp]));
-                            } else {
-                                let atom = if is_bare_minimal_interpreter(self.metta) {
-                                    atom
-                                } else {
-                                    wrap_atom_by_metta_interpreter(self.module().space().clone(), atom)
-                                };
-                                self.i_wrapper.interpreter_state = Some(interpret_init(self.module().space().clone(), &atom));
-                                if let Some(depth) = self.metta.settings().get_string("max-stack-depth") {
-                                    let depth = depth.parse::<usize>().unwrap();
-                                    self.i_wrapper.interpreter_state.as_mut().map(|state| state.set_max_stack_depth(depth));
+                            if self.metta.type_check_is_enabled() {
+                                let types = get_atom_types(&self.module().space(), &atom);
+                                if types.iter().all(AtomType::is_error) {
+                                    self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(),
+                                        types.into_iter().map(AtomType::into_error_unchecked).collect()));
+                                    return Ok(())
                                 }
+                            }
+                            let atom = if is_bare_minimal_interpreter(self.metta) {
+                                atom
+                            } else {
+                                wrap_atom_by_metta_interpreter(self.module().space().clone(), atom)
+                            };
+                            self.i_wrapper.interpreter_state = Some(interpret_init(self.module().space().clone(), &atom));
+                            if let Some(depth) = self.metta.settings().get_string("max-stack-depth") {
+                                let depth = depth.parse::<usize>().unwrap();
+                                self.i_wrapper.interpreter_state.as_mut().map(|state| state.set_max_stack_depth(depth));
                             }
                         },
                         MettaRunnerMode::TERMINATE => {
@@ -1228,6 +1233,7 @@ pub fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
 
 #[cfg(test)]
 mod tests {
+    use crate::metta::runner::number::Number;
     use super::*;
     use super::bool::Bool;
 
@@ -1250,6 +1256,19 @@ mod tests {
     }
 
     #[test]
+    fn metta_type_check_incorrect_number_of_arguments() {
+        let program = "
+            (: foo (-> A B))
+            (foo)
+        ";
+
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
+        metta.settings().set("type-check".into(), sym!("auto"));
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo") "IncorrectNumberOfArguments")]]));
+    }
+
+    #[test]
     fn metta_add_type_check() {
         let program = "
             (: foo (-> A B))
@@ -1260,7 +1279,7 @@ mod tests {
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[test]
@@ -1274,7 +1293,7 @@ mod tests {
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[derive(Clone, Debug)]
@@ -1326,7 +1345,7 @@ mod tests {
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[test]
@@ -1352,7 +1371,7 @@ mod tests {
             !(s (foo b))
         ";
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" "b" "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[test]
@@ -1364,7 +1383,7 @@ mod tests {
             !((foo b) s)
         ";
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
 

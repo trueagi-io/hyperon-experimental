@@ -33,6 +33,6 @@ fn bench_get_atom_types_complex(bencher: &mut Bencher) {
     let atom = atom_with_depth(3);
     bencher.iter(|| {
         let types = get_atom_types(&space, &atom);
-        assert!(!types.is_empty());
+        assert!(!types.iter().all(AtomType::is_error));
     })
 }

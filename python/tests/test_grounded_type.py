@@ -79,7 +79,7 @@ class GroundedTypeTest(unittest.TestCase):
             !(id_num myAtom)
             !(id_num False)
             '''),
-            [[E(S('Error'), S('myAtom'), S('BadType'))]])
+             metta.run('!(Error (id_num myAtom) (BadArgType 1 Number myType))'))
         ### Grounded functions over Atom
         ### (should use unwrap=False to deal with non-grounded atoms)
         # All grounded and ungrounded, typed and untyped symbols should be processed
