@@ -15,11 +15,28 @@
 (@doc BadType
   (@desc "BadType error constructor")
   (@params (
-    (@param "Index of atom in expression which produced this error")
     (@param "Expected type")
     (@param "Actual type")))
   (@return "Instance of the BadType error atom"))
-(: BadType (-> Number Type Type ErrorDescription))
+(: BadType (-> Type Type ErrorDescription))
+
+(@doc BadArgType
+  (@desc "BadArgType error constructor")
+  (@params (
+    (@param "Index of atom in expression which produced this error")
+    (@param "Expected type")
+    (@param "Actual type")))
+  (@return "Instance of the BadArgType error atom"))
+(: BadArgType (-> Number Type Type ErrorDescription))
+
+(@doc BadRetType
+  (@desc "BadRetType error constructor")
+  (@params (
+    (@param "Expected type")
+    (@param "Actual type")))
+  (@return "Instance of the BadRetType error atom"))
+(: BadRetType (-> Type Type ErrorDescription))
+
 (: IncorrectNumberOfArguments ErrorDescription)
 
 (@doc Error

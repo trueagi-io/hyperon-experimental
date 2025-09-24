@@ -1060,7 +1060,7 @@ fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -
         }
 
         Box::new(errors.into_iter().map(move |actual_type| {
-            let err = error_atom(atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(1)), expected_type.clone(), actual_type]));
+            let err = error_atom(atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, expected_type.clone(), actual_type]));
             (return_atom(err), bindings.clone())
         }))
     }
@@ -1317,7 +1317,7 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                     // expression's meta-type and type check finishes.
                     match match_types(&ret_type, expected_type, bindings) {
                         Ok(matches) => Box::new(matches.map(move |bindings| (Ok(op_type.clone()), bindings))),
-                        Err(nomatch) => Box::new(nomatch.map(move |bindings| (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(1)), expected_type.clone(), ret_type.clone()])])), bindings))),
+                        Err(nomatch) => Box::new(nomatch.map(move |bindings| (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, expected_type.clone(), ret_type.clone()])])), bindings))),
                     }
                 },
                 _ => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
@@ -1348,7 +1348,7 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                                             let formal_arg_type_clone = formal_arg_type.clone();
                                             Box::new(nomatch.map(move |bindings| {
                                                 let formal_arg_type = apply_bindings_to_atom_move(formal_arg_type_clone.clone(), &bindings);
-                                                (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_TYPE_SYMBOL, Atom::gnd(Number::Integer(arg_id as i64)), formal_arg_type, actual_arg_type.clone()])])), bindings)
+                                                (Err(Atom::expr([ERROR_SYMBOL, expr.clone(), Atom::expr([BAD_ARG_TYPE_SYMBOL, Atom::gnd(Number::Integer(arg_id as i64)), formal_arg_type, actual_arg_type.clone()])])), bindings)
                                             }))
                                         },
                                     }
@@ -1383,7 +1383,7 @@ fn interpret_args(args_: Atom, bindings: Bindings) -> MettaResult {
         if types_tail.is_empty() {
             match match_types(&types_head, &ret_type, bindings) {
                 Ok(matches) => Box::new(matches.map(move |bindings| (return_atom(Atom::expr([Atom::sym("Ok"), Atom::Expression(args.clone())])), bindings))),
-                Err(nomatch) => Box::new(nomatch.map(move |bindings| (return_atom(error_atom(atom.clone(), BAD_TYPE_SYMBOL)), bindings))),
+                Err(nomatch) => Box::new(nomatch.map(move |bindings| (return_atom(error_atom(atom.clone(), BAD_RET_TYPE_SYMBOL)), bindings))),
             }
         } else {
             once((return_atom(error_atom(atom, INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings))

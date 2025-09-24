@@ -7,10 +7,10 @@ Auto type-checking can be enabled
 ; checking grounded types
 !(assertEqualToResult
    (+ 5 "S")
-  ((Error (+ 5 "S") (BadType 2 Number String))))
+  ((Error (+ 5 "S") (BadArgType 2 Number String))))
 !(assertEqualToResult
    (== 5 "S")
-  ((Error (== 5 "S") (BadType 2 Number String))))
+  ((Error (== 5 "S") (BadArgType 2 Number String))))
 
 ; declaring some custom types
 (: Entity Type)
@@ -28,10 +28,10 @@ Auto type-checking can be enabled
 ; badly typed examples produce `Error` grounded values describing the issue:
 !(assertEqualToResult
    (== SocratesIsHuman SamIsMortal)
-  ((Error (== SocratesIsHuman SamIsMortal) (BadType 2 (Human Socrates) (Mortal Sam)))))
+  ((Error (== SocratesIsHuman SamIsMortal) (BadArgType 2 (Human Socrates) (Mortal Sam)))))
 !(assertAlphaEqualToResult
    (HumansAreMortal (Human Socrates))
-  ((Error (HumansAreMortal (Human Socrates)) (BadType 1 (Human $t) Type))))
+  ((Error (HumansAreMortal (Human Socrates)) (BadArgType 1 (Human $t) Type))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -39,7 +39,7 @@ Auto type-checking can be enabled
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqualToResult
    (collapse (+ 5 "S"))
-   (((Error (+ 5 "S") (BadType 2 Number String)))))
+   (((Error (+ 5 "S") (BadArgType 2 Number String)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -63,4 +63,4 @@ Auto type-checking can be enabled
 (: f (-> $t Number))
 !(assertEqualToResult
    (f (+ 5 "S"))
-   ((Error (+ 5 "S") (BadType 2 Number String))))
+   ((Error (+ 5 "S") (BadArgType 2 Number String))))

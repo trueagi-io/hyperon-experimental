@@ -55,12 +55,12 @@
 ; it cannot be changed to int
 !(assertEqual
   (change-state! &state-token 1)
-  (Error (change-state! &state-token 1) (BadType 2 Expression Number)))
+  (Error (change-state! &state-token 1) (BadArgType 2 Expression Number)))
 
 ; the new state here is int, so it cannot be changed to string
 !(assertEqual
   (change-state! (new-state 1) "S")
-  (Error (change-state! (new-state 1) "S") (BadType 2 Number String)))
+  (Error (change-state! (new-state 1) "S") (BadArgType 2 Number String)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -1279,7 +1279,7 @@ mod tests {
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[test]
@@ -1293,7 +1293,7 @@ mod tests {
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[derive(Clone, Debug)]
@@ -1345,7 +1345,7 @@ mod tests {
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[test]
@@ -1371,7 +1371,7 @@ mod tests {
             !(s (foo b))
         ";
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
     #[test]
@@ -1383,7 +1383,7 @@ mod tests {
             !((foo b) s)
         ";
         let result = metta.run(SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadType" {Number::Integer(1)} "A" "B"))]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") ("BadArgType" {Number::Integer(1)} "A" "B"))]]));
     }
 
 

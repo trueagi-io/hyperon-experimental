@@ -89,14 +89,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqualToResult
   (+ 2 "String")
-  ((Error (+ 2 "String") (BadType 2 Number String))))
+  ((Error (+ 2 "String") (BadArgType 2 Number String))))
 
 ; Custom symbols as arguments of grounded operations
 ; work similarly
 (: ln LN)
 !(assertEqualToResult
   (== 4 (+ ln 2))
-  ((Error (+ ln 2) (BadType 1 Number LN))))
+  ((Error (+ ln 2) (BadArgType 1 Number LN))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
