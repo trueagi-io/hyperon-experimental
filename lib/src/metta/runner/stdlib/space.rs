@@ -3,6 +3,7 @@ use hyperon_space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::runner::stdlib::{grounded_op, unit_result, regex};
+use hyperon_atom::gnd::GroundedFunctionAtom;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -36,57 +37,38 @@ impl CustomExecute for NewSpaceOp {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct StateAtom {
-    state: Rc<RefCell<Atom>>
+    state: Rc<RefCell<(Atom, Atom)>>
 }
 
 impl StateAtom {
-    pub fn new(atom: Atom) -> Self {
-        Self{ state: Rc::new(RefCell::new(atom)) }
+    pub fn new(atom: Atom, typ: Atom) -> Self {
+        Self{ state: Rc::new(RefCell::new((atom, typ))) }
     }
 }
 
 impl Display for StateAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(State {})", self.state.borrow())
+        write!(f, "(State {})", self.state.borrow().0)
     }
 }
 
 impl Grounded for StateAtom {
     fn type_(&self) -> Atom {
-        // TODO? Wrap metatypes for non-grounded atoms
-        // rust_type_atom::<StateAtom>() instead of StateMonad symbol might be used
-        let atom = &*self.state.borrow();
-        let typ = match atom {
-            Atom::Symbol(_) => ATOM_TYPE_SYMBOL,
-            Atom::Expression(_) => ATOM_TYPE_EXPRESSION,
-            Atom::Variable(_) => ATOM_TYPE_VARIABLE,
-            Atom::Grounded(a) => a.type_(),
-        };
-        Atom::expr([expr!("StateMonad"), typ])
+        self.state.borrow().1.clone()
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct NewStateOp { }
-
-grounded_op!(NewStateOp, "new-state");
-
-impl Grounded for NewStateOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, expr!(tnso), expr!("StateMonad" tnso)])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for NewStateOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "new-state expects single atom as an argument";
-        let atom = args.get(0).ok_or(arg_error)?;
-        Ok(vec![Atom::gnd(StateAtom::new(atom.clone()))])
-    }
+fn new_state(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    let arg_error = "new-state expects atom as a first argument and non-empty list of types as a second argument";
+    let atom = args.get(0).ok_or(arg_error)?;
+    let typ = args.get(1)
+        .and_then(|t| TryInto::<&ExpressionAtom>::try_into(t).ok())
+        // TODO: when grounded atom will be able returning few types then
+        // all types should be returned
+        .and_then(|e| e.children().get(0))
+        .ok_or(arg_error)?;
+    Ok(vec![Atom::gnd(StateAtom::new(atom.clone(),
+        Atom::expr([Atom::sym("StateMonad"), typ.clone()])))])
 }
 
 #[derive(Clone, Debug)]
@@ -109,7 +91,7 @@ impl CustomExecute for GetStateOp {
         let arg_error = "get-state expects single state atom as an argument";
         let state = args.get(0).ok_or(arg_error)?;
         let atom = Atom::as_gnd::<StateAtom>(state).ok_or(arg_error)?;
-        Ok(vec![atom.state.borrow().clone()])
+        Ok(vec![atom.state.borrow().0.clone()])
     }
 }
 
@@ -134,7 +116,7 @@ impl CustomExecute for ChangeStateOp {
         let atom = args.get(0).ok_or(arg_error)?;
         let state = Atom::as_gnd::<StateAtom>(atom).ok_or("change-state! expects a state as the first argument")?;
         let new_value = args.get(1).ok_or(arg_error)?;
-        *state.state.borrow_mut() = new_value.clone();
+        state.state.borrow_mut().0 = new_value.clone();
         Ok(vec![atom.clone()])
     }
 }
@@ -228,8 +210,11 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"add-atom"), move |_| { add_atom_op.clone() });
     let remove_atom_op = Atom::gnd(RemoveAtomOp{});
     tref.register_token(regex(r"remove-atom"), move |_| { remove_atom_op.clone() });
-    let new_state_op = Atom::gnd(NewStateOp{});
-    tref.register_token(regex(r"new-state"), move |_| { new_state_op.clone() });
+    tref.register_function(GroundedFunctionAtom::new(
+            r"_new-state".into(),
+            expr!("->" t "Expression" ("StateMonad" t)),
+            |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { new_state(args) }, 
+        ));
     let change_state_op = Atom::gnd(ChangeStateOp{});
     tref.register_token(regex(r"change-state!"), move |_| { change_state_op.clone() });
     let get_state_op = Atom::gnd(GetStateOp{});
@@ -245,6 +230,8 @@ mod tests {
     use crate::space::grounding::metta_space;
     use crate::metta::runner::Metta;
     use hyperon_common::assert_eq_no_order;
+    use hyperon_macros::metta;
+    use crate as hyperon;
 
     #[test]
     fn mod_space_op() {
@@ -314,14 +301,25 @@ mod tests {
 
     #[test]
     fn state_ops() {
-        let result = NewStateOp{}.execute(&mut vec![expr!("A" "B")]).unwrap();
-        let old_state = result.get(0).ok_or("error").unwrap();
-        assert_eq!(old_state, &Atom::gnd(StateAtom::new(expr!("A" "B"))));
-        let result = ChangeStateOp{}.execute(&mut vec!(old_state.clone(), expr!("C" "D"))).unwrap();
-        let new_state = result.get(0).ok_or("error").unwrap();
-        assert_eq!(old_state, new_state);
-        assert_eq!(new_state, &Atom::gnd(StateAtom::new(expr!("C" "D"))));
-        let result = GetStateOp{}.execute(&mut vec![new_state.clone()]);
-        assert_eq!(result, Ok(vec![expr!("C" "D")]))
+        let program = r#"
+            (: a A)
+            (: aa A)
+            (: b B)
+            (: F (-> $t $t))
+            !(bind! &stateAB (new-state (F a)))
+            !(change-state! &stateAB (F aa))
+            !(get-state &stateAB)
+            !(change-state! &stateAB (F b))
+        "#;
+        let runner = Metta::new(Some(runner::environment::EnvBuilder::test_env()));
+        let result = runner.run(SExprParser::new(program));
+
+        let faa = StateAtom::new(metta!((F aa)), metta!((StateMonad A)));
+        assert_eq!(result, Ok(vec![
+            vec![UNIT_ATOM],
+            vec![Atom::gnd(faa.clone())],
+            vec![metta!((F aa))],
+            vec![metta!((Error ({ChangeStateOp{}} {faa} (F b)) (BadArgType 2 A B)))],
+        ]));
     }
 }
