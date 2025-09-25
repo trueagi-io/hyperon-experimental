@@ -1009,6 +1009,11 @@
   (@params (
     (@param "Atom to be wrapped")))
   (@return "Returns (State $value) where $value is an argument to a new-state"))
+(: new-state (-> $t (StateMonad $t)))
+(= (new-state $x)
+   (chain (context-space) $space
+     (let $t (collapse (get-type-space $space $x))
+       (_new-state $x $t))))
 
 (@doc change-state!
   (@desc "Changes input state's wrapped atom to another value (second argument). E.g. (change-state! (State 5) 6) -> (State 6)")
