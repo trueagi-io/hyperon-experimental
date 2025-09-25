@@ -780,7 +780,27 @@ impl<T: CustomGroundedType> CustomGroundedTypeToAtom for &Wrap<T> {
 
 impl PartialEq for Box<dyn GroundedAtom> {
     fn eq(&self, other: &Self) -> bool {
-        self.eq_gnd(&**other)
+        // same-class equality
+        if self.eq_gnd(&**other) {
+            return true;
+        }
+
+        // cross-class primitive equality (string)
+        fn unquote(s: &str) -> Option<&str> {
+            let bytes = s.as_bytes();
+            if bytes.len() >= 2 && bytes[0] == b'"' && bytes[bytes.len()-1] == b'"' {
+                Some(&s[1..s.len()-1])
+            } else {
+                None
+            }
+        }
+
+        let sa = self.to_string();
+        let sb = other.to_string();
+        match (unquote(&sa), unquote(&sb)) {
+            (Some(a), Some(b)) => a == b,
+            _ => false,
+        }
     }
 }
 
