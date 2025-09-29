@@ -1334,6 +1334,9 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                 _ => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
             }
         },
+        t if t <=  actual_args.len() => {
+            once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings))
+        },
         _ => {
             let formal_arg_type = arg_types.remove(0);
             let arg_types_len = arg_types.len();
@@ -1504,10 +1507,11 @@ fn metta_call_return(args: Atom, bindings: Bindings) -> MettaResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::text::metta_atom;
+    use crate::metta::text::{metta_atom, SExprParser};
     use crate::space::grounding::metta_space;
-    use hyperon_common::assert_eq_no_order;
+    use hyperon_common::{assert_eq_metta_results, assert_eq_no_order};
     use hyperon_macros::metta;
+    use crate::metta::runner::{EnvBuilder, Metta};
 
     #[test]
     fn interpret_atom_evaluate_incorrect_args() {
@@ -2187,5 +2191,21 @@ mod tests {
         ");
         let result = interpret(space.clone(), &metta!((metta (bar) %Undefined% {space.clone()})));
         assert_eq!(result, Ok(vec![metta!((Error (foo) (BadType Bool Number)))]));
+    }
+
+    #[test]
+    fn test_incorrect_number_of_arguments_issue_1037() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
+            (: a A)
+            (: b B)
+            (: foo (-> A B))
+            !(assertEqual
+                (foo b c)
+                (Error (foo b c) IncorrectNumberOfArguments))
+        ");
+
+        assert_eq_metta_results!(metta.run(parser),
+            Ok(vec![vec![UNIT_ATOM]]));
     }
 }
