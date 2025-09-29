@@ -780,27 +780,37 @@ impl<T: CustomGroundedType> CustomGroundedTypeToAtom for &Wrap<T> {
 
 impl PartialEq for Box<dyn GroundedAtom> {
     fn eq(&self, other: &Self) -> bool {
-        // same-class equality
+        // same-class equality first
         if self.eq_gnd(&**other) {
             return true;
         }
 
-        // cross-class primitive equality (string)
+        // helpers
         fn unquote(s: &str) -> Option<&str> {
-            let bytes = s.as_bytes();
-            if bytes.len() >= 2 && bytes[0] == b'"' && bytes[bytes.len()-1] == b'"' {
+            let b = s.as_bytes();
+            if b.len() >= 2 && b[0] == b'"' && b[b.len()-1] == b'"' {
                 Some(&s[1..s.len()-1])
-            } else {
-                None
-            }
+            } else { None }
+        }
+        fn parse_num(s: &str) -> Option<f64> {
+            // try int, then float
+            if let Ok(i) = s.parse::<i128>() { return Some(i as f64); }
+            s.parse::<f64>().ok()
         }
 
+        // cross-class primitive equality: strings
         let sa = self.to_string();
         let sb = other.to_string();
-        match (unquote(&sa), unquote(&sb)) {
-            (Some(a), Some(b)) => a == b,
-            _ => false,
+        if let (Some(a), Some(b)) = (unquote(&sa), unquote(&sb)) {
+            return a == b;
         }
+
+        // cross-class primitive equality: numbers
+        if let (Some(a), Some(b)) = (parse_num(&sa), parse_num(&sb)) {
+            return (a - b).abs() < 1e-12; // treat 3 and 3.0 as equal
+        }
+
+        false
     }
 }
 
