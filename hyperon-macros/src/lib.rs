@@ -325,14 +325,14 @@ impl PrinterBase {
 
     fn integer(&mut self, n: i64) {
         self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("gnd").group('(')
-            .ident("hyperon").punct("::").ident("metta").punct("::").ident("runner").punct("::").ident("number").punct("::").ident("Number").punct("::").ident("Integer").group('(')
+            .ident("hyperon_atom").punct("::").ident("gnd").punct("::").ident("number").punct("::").ident("Number").punct("::").ident("Integer").group('(')
             .literal(Literal::i64_suffixed(n))
             .group(')').group(')');
     }
 
     fn float(&mut self, f: f64) {
         self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("gnd").group('(')
-            .ident("hyperon").punct("::").ident("metta").punct("::").ident("runner").punct("::").ident("number").punct("::").ident("Number").punct("::").ident("Float").group('(')
+            .ident("hyperon_atom").punct("::").ident("gnd").punct("::").ident("number").punct("::").ident("Number").punct("::").ident("Float").group('(')
             .literal(Literal::f64_suffixed(f))
             .group(')').group(')');
     }

@@ -1,6 +1,6 @@
 use hyperon_atom::*;
 use hyperon_macros::metta;
-use hyperon::metta::runner::number::*;
+use hyperon_atom::gnd::number::*;
 use hyperon_atom::gnd::str::*;
 use hyperon::metta::runner::bool::*;
 

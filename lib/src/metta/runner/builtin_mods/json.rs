@@ -11,7 +11,7 @@ use serde_json::Value;
 use hyperon_space::ATOM_TYPE_SPACE;
 use crate::metta::runner::DynSpace;
 use crate::metta::runner::bool::*;
-use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
+use hyperon_atom::gnd::number::{Number, ATOM_TYPE_NUMBER};
 use std::io::Write;
 
 pub static JSON_METTA: &'static str = include_str!("json.metta");

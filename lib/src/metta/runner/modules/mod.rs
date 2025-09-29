@@ -660,7 +660,7 @@ pub enum ResourceKey<'a> {
 #[cfg(test)]
 mod test {
     use hyperon_atom::gnd::GroundedFunctionAtom;
-    use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
+    use hyperon_atom::gnd::number::{Number, ATOM_TYPE_NUMBER};
     use super::*;
     use std::sync::Mutex;
     use std::sync::LazyLock;

@@ -1,4 +1,5 @@
 pub mod str;
+pub mod number;
 
 use std::rc::Rc;
 

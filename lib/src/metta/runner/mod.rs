@@ -95,7 +95,6 @@ mod builtin_mods;
 use builtin_mods::*;
 
 pub mod bool;
-pub mod number;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
@@ -1232,11 +1231,10 @@ pub fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::metta::runner::number::Number;
+    use hyperon_atom::gnd::number::Number;
     use super::*;
     use super::bool::Bool;
     use hyperon_macros::metta;
-    use crate as hyperon;
 
     #[test]
     fn test_space() {

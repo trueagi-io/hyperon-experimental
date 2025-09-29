@@ -2,7 +2,7 @@ use hyperon_atom::*;
 use hyperon::metta::*;
 use hyperon::metta::text::*;
 use hyperon::metta::runner::{Metta, EnvBuilder};
-use hyperon::metta::runner::number::Number;
+use hyperon_atom::gnd::number::Number;
 use hyperon::metta::runner::bool::Bool;
 
 #[test]

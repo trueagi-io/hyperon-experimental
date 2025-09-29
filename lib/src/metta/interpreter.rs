@@ -15,7 +15,7 @@ use std::rc::Rc;
 use std::fmt::Write;
 use std::cell::RefCell;
 use itertools::Itertools;
-use crate::metta::runner::number::Number;
+use hyperon_atom::gnd::number::Number;
 
 macro_rules! match_atom {
     ($atom:tt ~ $pattern:tt => $succ:tt , _ => $error:tt) => {

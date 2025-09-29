@@ -12,7 +12,7 @@ use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{ModuleLoader, RunContext, DynSpace, Metta, MettaMod};
 use hyperon_atom::gnd::*;
-use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
+use hyperon_atom::gnd::number::{Number, ATOM_TYPE_NUMBER};
 
 pub static FILEIO_METTA: &'static str = include_str!("fileio.metta");
 pub const ATOM_TYPE_FILE_HANDLE: Atom = sym!("FileHandle");

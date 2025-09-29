@@ -300,7 +300,7 @@ mod tests {
     use crate::metta::runner::run_program;
     use hyperon_atom::matcher::atoms_are_equivalent;
     use crate::space::grounding::metta_space;
-    use crate::metta::runner::number::Number;
+    use hyperon_atom::gnd::number::Number;
     use hyperon_common::{assert_eq_no_order, assert_eq_metta_results};
 
     use std::convert::TryFrom;

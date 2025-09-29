@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon_atom::matcher::{Bindings, BindingsSet};
 use hyperon::metta::runner::bool::Bool;
-use hyperon::metta::runner::number::Number;
+use hyperon_atom::gnd::number::Number;
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Atom Interface
