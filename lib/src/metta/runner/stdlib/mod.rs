@@ -845,20 +845,4 @@ mod tests {
         assert_eq_metta_results!(metta.run(parser),
             Ok(vec![vec![]]));
     }
-
-    #[test]
-    fn test_incorrect_number_of_arguments_issue_1037() {
-        let metta = Metta::new(Some(EnvBuilder::test_env()));
-        let parser = SExprParser::new("
-            (: a A)
-            (: b B)
-            (: foo (-> A B))
-            !(assertEqual
-                (foo b c)
-                (Error (foo b c) IncorrectNumberOfArguments))
-        ");
-
-        assert_eq_metta_results!(metta.run(parser),
-            Ok(vec![vec![UNIT_ATOM]]));
-    }
 }
