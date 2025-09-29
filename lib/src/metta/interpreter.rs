@@ -1334,6 +1334,9 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                 _ => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
             }
         },
+        t if t <=  actual_args.len() => {
+            once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings))
+        },
         _ => {
             let formal_arg_type = arg_types.remove(0);
             let arg_types_len = arg_types.len();
