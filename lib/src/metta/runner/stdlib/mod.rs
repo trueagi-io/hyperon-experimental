@@ -138,7 +138,7 @@ mod tests {
     use super::*;
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
-    use crate::metta::runner::str::Str;
+    use hyperon_atom::gnd::str::Str;
     use hyperon_atom::matcher::atoms_are_equivalent;
     use crate::metta::runner::bool::Bool;
     use crate::metta::runner::number::Number;

@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use hyperon_atom::{sym, Atom, ExecError, Grounded};
 use crate::metta::{ARROW_SYMBOL, UNIT_ATOM};
 use crate::metta::runner::stdlib::unit_result;
-use crate::metta::runner::str::{Str, ATOM_TYPE_STRING};
+use hyperon_atom::gnd::str::{Str, ATOM_TYPE_STRING};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};

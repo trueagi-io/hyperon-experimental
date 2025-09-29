@@ -5,8 +5,8 @@ use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, ModuleLoader, RunContext};
 use crate::metta::runner::modules::MettaMod;
-use crate::metta::runner::str::ATOM_TYPE_STRING;
-use crate::metta::runner::str::Str;
+use hyperon_atom::gnd::str::ATOM_TYPE_STRING;
+use hyperon_atom::gnd::str::Str;
 use serde_json::Value;
 use hyperon_space::ATOM_TYPE_SPACE;
 use crate::metta::runner::DynSpace;
@@ -325,7 +325,7 @@ mod tests {
         use hyperon_atom::Atom;
         use hyperon_space::DynSpace;
         use crate::space::grounding::*;
-        use crate::metta::runner::str::Str;
+        use hyperon_atom::gnd::str::Str;
         use super::super::json_encode;
 
         #[bench]

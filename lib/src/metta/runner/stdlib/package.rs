@@ -6,7 +6,7 @@ use crate::metta::runner::{Metta, RunContext,
                            git_catalog::ModuleGitLocation,
                            mod_name_from_url,
                            pkg_mgmt::UpdateMode};
-use crate::metta::runner::str::expect_string_like_atom;
+use hyperon_atom::gnd::str::expect_string_like_atom;
 
 /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
 #[derive(Clone, Debug)]

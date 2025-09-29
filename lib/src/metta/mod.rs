@@ -7,7 +7,7 @@ pub mod runner;
 
 use hyperon_atom::*;
 use hyperon_macros::*;
-use crate::metta::runner::str::atom_to_string;
+use hyperon_atom::gnd::str::atom_to_string;
 use crate::space::grounding::GroundingSpace;
 
 pub const ATOM_TYPE_UNDEFINED : Atom = metta_const!(%Undefined%);

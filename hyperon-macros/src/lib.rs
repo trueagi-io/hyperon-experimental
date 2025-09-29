@@ -339,7 +339,7 @@ impl PrinterBase {
 
     fn str(&mut self, s: &str) {
         self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("gnd").group('(')
-            .ident("hyperon").punct("::").ident("metta").punct("::").ident("runner").punct("::").ident("str").punct("::").ident("Str").punct("::").ident("from_str").group('(')
+            .ident("hyperon_atom").punct("::").ident("gnd").punct("::").ident("str").punct("::").ident("Str").punct("::").ident("from_str").group('(')
             .literal(Literal::string(s))
             .group(')').group(')');
     }

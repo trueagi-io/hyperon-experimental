@@ -1,3 +1,5 @@
+pub mod str;
+
 use std::rc::Rc;
 
 use super::*;

@@ -477,7 +477,7 @@ mod tests {
     use super::*;
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
-    use crate::metta::runner::str::Str;
+    use hyperon_atom::gnd::str::Str;
     use crate::space::grounding::metta_space;
     use crate::metta::runner::run_program;
     use crate::metta::runner::Metta;
