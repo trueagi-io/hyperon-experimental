@@ -5,7 +5,7 @@ use hyperon_common::collections::{SliceDisplay, Equality, DefaultEquality};
 use hyperon_common::assert::compare_vec_no_order;
 use hyperon_atom::matcher::atoms_are_equivalent;
 use crate::metta::runner::stdlib::{grounded_op, regex, unit_result};
-use crate::metta::runner::bool::*;
+use hyperon_atom::gnd::bool::*;
 use hyperon_atom::gnd::str::*;
 use hyperon_atom::gnd::GroundedFunctionAtom;
 

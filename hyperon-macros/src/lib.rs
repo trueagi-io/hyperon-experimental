@@ -318,7 +318,7 @@ impl PrinterBase {
 
     fn bool(&mut self, b: &str) {
         self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("gnd").group('(')
-            .ident("hyperon").punct("::").ident("metta").punct("::").ident("runner").punct("::").ident("bool").punct("::").ident("Bool").group('(')
+            .ident("hyperon_atom").punct("::").ident("gnd").punct("::").ident("bool").punct("::").ident("Bool").group('(')
             .ident(b)
             .group(')').group(')');
     }

@@ -3,7 +3,7 @@ use hyperon::metta::*;
 use hyperon::metta::text::*;
 use hyperon::metta::runner::{Metta, EnvBuilder};
 use hyperon_atom::gnd::number::Number;
-use hyperon::metta::runner::bool::Bool;
+use hyperon_atom::gnd::bool::Bool;
 
 #[test]
 fn test_types_in_metta() {

@@ -1,5 +1,6 @@
 pub mod str;
 pub mod number;
+pub mod bool;
 
 use std::rc::Rc;
 

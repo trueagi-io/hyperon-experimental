@@ -14,7 +14,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon_atom::matcher::{Bindings, BindingsSet};
-use hyperon::metta::runner::bool::Bool;
+use hyperon_atom::gnd::bool::Bool;
 use hyperon_atom::gnd::number::Number;
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

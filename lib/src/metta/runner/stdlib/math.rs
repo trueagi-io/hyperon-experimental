@@ -3,7 +3,7 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use super::{grounded_op, regex};
 use hyperon_atom::gnd::number::*;
-use crate::metta::runner::bool::*;
+use hyperon_atom::gnd::bool::*;
 
 use std::convert::TryInto;
 

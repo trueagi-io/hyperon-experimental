@@ -10,7 +10,7 @@ use hyperon_atom::gnd::str::Str;
 use serde_json::Value;
 use hyperon_space::ATOM_TYPE_SPACE;
 use crate::metta::runner::DynSpace;
-use crate::metta::runner::bool::*;
+use hyperon_atom::gnd::bool::*;
 use hyperon_atom::gnd::number::{Number, ATOM_TYPE_NUMBER};
 use std::io::Write;
 

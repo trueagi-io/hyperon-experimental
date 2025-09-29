@@ -140,7 +140,7 @@ mod tests {
     use crate::metta::runner::EnvBuilder;
     use hyperon_atom::gnd::str::Str;
     use hyperon_atom::matcher::atoms_are_equivalent;
-    use crate::metta::runner::bool::Bool;
+    use hyperon_atom::gnd::bool::Bool;
     use hyperon_atom::gnd::number::Number;
     use crate::metta::runner::run_program;
     use hyperon_atom::gnd::GroundedFunctionAtom;

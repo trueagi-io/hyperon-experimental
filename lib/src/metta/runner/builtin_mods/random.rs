@@ -3,7 +3,7 @@ use hyperon_atom::*;
 use crate::metta::*;
 use crate::metta::text::SExprParser;
 use hyperon_atom::gnd::number::*;
-use crate::metta::runner::bool::*;
+use hyperon_atom::gnd::bool::*;
 
 use std::fmt::{Display, Formatter};
 use std::cell::RefCell;
