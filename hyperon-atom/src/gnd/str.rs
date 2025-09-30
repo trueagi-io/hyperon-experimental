@@ -24,7 +24,7 @@ impl Str {
     }
     /// Try to convert an atom into `Str` instance
     pub fn from_atom(atom: &Atom) -> Option<Self> {
-        StrSerializer::convert(atom)
+        Str::try_from(atom).ok()
     }
 }
 
@@ -53,6 +53,21 @@ impl std::fmt::Display for Str {
 impl Into<String> for Str {
     fn into(self) -> String {
         self.as_str().into()
+    }
+}
+
+impl TryFrom<&Atom> for Str {
+    type Error = &'static str;
+    fn try_from(value: &Atom) -> Result<Self, Self::Error> {
+        std::convert::TryInto::<&dyn GroundedAtom>::try_into(value)
+            .and_then(StrSerializer::convert)
+    }
+}
+
+impl TryFrom<&dyn GroundedAtom> for Str {
+    type Error = &'static str;
+    fn try_from(value: &dyn GroundedAtom) -> Result<Self, Self::Error> {
+        StrSerializer::convert(value)
     }
 }
 

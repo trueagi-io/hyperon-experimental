@@ -17,13 +17,28 @@ impl Bool {
     }
 
     pub fn from_atom(atom: &Atom) -> Option<Self> {
-        BoolSerializer::convert(atom)
+        Bool::try_from(atom).ok()
     }
 }
 
 impl Into<Bool> for bool {
     fn into(self) -> Bool {
         Bool(self)
+    }
+}
+
+impl TryFrom<&Atom> for Bool {
+    type Error = &'static str;
+    fn try_from(value: &Atom) -> Result<Self, Self::Error> {
+        std::convert::TryInto::<&dyn GroundedAtom>::try_into(value)
+            .and_then(BoolSerializer::convert)
+    }
+}
+
+impl TryFrom<&dyn GroundedAtom> for Bool {
+    type Error = &'static str;
+    fn try_from(value: &dyn GroundedAtom) -> Result<Self, Self::Error> {
+        BoolSerializer::convert(value)
     }
 }
 

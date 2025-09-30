@@ -85,26 +85,23 @@ use gnd::number::*;
 use gnd::bool::*;
 
 /// Compares two grounded atoms for equality
-pub fn gnd_eq(a: &Atom, b: &Atom) -> bool {
+pub fn gnd_eq(a: &dyn GroundedAtom, b: &dyn GroundedAtom) -> bool {
     // TODO: this function is a hack which is introduced for embedded grounded
     // types only. It should be replaced by some mechanism which allows defining
     // a single grounded atom equality procedure in a MeTTa module. This could
     // be done via defining a type class or equality function overloading.
-    let agnd = TryInto::<&dyn GroundedAtom>::try_into(a).expect("Grounded atom is expected");
-    let bgnd = TryInto::<&dyn GroundedAtom>::try_into(b).expect("Grounded atom is expected");
-
-    if agnd.eq_gnd(bgnd) {
+    if a.eq_gnd(b) {
         return true
     }
-    if agnd.type_() != bgnd.type_() {
+    if a.type_() != b.type_() {
         return false
     }
-    if agnd.type_() == ATOM_TYPE_STRING {
-        Str::from_atom(a) == Str::from_atom(b)
-    } else if agnd.type_() == ATOM_TYPE_NUMBER {
-        Number::from_atom(a) == Number::from_atom(b)
-    } else if agnd.type_() == ATOM_TYPE_BOOL {
-        Bool::from_atom(a) == Bool::from_atom(b)
+    if a.type_() == ATOM_TYPE_STRING {
+        Str::try_from(a).unwrap() == Str::try_from(b).unwrap()
+    } else if a.type_() == ATOM_TYPE_NUMBER {
+        Number::try_from(a).unwrap() == Number::try_from(b).unwrap()
+    } else if a.type_() == ATOM_TYPE_BOOL {
+        Bool::try_from(a).unwrap() == Bool::try_from(b).unwrap()
     } else {
         false
     }
