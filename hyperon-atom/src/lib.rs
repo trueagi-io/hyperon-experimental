@@ -778,14 +778,6 @@ impl<T: CustomGroundedType> CustomGroundedTypeToAtom for &Wrap<T> {
     }
 }
 
-impl PartialEq for Box<dyn GroundedAtom> {
-    fn eq(&self, other: &Self) -> bool {
-        self.eq_gnd(&**other)
-    }
-}
-
-impl Eq for Box<dyn GroundedAtom> {}
-
 impl Clone for Box<dyn GroundedAtom> {
     fn clone(&self) -> Self {
         self.clone_gnd()
@@ -999,7 +991,7 @@ impl PartialEq for Atom {
             // because of strange compiler error which requires Copy trait
             // to be implemented. It prevents using constant atoms as patterns
             // for matching (see COMMA_SYMBOL in grounding.rs for instance).
-            (Atom::Grounded(gnd), Atom::Grounded(other)) => PartialEq::eq(gnd, other),
+            (Atom::Grounded(_), Atom::Grounded(_)) => gnd::gnd_eq(self, other),
             _ => false,
         }
     }
