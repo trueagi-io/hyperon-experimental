@@ -231,7 +231,6 @@ mod tests {
     use crate::metta::runner::Metta;
     use hyperon_common::assert_eq_no_order;
     use hyperon_macros::metta;
-    use crate as hyperon;
 
     #[test]
     fn mod_space_op() {

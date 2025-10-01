@@ -578,21 +578,21 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
 /// @return  The `atom_t` representing the atom
 /// @note The returned `atom_t` must be freed with `atom_free()`
 ///
-#[no_mangle] pub extern "C" fn ATOM_TYPE_NUMBER() -> atom_t { hyperon::metta::runner::number::ATOM_TYPE_NUMBER.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_NUMBER() -> atom_t { hyperon_atom::gnd::number::ATOM_TYPE_NUMBER.into() }
 
 /// @brief Creates an atom used to indicate that an atom's type is a Bool type.
 /// @ingroup metta_language_group
 /// @return  The `atom_t` representing the atom
 /// @note The returned `atom_t` must be freed with `atom_free()`
 ///
-#[no_mangle] pub extern "C" fn ATOM_TYPE_BOOL() -> atom_t { hyperon::metta::runner::bool::ATOM_TYPE_BOOL.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_BOOL() -> atom_t { hyperon_atom::gnd::bool::ATOM_TYPE_BOOL.into() }
 
 /// @brief Creates an atom used to indicate that an atom's type is a String type.
 /// @ingroup metta_language_group
 /// @return  The `atom_t` representing the atom
 /// @note The returned `atom_t` must be freed with `atom_free()`
 ///
-#[no_mangle] pub extern "C" fn ATOM_TYPE_STRING() -> atom_t { hyperon::metta::runner::str::ATOM_TYPE_STRING.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_STRING() -> atom_t { hyperon_atom::gnd::str::ATOM_TYPE_STRING.into() }
 
 /// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate empty results
 /// returned by function.

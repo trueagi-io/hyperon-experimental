@@ -5,13 +5,13 @@ use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, ModuleLoader, RunContext};
 use crate::metta::runner::modules::MettaMod;
-use crate::metta::runner::str::ATOM_TYPE_STRING;
-use crate::metta::runner::str::Str;
+use hyperon_atom::gnd::str::ATOM_TYPE_STRING;
+use hyperon_atom::gnd::str::Str;
 use serde_json::Value;
 use hyperon_space::ATOM_TYPE_SPACE;
 use crate::metta::runner::DynSpace;
-use crate::metta::runner::bool::*;
-use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
+use hyperon_atom::gnd::bool::*;
+use hyperon_atom::gnd::number::{Number, ATOM_TYPE_NUMBER};
 use std::io::Write;
 
 pub static JSON_METTA: &'static str = include_str!("json.metta");
@@ -325,7 +325,7 @@ mod tests {
         use hyperon_atom::Atom;
         use hyperon_space::DynSpace;
         use crate::space::grounding::*;
-        use crate::metta::runner::str::Str;
+        use hyperon_atom::gnd::str::Str;
         use super::super::json_encode;
 
         #[bench]

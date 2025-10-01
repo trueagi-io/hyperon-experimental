@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use hyperon_atom::{sym, Atom, ExecError, Grounded};
 use crate::metta::{ARROW_SYMBOL, UNIT_ATOM};
 use crate::metta::runner::stdlib::unit_result;
-use crate::metta::runner::str::{Str, ATOM_TYPE_STRING};
+use hyperon_atom::gnd::str::{Str, ATOM_TYPE_STRING};
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -12,7 +12,7 @@ use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{ModuleLoader, RunContext, DynSpace, Metta, MettaMod};
 use hyperon_atom::gnd::*;
-use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
+use hyperon_atom::gnd::number::{Number, ATOM_TYPE_NUMBER};
 
 pub static FILEIO_METTA: &'static str = include_str!("fileio.metta");
 pub const ATOM_TYPE_FILE_HANDLE: Atom = sym!("FileHandle");

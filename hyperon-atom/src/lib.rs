@@ -778,14 +778,6 @@ impl<T: CustomGroundedType> CustomGroundedTypeToAtom for &Wrap<T> {
     }
 }
 
-impl PartialEq for Box<dyn GroundedAtom> {
-    fn eq(&self, other: &Self) -> bool {
-        self.eq_gnd(&**other)
-    }
-}
-
-impl Eq for Box<dyn GroundedAtom> {}
-
 impl Clone for Box<dyn GroundedAtom> {
     fn clone(&self) -> Self {
         self.clone_gnd()
@@ -804,29 +796,26 @@ pub trait ConvertingSerializer<T>: serial::Serializer + Default {
     /// First it checks whether the grounded atom is already an instance of `T`
     /// and clones value if it the case. Otherwise it uses `Self` to convert
     /// into `T` via serialization.
-    fn convert(atom: &Atom) -> Option<T>
+    fn convert(gnd: &dyn GroundedAtom) -> Result<T, &'static str>
         where T: 'static + Clone
     {
-        std::convert::TryInto::<&dyn GroundedAtom>::try_into(atom)
-            .ok()
-            .and_then(|gnd| {
-                gnd.as_any_ref()
-                    // TODO: it is not clear whether this step really improves performance.
-                    // On the other hand it requires `T` to be static and implement `Clone`.
-                    // It is better to do a performance test and check if first step should be
-                    // removed.
-                    .downcast_ref::<T>()
-                    .cloned()
-                    .or_else(|| {
-                        if Self::check_type(gnd) {
-                            let mut serializer = Self::default();
-                            gnd.serialize(&mut serializer).ok()
-                                .and_then(|()| serializer.into_type())
-                        } else {
-                            None
-                        }
-                    })
+        gnd.as_any_ref()
+            // TODO: it is not clear whether this step really improves performance.
+            // On the other hand it requires `T` to be static and implement `Clone`.
+            // It is better to do a performance test and check if first step should be
+            // removed.
+            .downcast_ref::<T>()
+            .cloned()
+            .or_else(|| {
+                if Self::check_type(gnd) {
+                    let mut serializer = Self::default();
+                    gnd.serialize(&mut serializer).ok()
+                        .and_then(|()| serializer.into_type())
+                } else {
+                    None
+                }
             })
+            .ok_or("Incorrect type")
     }
 }
 
@@ -995,11 +984,7 @@ impl PartialEq for Atom {
             (Atom::Symbol(sym), Atom::Symbol(other)) => PartialEq::eq(sym, other),
             (Atom::Expression(expr), Atom::Expression(other)) => PartialEq::eq(expr, other),
             (Atom::Variable(var), Atom::Variable(other)) => PartialEq::eq(var, other),
-            // TODO: PartialEq cannot be derived for the Box<dyn GroundedAtom>
-            // because of strange compiler error which requires Copy trait
-            // to be implemented. It prevents using constant atoms as patterns
-            // for matching (see COMMA_SYMBOL in grounding.rs for instance).
-            (Atom::Grounded(gnd), Atom::Grounded(other)) => PartialEq::eq(gnd, other),
+            (Atom::Grounded(gnd), Atom::Grounded(other)) => gnd::gnd_eq(&**gnd, &**other),
             _ => false,
         }
     }
@@ -1418,8 +1403,8 @@ mod test {
 
     #[test]
     fn test_converting_serializer() {
-        assert_eq!(I64Serializer::convert(&Atom::gnd(I64Gnd(42))), Some(42));
-        assert_eq!(I64Serializer::convert(&Atom::value("42")), None);
-        assert_eq!(I64Serializer::convert(&Atom::gnd(F64Gnd(42.0))), None);
+        assert_eq!(I64Serializer::convert(&CustomGroundedAtom(I64Gnd(42))), Ok(42));
+        assert_eq!(I64Serializer::convert(&AutoGroundedAtom("42")), Err("Incorrect type"));
+        assert_eq!(I64Serializer::convert(&CustomGroundedAtom(F64Gnd(42.0))), Err("Incorrect type"));
     }
 }

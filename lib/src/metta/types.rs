@@ -24,7 +24,7 @@ use hyperon_space::DynSpace;
 
 use std::fmt::{Display, Debug};
 use itertools::Itertools;
-use crate::metta::runner::number::Number;
+use hyperon_atom::gnd::number::Number;
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
     Atom::expr(vec![HAS_TYPE_SYMBOL, atom.clone(), typ.clone()])
@@ -671,7 +671,6 @@ pub fn validate_atom(space: &DynSpace, atom: &Atom) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate as hyperon;
     use hyperon_atom::matcher::atoms_are_equivalent;
     use crate::metta::runner::*;
     use crate::metta::text::SExprParser;

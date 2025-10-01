@@ -5,7 +5,7 @@ use crate::metta::text::Tokenizer;
 use crate::metta::types::{AtomType, get_atom_types, get_meta_type};
 use hyperon_common::multitrie::{MultiTrie, TrieKey, TrieToken};
 use super::{grounded_op, regex};
-use crate::metta::runner::number::*;
+use hyperon_atom::gnd::number::*;
 
 use std::convert::TryInto;
 use std::hash::{DefaultHasher, Hasher};
@@ -477,7 +477,7 @@ mod tests {
     use super::*;
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
-    use crate::metta::runner::str::Str;
+    use hyperon_atom::gnd::str::Str;
     use crate::space::grounding::metta_space;
     use crate::metta::runner::run_program;
     use crate::metta::runner::Metta;

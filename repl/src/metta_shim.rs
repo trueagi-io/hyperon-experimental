@@ -42,7 +42,7 @@ pub mod metta_interface_mod {
     use pyo3::types::{PyTuple, PyString, PyBool, PyList, PyDict};
     use hyperon_common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
-    use hyperon::metta::runner::str::unescape;
+    use hyperon_atom::gnd::str::unescape;
     use hyperon::metta::text::CharReader;
 
     /// Load the hyperon module, and get the "__version__" attribute
@@ -274,7 +274,7 @@ pub mod metta_interface_mod {
     use hyperon_atom::ExpressionAtom;
     use hyperon_atom::Atom;
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
-    use hyperon::metta::runner::str::Str;
+    use hyperon_atom::gnd::str::Str;
     use hyperon_common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
 
