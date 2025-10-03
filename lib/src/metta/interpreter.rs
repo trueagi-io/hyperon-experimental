@@ -1001,34 +1001,23 @@ fn metta_impl(args: Atom, bindings: Bindings) -> MettaResult {
         }
     };
 
-    let meta = get_meta_type(&atom);
-    if typ == ATOM_TYPE_ATOM {
-        once((return_atom(atom), bindings))
-    } else if typ == meta {
-        once((return_atom(atom), bindings))
-    } else {
-        if meta == ATOM_TYPE_VARIABLE {
-            once((return_atom(atom), bindings))
-        } else if meta == ATOM_TYPE_SYMBOL {
-            type_cast(space, atom, typ, bindings)
-        } else if meta == ATOM_TYPE_GROUNDED {
-            type_cast(space, atom, typ, bindings)
-        } else {
-            let evaluated = match &atom {
-                Atom::Expression(e) => e.is_evaluated(),
-                _ => unreachable!(),
-            };
-            if !evaluated {
-                let var = Atom::Variable(VariableAtom::new("x").make_unique());
-                let res = Atom::Variable(VariableAtom::new("res").make_unique());
-                once((Atom::expr([CHAIN_SYMBOL, Atom::expr([COLLAPSE_BIND_SYMBOL, call_native!(interpret_expression, Atom::expr([atom.clone(), typ, space]))]), var.clone(),
-                    Atom::expr([CHAIN_SYMBOL, call_native!(check_alternatives, Atom::expr([atom, var])), res.clone(),
-                        return_atom(res)
-                    ])
-                ]), bindings))
-            } else {
-                once((return_atom(atom), bindings))
-            }
+    match &atom {
+        _ if typ == ATOM_TYPE_ATOM => once((return_atom(atom), bindings)),
+        Atom::Variable(_) => once((return_atom(atom), bindings)),
+        Atom::Symbol(_) if typ == ATOM_TYPE_SYMBOL => once((return_atom(atom), bindings)),
+        Atom::Symbol(_) => type_cast(space, atom, typ, bindings),
+        Atom::Grounded(_) if typ == ATOM_TYPE_GROUNDED => once((return_atom(atom), bindings)),
+        Atom::Grounded(_) =>  type_cast(space, atom, typ, bindings),
+        Atom::Expression(_) if typ == ATOM_TYPE_EXPRESSION => once((return_atom(atom), bindings)),
+        Atom::Expression(e) if e.is_evaluated() => once((return_atom(atom), bindings)),
+        Atom::Expression(_) => {
+            let var = Atom::Variable(VariableAtom::new("x").make_unique());
+            let res = Atom::Variable(VariableAtom::new("res").make_unique());
+            once((Atom::expr([CHAIN_SYMBOL, Atom::expr([COLLAPSE_BIND_SYMBOL, call_native!(interpret_expression, Atom::expr([atom.clone(), typ, space]))]), var.clone(),
+                Atom::expr([CHAIN_SYMBOL, call_native!(check_alternatives, Atom::expr([atom, var])), res.clone(),
+                    return_atom(res)
+                ])
+            ]), bindings))
         }
     }
 }
@@ -1043,27 +1032,22 @@ fn get_meta_type(atom: &Atom) -> Atom {
 }
 
 fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -> MettaResult {
-    let meta = get_meta_type(&atom);
-    if expected_type == meta {
-        once((return_atom(atom), bindings))
-    } else {
-        let space = space.as_gnd::<DynSpace>().unwrap();
-        let types = get_atom_types(space, &atom);
+    let space = space.as_gnd::<DynSpace>().unwrap();
+    let types = get_atom_types(space, &atom);
 
-        let mut errors = Vec::with_capacity(types.len());
-        for actual_type in types.into_iter().filter(AtomType::is_valid).map(AtomType::into_atom) {
-            let res = match_types(&expected_type, &actual_type, bindings.clone());
-            match res {
-                Ok(mut it) => return once((return_atom(atom), it.next().unwrap())),
-                Err(_) => errors.push(actual_type),
-            }
+    let mut errors = Vec::with_capacity(types.len());
+    for actual_type in types.into_iter().filter(AtomType::is_valid).map(AtomType::into_atom) {
+        let res = match_types(&expected_type, &actual_type, bindings.clone());
+        match res {
+            Ok(it) => return Box::new(it.map(move |b| (return_atom(atom.clone()), b))),
+            Err(_) => errors.push(actual_type),
         }
-
-        Box::new(errors.into_iter().map(move |actual_type| {
-            let err = error_atom(atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, expected_type.clone(), actual_type]));
-            (return_atom(err), bindings.clone())
-        }))
     }
+
+    Box::new(errors.into_iter().map(move |actual_type| {
+        let err = error_atom(atom.clone(), Atom::expr([BAD_TYPE_SYMBOL, expected_type.clone(), actual_type]));
+        (return_atom(err), bindings.clone())
+    }))
 }
 
 fn match_types(type1: &Atom, type2: &Atom, bindings: Bindings) -> Result<MatchResultIter, MatchResultIter>  {
