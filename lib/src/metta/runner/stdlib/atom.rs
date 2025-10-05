@@ -31,12 +31,8 @@ impl CustomExecute for UniqueAtomOp {
         let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
 
         let mut atoms: Vec<Atom> = expr.children().into();
-        let mut set = GroundingSpace::new();
-        atoms.retain(|x| {
-            let not_contained = set.query(x).is_empty();
-            if not_contained { set.add(x.clone()) };
-            not_contained
-        });
+        let mut seen = std::collections::HashSet::new();
+        atoms.retain(|x| seen.insert(x.clone()));
         Ok(vec![Atom::expr(atoms)])
     }
 }
@@ -622,6 +618,21 @@ mod tests {
         )]).unwrap();
         assert_eq_no_order!(actual,
                    vec![expr!(("A" ("B" "C")) ("f" "g") "Z")]);
+    }
+
+    #[test]
+    fn unique_op_with_variables() {
+        let unique_op = UniqueAtomOp {};
+        let x = VariableAtom::new("x");
+        let y = VariableAtom::new("y");
+        let actual = unique_op
+            .execute(&mut vec![expr!(
+                {Atom::Variable(x.clone())}
+                {Atom::Variable(x.clone())}
+                {Atom::Variable(y.clone())}
+            )])
+            .unwrap();
+        assert_eq!(actual, vec![expr!({Atom::Variable(x)} {Atom::Variable(y)})]);
     }
 
     #[test]
