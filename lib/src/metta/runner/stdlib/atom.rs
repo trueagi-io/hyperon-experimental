@@ -25,16 +25,20 @@ impl Grounded for UniqueAtomOp {
     }
 }
 
-impl CustomExecute for UniqueAtomOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("unique expects single expression atom as an argument");
-        let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
-
-        let mut atoms: Vec<Atom> = expr.children().into();
-        let mut seen = std::collections::HashSet::new();
-        atoms.retain(|x| seen.insert(x.clone()));
-        Ok(vec![Atom::expr(atoms)])
-    }
+impl CustomExecute for UniqueAtomOp {  
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {  
+        let arg_error = || ExecError::from("unique expects single expression atom as an argument");  
+        let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;  
+  
+        let mut atoms: Vec<Atom> = expr.children().into();  
+        let mut seen: Vec<Atom> = Vec::new();  
+        atoms.retain(|x| {  
+            let not_contained = !seen.iter().any(|seen_atom| seen_atom == x);  
+            if not_contained { seen.push(x.clone()) };  
+            not_contained  
+        });  
+        Ok(vec![Atom::expr(atoms)])  
+    }  
 }
 
 #[derive(Clone, Debug)]
@@ -620,19 +624,86 @@ mod tests {
                    vec![expr!(("A" ("B" "C")) ("f" "g") "Z")]);
     }
 
-    #[test]
-    fn unique_op_with_variables() {
-        let unique_op = UniqueAtomOp {};
-        let x = VariableAtom::new("x");
-        let y = VariableAtom::new("y");
-        let actual = unique_op
-            .execute(&mut vec![expr!(
-                {Atom::Variable(x.clone())}
-                {Atom::Variable(x.clone())}
-                {Atom::Variable(y.clone())}
-            )])
-            .unwrap();
-        assert_eq!(actual, vec![expr!({Atom::Variable(x)} {Atom::Variable(y)})]);
+    // #[test]
+    // fn unique_op_with_variables() {
+    //     let unique_op = UniqueAtomOp {};
+    //     let x = VariableAtom::new("x");
+    //     let y = VariableAtom::new("y");
+    //     let actual = unique_op
+    //         .execute(&mut vec![expr!(
+    //             {Atom::Variable(x.clone())}
+    //             {Atom::Variable(x.clone())}
+    //             {Atom::Variable(y.clone())}
+    //         )])
+    //         .unwrap();
+    //     assert_eq!(actual, vec![expr!({Atom::Variable(x)} {Atom::Variable(z)})]);
+    // }
+    #[test]  
+    fn unique_op_with_variables() {  
+        let unique_op = UniqueAtomOp {};  
+        
+        // Test 1: Basic variable deduplication  
+        let x = VariableAtom::new("x");  
+        let y = VariableAtom::new("y");  
+        let actual = unique_op  
+            .execute(&mut vec![expr!(  
+                {Atom::Variable(x.clone())}  
+                {Atom::Variable(x.clone())}  
+                {Atom::Variable(y.clone())}  
+            )])  
+            .unwrap();  
+        assert_eq!(actual, vec![expr!({Atom::Variable(x.clone())} {Atom::Variable(y.clone())})]);  
+        
+        // Test 2: Complex expressions with variables that can unify  
+        let first_var = VariableAtom::new("firstVar");  
+        let second_var = VariableAtom::new("secondVar");  
+        let yon = Atom::sym("yon");  
+        let am = Atom::sym("am");  
+        let tol = Atom::sym("tol");  
+        let i = Atom::sym("I");  
+        
+        // This mimics: (I $firstVar $yon) (I am $secondVar) (I am $secondVar) (I $firstVar tol)  
+        let actual = unique_op  
+            .execute(&mut vec![expr!(  
+                ({i.clone()} {Atom::Variable(first_var.clone())} {yon.clone()})  
+                ({i.clone()} {am.clone()} {Atom::Variable(second_var.clone())})  
+                ({i.clone()} {am.clone()} {Atom::Variable(second_var.clone())})  
+                ({i.clone()} {Atom::Variable(first_var.clone())} {tol.clone()})  
+            )])  
+            .unwrap();  
+        
+        // With current GroundingSpace.query() behavior, these unify and only first is kept  
+        // Expected with syntactic equality: all distinct atoms should be present  
+        let result_atoms = <&ExpressionAtom>::try_from(&actual[0]).unwrap().children();  
+        
+        // Test 3: Mix of concrete values and variables  
+        let yonas = Atom::sym("yonas");  
+        let ayele = Atom::sym("ayele");  
+        
+        let actual = unique_op  
+            .execute(&mut vec![expr!(  
+                ({i.clone()} {yonas.clone()} {ayele.clone()})  
+                ({i.clone()} {Atom::Variable(first_var.clone())} {yon.clone()})  
+                ({i.clone()} {am.clone()} {Atom::Variable(second_var.clone())})  
+                ({i.clone()} {am.clone()} {Atom::Variable(second_var.clone())})  
+            )])  
+            .unwrap();  
+        
+        let result_atoms = <&ExpressionAtom>::try_from(&actual[0]).unwrap().children();  
+        // Should keep concrete atom and one variable-containing atom per unique structure  
+        
+        // Test 4: Different variable names in same structure  
+        let z = VariableAtom::new("z");  
+        let actual = unique_op  
+            .execute(&mut vec![expr!(  
+                ({i.clone()} {Atom::Variable(x.clone())} {yon.clone()})  
+                ({i.clone()} {Atom::Variable(y.clone())} {yon.clone()})  
+                ({i.clone()} {Atom::Variable(z.clone())} {yon.clone()})  
+            )])  
+            .unwrap();  
+        
+        // With unification: only first kept (they all unify)  
+        // With syntactic equality: all three kept (different variable names)  
     }
 
     #[test]
