@@ -1,6 +1,6 @@
 !(import! &self das)
 
-!(bind! &das (new-das! (localhost:42000-42499) (localhost:40002)))
+!(bind! &das (new-das! (0.0.0.0:42000-42499) (0.0.0.0:40002)))
 
 !(assertEqualToResult
     (match &das (EVALUATION (PREDICATE is_animal) (CONCEPT $C)) $C)
