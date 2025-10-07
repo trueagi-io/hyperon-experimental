@@ -318,28 +318,28 @@ impl PrinterBase {
 
     fn bool(&mut self, b: &str) {
         self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("gnd").group('(')
-            .ident("hyperon").punct("::").ident("metta").punct("::").ident("runner").punct("::").ident("bool").punct("::").ident("Bool").group('(')
+            .ident("hyperon_atom").punct("::").ident("gnd").punct("::").ident("bool").punct("::").ident("Bool").group('(')
             .ident(b)
             .group(')').group(')');
     }
 
     fn integer(&mut self, n: i64) {
         self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("gnd").group('(')
-            .ident("hyperon").punct("::").ident("metta").punct("::").ident("runner").punct("::").ident("number").punct("::").ident("Number").punct("::").ident("Integer").group('(')
+            .ident("hyperon_atom").punct("::").ident("gnd").punct("::").ident("number").punct("::").ident("Number").punct("::").ident("Integer").group('(')
             .literal(Literal::i64_suffixed(n))
             .group(')').group(')');
     }
 
     fn float(&mut self, f: f64) {
         self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("gnd").group('(')
-            .ident("hyperon").punct("::").ident("metta").punct("::").ident("runner").punct("::").ident("number").punct("::").ident("Number").punct("::").ident("Float").group('(')
+            .ident("hyperon_atom").punct("::").ident("gnd").punct("::").ident("number").punct("::").ident("Number").punct("::").ident("Float").group('(')
             .literal(Literal::f64_suffixed(f))
             .group(')').group(')');
     }
 
     fn str(&mut self, s: &str) {
         self.ident("hyperon_atom").punct("::").ident("Atom").punct("::").ident("gnd").group('(')
-            .ident("hyperon").punct("::").ident("metta").punct("::").ident("runner").punct("::").ident("str").punct("::").ident("Str").punct("::").ident("from_str").group('(')
+            .ident("hyperon_atom").punct("::").ident("gnd").punct("::").ident("str").punct("::").ident("Str").punct("::").ident("from_str").group('(')
             .literal(Literal::string(s))
             .group(')').group(')');
     }

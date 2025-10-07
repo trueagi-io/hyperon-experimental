@@ -2,8 +2,8 @@ use hyperon_atom::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use super::{grounded_op, regex};
-use crate::metta::runner::number::*;
-use crate::metta::runner::bool::*;
+use hyperon_atom::gnd::number::*;
+use hyperon_atom::gnd::bool::*;
 
 use std::convert::TryInto;
 
@@ -358,7 +358,7 @@ grounded_op!(IsNanMathOp, "isnan-math");
 
 impl Grounded for IsNanMathOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_BOOL])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -385,7 +385,7 @@ grounded_op!(IsInfMathOp, "isinf-math");
 
 impl Grounded for IsInfMathOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_BOOL])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {

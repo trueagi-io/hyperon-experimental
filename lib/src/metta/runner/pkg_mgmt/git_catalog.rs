@@ -382,6 +382,6 @@ fn git_catalog_direct_test() {
     runner.display_loaded_modules();
 
     let result = runner.run(SExprParser::new("!(fact 5)"));
-    assert_eq!(result, Ok(vec![vec![expr!({crate::metta::runner::number::Number::Integer(120)})]]));
+    assert_eq!(result, Ok(vec![vec![expr!({hyperon_atom::gnd::number::Number::Integer(120)})]]));
 }
 

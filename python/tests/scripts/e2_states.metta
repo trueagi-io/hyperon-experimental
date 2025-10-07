@@ -2,6 +2,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; State atoms
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; assign the specific type to the (A B) pair
+(: (A B) PairAB)
+
 ; `new-state` creates a new state atom wrapping the initial value (A B).
 ; Then it binds this state atom to the token `&state-token`,
 ; which is replaced by the corresponding atom at parse-time.
@@ -42,10 +46,10 @@
 !(assertEqual
   (let $v (new-state 1) (get-type $v))
   (StateMonad Number))
-; atm, meta-types for states of non-grounded types are used
+; type of the value is used as part of the state type
 !(assertEqual
   (get-type &state-token)
-  (StateMonad Expression))
+  (StateMonad PairAB))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -55,7 +59,7 @@
 ; it cannot be changed to int
 !(assertEqual
   (change-state! &state-token 1)
-  (Error (change-state! &state-token 1) (BadArgType 2 Expression Number)))
+  (Error (change-state! &state-token 1) (BadArgType 2 PairAB Number)))
 
 ; the new state here is int, so it cannot be changed to string
 !(assertEqual

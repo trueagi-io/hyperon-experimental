@@ -1,6 +1,4 @@
-use hyperon_atom::*;
-use hyperon_atom::serial;
-use hyperon_atom::ConvertingSerializer;
+use crate::*;
 
 use std::fmt::Display;
 
@@ -58,6 +56,21 @@ impl Into<f64> for Number {
     }
 }
 
+impl TryFrom<&Atom> for Number {
+    type Error = &'static str;
+    fn try_from(value: &Atom) -> Result<Self, Self::Error> {
+        std::convert::TryInto::<&dyn GroundedAtom>::try_into(value)
+            .and_then(NumberSerializer::convert)
+    }
+}
+
+impl TryFrom<&dyn GroundedAtom> for Number {
+    type Error = &'static str;
+    fn try_from(value: &dyn GroundedAtom) -> Result<Self, Self::Error> {
+        NumberSerializer::convert(value)
+    }
+}
+
 impl Number {
     pub fn from_int_str(num: &str) -> Result<Self, String> {
         let n = num.parse::<i64>().map_err(|e| format!("Could not parse integer: '{num}', {e}"))?;
@@ -75,7 +88,7 @@ impl Number {
     }
 
     pub fn from_atom(atom: &Atom) -> Option<Self> {
-        NumberSerializer::convert(atom)
+        Number::try_from(atom).ok()
     }
 
     fn get_type(&self) -> NumberType {

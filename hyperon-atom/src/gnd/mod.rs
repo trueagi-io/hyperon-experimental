@@ -1,3 +1,7 @@
+pub mod str;
+pub mod number;
+pub mod bool;
+
 use std::rc::Rc;
 
 use super::*;
@@ -73,5 +77,32 @@ impl<T: GroundedFunction> Grounded for GroundedFunctionAtom<T> {
 impl<T: GroundedFunction> CustomExecute for GroundedFunctionAtom<T> {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         self.0.func.execute(args)
+    }
+}
+
+use gnd::str::*;
+use gnd::number::*;
+use gnd::bool::*;
+
+/// Compares two grounded atoms for equality
+pub fn gnd_eq(a: &dyn GroundedAtom, b: &dyn GroundedAtom) -> bool {
+    // TODO: this function is a hack which is introduced for embedded grounded
+    // types only. It should be replaced by some mechanism which allows defining
+    // a single grounded atom equality procedure in a MeTTa module. This could
+    // be done via defining a type class or equality function overloading.
+    if a.eq_gnd(b) {
+        return true
+    }
+    if a.type_() != b.type_() {
+        return false
+    }
+    if a.type_() == ATOM_TYPE_STRING {
+        Str::try_from(a).unwrap() == Str::try_from(b).unwrap()
+    } else if a.type_() == ATOM_TYPE_NUMBER {
+        Number::try_from(a).unwrap() == Number::try_from(b).unwrap()
+    } else if a.type_() == ATOM_TYPE_BOOL {
+        Bool::try_from(a).unwrap() == Bool::try_from(b).unwrap()
+    } else {
+        false
     }
 }

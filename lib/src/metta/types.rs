@@ -24,7 +24,7 @@ use hyperon_space::DynSpace;
 
 use std::fmt::{Display, Debug};
 use itertools::Itertools;
-use crate::metta::runner::number::Number;
+use hyperon_atom::gnd::number::Number;
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
     Atom::expr(vec![HAS_TYPE_SYMBOL, atom.clone(), typ.clone()])
@@ -603,36 +603,6 @@ pub fn check_type(space: &DynSpace, atom: &Atom, typ: &Atom) -> bool {
     check_meta_type(atom, typ) || !get_matched_types(space, atom, typ).is_empty()
 }
 
-/// Finds all types of the passed `atom` which matches the given `typ` in
-/// context of the given `space`. Returns vector of matched types with type
-/// parameter bindings.
-///
-/// # Examples
-///
-/// ```
-/// use hyperon_atom::{expr, bind};
-/// use hyperon::metta::runner::*;
-/// use hyperon::metta::text::SExprParser;
-/// use hyperon::metta::types::get_type_bindings;
-///
-/// let metta = Metta::new(None);
-/// metta.run(SExprParser::new("(: a (List A))")).unwrap();
-/// let types = get_type_bindings(&metta.space(), &expr!("a"), &expr!("List" t));
-///
-/// assert_eq!(types, vec![(expr!("List" "A"), bind!{ t: expr!("A") })]);
-/// ```
-pub fn get_type_bindings(space: &DynSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
-    let mut result = Vec::new();
-    if check_meta_type(atom, typ) {
-        result.push((typ.clone(), Bindings::new()));
-    }
-    result.append(&mut get_matched_types(space, atom, typ));
-    if result.len() > 1 {
-        result = result.into_iter().filter(|(typ, _)| *typ != ATOM_TYPE_UNDEFINED).collect();
-    }
-    result
-}
-
 pub fn get_meta_type(atom: &Atom) -> Atom {
     match atom {
         Atom::Symbol(_) => ATOM_TYPE_SYMBOL,
@@ -671,7 +641,6 @@ pub fn validate_atom(space: &DynSpace, atom: &Atom) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate as hyperon;
     use hyperon_atom::matcher::atoms_are_equivalent;
     use crate::metta::runner::*;
     use crate::metta::text::SExprParser;
