@@ -3,6 +3,7 @@ use hyperon_space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::types::{AtomType, get_atom_types, get_meta_type};
+use hyperon_atom::matcher::atoms_are_equivalent;
 use hyperon_common::multitrie::{MultiTrie, TrieKey, TrieToken};
 use super::{grounded_op, regex};
 use hyperon_atom::gnd::number::*;
@@ -25,20 +26,20 @@ impl Grounded for UniqueAtomOp {
     }
 }
 
-impl CustomExecute for UniqueAtomOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("unique expects single expression atom as an argument");
-        let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
-
-        let mut atoms: Vec<Atom> = expr.children().into();
-        let mut set = GroundingSpace::new();
-        atoms.retain(|x| {
-            let not_contained = set.query(x).is_empty();
-            if not_contained { set.add(x.clone()) };
-            not_contained
-        });
-        Ok(vec![Atom::expr(atoms)])
-    }
+impl CustomExecute for UniqueAtomOp {    
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {    
+        let arg_error = || ExecError::from("unique expects single expression atom as an argument");    
+        let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;    
+    
+        let mut atoms: Vec<Atom> = expr.children().into();    
+        let mut seen: Vec<Atom> = Vec::new();    
+        atoms.retain(|x| {    
+            let not_contained = !seen.iter().any(|seen_atom| atoms_are_equivalent(seen_atom, x));    
+            if not_contained { seen.push(x.clone()) };    
+            not_contained    
+        });    
+        Ok(vec![Atom::expr(atoms)])    
+    }    
 }
 
 #[derive(Clone, Debug)]
@@ -623,7 +624,32 @@ mod tests {
         assert_eq_no_order!(actual,
                    vec![expr!(("A" ("B" "C")) ("f" "g") "Z")]);
     }
-
+    
+    #[test]  
+    fn unique_op_() {  
+        let unique_op = UniqueAtomOp{};  
+        let yonas = VariableAtom::new("yonas");  
+        let tol = VariableAtom::new("tol");  
+        let name_var = VariableAtom::new("name");  
+    
+        // Build the input: ((name $yonas) (name $tol) ($name $tol))  
+        let input = Atom::expr([  
+            Atom::expr([Atom::sym("name"), Atom::Variable(yonas.clone())]),  
+            Atom::expr([Atom::sym("name"), Atom::Variable(tol.clone())]),  
+            Atom::expr([Atom::Variable(name_var.clone()), Atom::Variable(tol.clone())])  
+        ]);  
+    
+        let actual = unique_op.execute(&[input]).unwrap();  
+    
+        // Expected: ((name $yonas) ($name $tol))  
+        let expected = vec![Atom::expr([  
+            Atom::expr([Atom::sym("name"), Atom::Variable(yonas.clone())]),  
+            Atom::expr([Atom::Variable(name_var.clone()), Atom::Variable(tol.clone())])  
+        ])];  
+    
+        assert_eq!(actual, expected);  
+    }
+    
     #[test]
     fn union_op() {
         let union_op = UnionAtomOp{};
