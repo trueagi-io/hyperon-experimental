@@ -10,7 +10,7 @@ static UNIQUE_STRINGS: LazyLock<Mutex<UniqueStringStorage>> = LazyLock::new(|| {
 });
 
 struct UniqueStringStorage {
-    strings: HashMap<Arc<ImmutableString>, ()>,
+    strings: HashMap<Arc<ImmutableString>, u64>,
 }
 
 impl UniqueStringStorage {
@@ -20,14 +20,15 @@ impl UniqueStringStorage {
         }
     }
 
-    fn insert(&mut self, key: ImmutableString) -> Arc<ImmutableString> {
+    fn insert(&mut self, key: ImmutableString) -> (Arc<ImmutableString>, u64) {
         let key = Arc::new(key.into());
         match self.strings.entry(key) {
-            Entry::Occupied(o) => o.key().clone(),
+            Entry::Occupied(o) => (o.key().clone(), *o.get()),
             Entry::Vacant(v) => {
                 let key = v.key().clone();
-                v.insert(());
-                key
+                let h = hash(key.as_str());
+                v.insert(h);
+                (key, h)
             }
         }
     }
@@ -54,8 +55,8 @@ impl UniqueString {
 
     #[inline]
     fn new_store(value: ImmutableString) -> Self {
-        let hash = hash(value.as_str());
-        Self::Store(UNIQUE_STRINGS.lock().unwrap().insert(value), hash)
+        let (s, h) = UNIQUE_STRINGS.lock().unwrap().insert(value);
+        Self::Store(s, h)
     }
 }
 
