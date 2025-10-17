@@ -13,7 +13,13 @@ bimap = "0.6.3"
 
 [dev-dependencies]
 hyperon = { workspace = true }
+criterion = "0.7"
 
 [lib]
 path = "src/lib.rs"
 crate-type = ["lib"]
+
+[[bench]]
+name = "atom_index"
+harness = false
+
