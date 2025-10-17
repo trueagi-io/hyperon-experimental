@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 hyperon-atom = { workspace = true }
 hyperon-common = { workspace = true }
+hyperon-macros = { workspace = true }
 
 log = { workspace = true }
 smallvec = "1.10.0"
