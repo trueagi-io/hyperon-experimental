@@ -651,7 +651,7 @@ impl Bindings {
     ///     (&VariableAtom::new("rightF"), expr!("F")),
     /// ]);
     /// ```
-    pub fn iter(&self) -> BindingsIter {
+    pub fn iter(&self) -> BindingsIter<'_> {
         BindingsIter { bindings: self, delegate: self.binding_by_var.iter() }
     }
 

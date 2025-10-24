@@ -192,7 +192,7 @@ fn as_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
     }
 }
 
-pub fn split_expr(expr: &Atom) -> Option<(&Atom, std::slice::Iter<Atom>)> {
+pub fn split_expr(expr: &Atom) -> Option<(&Atom, std::slice::Iter<'_, Atom>)> {
     match expr {
         Atom::Expression(expr) => {
             let mut args = expr.children().iter();

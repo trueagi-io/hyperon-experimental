@@ -179,7 +179,7 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
 }
 
 impl Space for GroundingSpace {
-    fn common(&self) -> FlexRef<SpaceCommon> {
+    fn common(&self) -> FlexRef<'_, SpaceCommon> {
         FlexRef::from_simple(&self.common)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
