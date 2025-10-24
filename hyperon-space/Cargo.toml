@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 hyperon-atom = { workspace = true }
 hyperon-common = { workspace = true }
+hyperon-macros = { workspace = true }
 
 log = { workspace = true }
 smallvec = "1.10.0"
@@ -13,7 +14,13 @@ bimap = "0.6.3"
 
 [dev-dependencies]
 hyperon = { workspace = true }
+criterion = "0.7"
 
 [lib]
 path = "src/lib.rs"
 crate-type = ["lib"]
+
+[[bench]]
+name = "atom_index"
+harness = false
+
