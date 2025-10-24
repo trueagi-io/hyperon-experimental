@@ -1178,7 +1178,7 @@ enum Executable<'i> {
 struct InputStream<'a>(Vec<InputSource<'a>>);
 
 impl<'i> InputStream<'i> {
-    fn push_parser(&mut self, parser: Box<(dyn Parser + 'i)>) {
+    fn push_parser(&mut self, parser: Box<dyn Parser + 'i>) {
         self.0.push(InputSource::Parser(parser))
     }
     fn push_func<F: FnOnce(&mut RunContext) -> Result<(), String> + 'i>(&mut self, f: F) {

@@ -71,11 +71,11 @@ pub struct SpaceObserverRef<T: SpaceObserver> (Rc<RefCell<T>>);
 
 impl<T: SpaceObserver> SpaceObserverRef<T> {
     /// Returns a [Ref] to mutably access the [SpaceObserver]
-    pub fn borrow(&self) -> Ref<T> {
+    pub fn borrow(&self) -> Ref<'_, T> {
         self.0.borrow()
     }
     /// Returns a [RefMut] to mutably access the [SpaceObserver]
-    pub fn borrow_mut(&self) -> RefMut<T> {
+    pub fn borrow_mut(&self) -> RefMut<'_, T> {
         self.0.borrow_mut()
     }
     /// Returns the contents of the `SpaceObserverRef`
@@ -151,7 +151,7 @@ impl<T> SpaceVisitor for T where T: FnMut(Cow<Atom>) {
 /// Read-only space trait.
 pub trait Space: std::fmt::Debug + std::fmt::Display {
     /// Access the SpaceCommon object owned by the Space
-    fn common(&self) -> FlexRef<SpaceCommon>;
+    fn common(&self) -> FlexRef<'_, SpaceCommon>;
 
     /// Executes `query` on the space and returns variable bindings found.
     /// Query may include sub-queries glued by [grounding::COMMA_SYMBOL] symbol. 
@@ -286,13 +286,13 @@ impl DynSpace {
         let shared = Rc::new(RefCell::new(space));
         DynSpace(shared)
     }
-    pub fn borrow(&self) -> Ref<dyn SpaceMut> {
+    pub fn borrow(&self) -> Ref<'_, dyn SpaceMut> {
         self.0.borrow()
     }
-    pub fn borrow_mut(&self) -> RefMut<dyn SpaceMut> {
+    pub fn borrow_mut(&self) -> RefMut<'_, dyn SpaceMut> {
         self.0.borrow_mut()
     }
-    pub fn common(&self) -> FlexRef<SpaceCommon> {
+    pub fn common(&self) -> FlexRef<'_, SpaceCommon> {
         FlexRef::from_ref_cell(Ref::map(self.0.borrow(), |space| space.common().into_simple()))
     }
 }

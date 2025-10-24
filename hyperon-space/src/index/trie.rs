@@ -724,7 +724,7 @@ impl TrieNode {
     }
 
     /// Iterate over all of keys in the list
-    pub fn iter_all(&self) -> std::iter::Chain<TrieNodeIndexIter, TrieNodeIndexIter> {
+    pub fn iter_all(&self) -> std::iter::Chain<TrieNodeIndexIter<'_>, TrieNodeIndexIter<'_>> {
         self.iter_match(AtomMatchMode::Unification)
             .chain(self.iter_match(AtomMatchMode::Equality))
     }

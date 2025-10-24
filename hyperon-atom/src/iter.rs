@@ -2,12 +2,12 @@ use super::*;
 
 impl Atom {
     /// Return iterator through all sub-atoms of the [Atom].
-    pub fn iter(&self) -> AtomIter {
+    pub fn iter(&self) -> AtomIter<'_> {
         AtomIter::new(self)
     }
 
     /// Return mutable iterator through all sub-atoms of the [Atom].
-    pub fn iter_mut(&mut self) -> AtomIterMut {
+    pub fn iter_mut(&mut self) -> AtomIterMut<'_> {
         AtomIterMut::new(self)
     }
 }

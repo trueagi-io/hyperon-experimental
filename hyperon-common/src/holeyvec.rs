@@ -106,7 +106,7 @@ impl<T> HoleyVec<T> {
     }
 
     #[inline]
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<'_, T> {
         fn unwrap<T>(cell: &Cell<T>) -> Option<&T> {
             match cell {
                 Cell::Value(value) => Some(value),
@@ -117,7 +117,7 @@ impl<T> HoleyVec<T> {
     }
 
     #[inline]
-    pub fn iter_mut(&mut self) -> IterMut<T> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
         fn unwrap<T>(cell: &mut Cell<T>) -> Option<&mut T> {
             match cell {
                 Cell::Value(value) => Some(value),

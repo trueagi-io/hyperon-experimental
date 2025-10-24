@@ -58,7 +58,7 @@ impl ModuleSpace {
 }
 
 impl Space for ModuleSpace {
-    fn common(&self) -> FlexRef<SpaceCommon> {
+    fn common(&self) -> FlexRef<'_, SpaceCommon> {
         self.main.common()
     }
     fn query(&self, query: &Atom) -> BindingsSet {

@@ -697,7 +697,7 @@ impl CSpace {
 }
 
 impl Space for CSpace {
-    fn common(&self) -> FlexRef<SpaceCommon> {
+    fn common(&self) -> FlexRef<'_, SpaceCommon> {
         FlexRef::from_simple(&(*self.params.common).common)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
@@ -768,7 +768,7 @@ impl std::fmt::Debug for CSpace {
 #[derive(Debug)]
 struct DefaultSpace<'a>(&'a CSpace);
 impl Space for DefaultSpace<'_> {
-    fn common(&self) -> FlexRef<SpaceCommon> { self.0.common() }
+    fn common(&self) -> FlexRef<'_, SpaceCommon> { self.0.common() }
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> { self.0.visit(v) }
     fn as_any(&self) -> &dyn std::any::Any { self.0 }
