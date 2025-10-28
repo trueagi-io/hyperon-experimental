@@ -1,12 +1,13 @@
 use std::{fmt::Debug, sync::{Arc, Mutex}};
 
-use hyperon_atom::{Atom, CustomExecute, ExecError, Grounded};
+use hyperon_atom::{Atom, BoxedIter, CustomExecute, ExecError, Grounded, matcher::Bindings};
 use hyperon_space::{DynSpace, ATOM_TYPE_SPACE};
 use metta_bus_client::{properties::PropertyValue, space::DistributedAtomSpace};
 use metta_bus_client::host_id_from_atom;
-use metta_bus_client::properties::Properties;
+use metta_bus_client::properties::{self as das_properties, Properties};
 
-use crate::metta::{runner::{modules::{MettaMod, ModuleLoader}, stdlib::unit_result}, ATOM_TYPE_ATOM, UNIT_TYPE};
+use crate::metta::{ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, UNIT_TYPE, runner::{modules::{MettaMod, ModuleLoader}, stdlib::unit_result}};
+use crate::metta::gnd::str::ATOM_TYPE_STRING;
 use crate::metta::runner::stdlib::{grounded_op, regex};
 use crate::metta::runner::{Metta, RunContext, SExprParser};
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL};
@@ -43,7 +44,7 @@ impl ModuleLoader for DasModLoader {
 
         let params = Arc::new(Mutex::new(Properties::default()));
 
-        let new_das_op = Atom::gnd(NewDasOp { metta_runner, params: params.clone() });
+        let new_das_op = Atom::gnd(NewDasOp { metta_runner: metta_runner.clone(), params: params.clone() });
         tref.register_token(regex(r"new-das!"), move |_| new_das_op.clone());
 
         let set_params_op = Atom::gnd(SetDasParamOp { params: params.clone() });
@@ -51,6 +52,12 @@ impl ModuleLoader for DasModLoader {
 
         let get_params_op = Atom::gnd(GetDasParamsOp { params: params.clone() });
         tref.register_token(regex(r"das-get-params!"), move |_| { get_params_op.clone() });
+
+        let das_create_context_op = Atom::gnd(CreateContextOp { metta_runner: metta_runner.clone(), params: params.clone() });
+        tref.register_token(regex(r"das-create-context!"), move |_| { das_create_context_op.clone() });
+
+        let das_evolution_op = Atom::gnd(EvolutionDasOp { metta_runner, params: params.clone() });
+        tref.register_token(regex(r"das-evolution!"), move |_| { das_evolution_op.clone() });
 
         Ok(())
     }
@@ -94,14 +101,17 @@ impl CustomExecute for NewDasOp {
             let client = args.get(1).ok_or(ExecError::from(
                 "new-das! second argument must be a valid endpoint (eg. 0.0.0.0:35700)",
             ))?;
-            let (host_id, port_lower, port_upper) = host_id_from_atom(server)?;
+            let (hostname, port_lower, port_upper) = host_id_from_atom(server)?;
             let (known_peer, _, _) = host_id_from_atom(client)?;
+            
+            let mut params = self.params.lock().unwrap();
+            params.insert(das_properties::HOSTNAME.to_string(), PropertyValue::String(hostname.clone()));
+            params.insert(das_properties::PORT_LOWER.to_string(), PropertyValue::UnsignedInt(port_lower.clone() as u64));
+            params.insert(das_properties::PORT_UPPER.to_string(), PropertyValue::UnsignedInt(port_upper.clone() as u64));
+            params.insert(das_properties::KNOWN_PEER_ID.to_string(), PropertyValue::String(known_peer.clone()));
+            drop(params);
+
             let space = Atom::gnd(DynSpace::new(DistributedAtomSpace::new(
-                Some("context".to_string()),
-                host_id,
-                known_peer,
-                port_lower,
-                port_upper,
                 self.params.clone(),
                 self.metta_runner.clone(),
             )));
@@ -196,5 +206,103 @@ impl CustomExecute for GetDasParamsOp {
             println!("'{}': {:?}", key, params.try_get(&key).unwrap().clone());
         }
         unit_result()
+    }
+}
+
+// !(das-create-context ( (query) (determiner_schema) (stimulus_schema) ) )
+#[derive(Clone)]
+pub struct CreateContextOp {
+    params: Arc<Mutex<Properties>>,
+    metta_runner: Arc<dyn Fn(String) -> Result<Vec<Vec<Atom>>, String>>,
+}
+
+impl Debug for CreateContextOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CreateContextOp")
+    }
+}
+
+grounded_op!(CreateContextOp, "das-create-context!");
+
+impl Grounded for CreateContextOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([
+            ARROW_SYMBOL,
+            ATOM_TYPE_STRING,       // context
+            ATOM_TYPE_ATOM,         // ( (query) (determiner_schema) (stimulus_schema) )
+            ATOM_TYPE_UNDEFINED,
+        ])
+        
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CreateContextOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("
+            das-create-context expects 2 arguments: context and ( (query) (determiner_schema) (stimulus_schema) )");
+        if args.len() != 2 {
+            return Err(arg_error());
+        }
+        let context = args.get(0).ok_or_else(arg_error)?.clone();
+        let atom = args.get(1).ok_or_else(arg_error)?.clone();
+        let das_space = DistributedAtomSpace::new(self.params.clone(), self.metta_runner.clone());
+        let result = match das_space.create_context(context.to_string(), &atom) {
+            Ok(result) => result,
+            Err(e) => return Err(ExecError::from(format!("Error at das-create-context: {e}"))),
+        };
+        Ok(vec![result])
+    }
+}
+
+// !(das-evolution ( (query) (fitness-function) (correlation-queries) (correlation-replacements) (correlation-mappings) ) template)
+#[derive(Clone)]
+pub struct EvolutionDasOp {
+    params: Arc<Mutex<Properties>>,
+    metta_runner: Arc<dyn Fn(String) -> Result<Vec<Vec<Atom>>, String>>,
+}
+
+impl Debug for EvolutionDasOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EvolutionDasOp")
+    }
+}
+
+grounded_op!(EvolutionDasOp, "das-evolution!");
+
+impl Grounded for EvolutionDasOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([
+            ARROW_SYMBOL,
+            ATOM_TYPE_ATOM,         // ( (query) (fitness-function) (correlation-queries) (correlation-replacements) (correlation-mappings) )
+            ATOM_TYPE_ATOM,         // template
+            ATOM_TYPE_UNDEFINED,
+        ])
+        
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for EvolutionDasOp {
+    fn execute_bindings(&self, args: &[Atom]) -> Result<BoxedIter<'static, (Atom, Option<Bindings>)>, ExecError> {
+        let arg_error = || ExecError::from("
+            das-evolution expects 2 arguments: ( (query) (fitness-function) (correlation-queries) (correlation-replacements) (correlation-mappings) ) and template");
+        if args.len() != 2 {
+            return Err(arg_error());
+        }
+        let atom = args.get(0).ok_or_else(arg_error)?.clone();
+        let template = args.get(1).ok_or_else(arg_error)?.clone();
+        let das_space = DistributedAtomSpace::new(self.params.clone(), self.metta_runner.clone());
+        let result = match das_space.evolution(&atom) {
+            Ok(result) => result,
+            Err(e) => return Err(ExecError::from(format!("Error at das-evolution: {e}"))),
+        };
+        Ok(Box::new(result.into_iter().map(move |b| (template.clone(), Some(b)))))
     }
 }
