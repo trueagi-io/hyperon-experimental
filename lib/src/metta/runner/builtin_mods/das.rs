@@ -1,20 +1,29 @@
-use std::{fmt::Debug, sync::{Arc, Mutex}};
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
-use hyperon_atom::{Atom, BoxedIter, CustomExecute, ExecError, Grounded, matcher::Bindings};
+use hyperon_atom::{matcher::Bindings, Atom, BoxedIter, CustomExecute, ExecError, Grounded};
 use hyperon_space::{DynSpace, ATOM_TYPE_SPACE};
-use metta_bus_client::{properties::PropertyValue, space::DistributedAtomSpace};
 use metta_bus_client::host_id_from_atom;
 use metta_bus_client::properties::{self as das_properties, Properties};
+use metta_bus_client::{properties::PropertyValue, space::DistributedAtomSpace};
 
-use crate::metta::{ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, UNIT_TYPE, runner::{modules::{MettaMod, ModuleLoader}, stdlib::unit_result}};
 use crate::metta::gnd::str::ATOM_TYPE_STRING;
 use crate::metta::runner::stdlib::{grounded_op, regex};
 use crate::metta::runner::{Metta, RunContext, SExprParser};
+use crate::metta::{
+    runner::{
+        modules::{MettaMod, ModuleLoader},
+        stdlib::unit_result,
+    },
+    ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, UNIT_TYPE,
+};
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL};
 use crate::space::grounding::GroundingSpace;
 
 /// This module expose DAS directly in metta-repl:
-/// 
+///
 /// Run the MeTTa REPL binary:
 /// ./target/release/metta-repl
 /// Visit https://metta-lang.dev/ for tutorials.
@@ -25,7 +34,7 @@ use crate::space::grounding::GroundingSpace;
 /// [()]
 /// > !(match &das (Similarity "human" $S) ($S))
 /// [(a408f6dd446cdd4fa56f82e77fe6c870), (3225ea795289574ceee32e091ad54ef4), (181a19436acef495c8039a610be59603)]
-/// > 
+/// >
 
 /// Loader to Initialize the "das" module
 #[derive(Debug)]
@@ -44,20 +53,35 @@ impl ModuleLoader for DasModLoader {
 
         let params = Arc::new(Mutex::new(Properties::default()));
 
-        let new_das_op = Atom::gnd(NewDasOp { metta_runner: metta_runner.clone(), params: params.clone() });
+        let new_das_op = Atom::gnd(NewDasOp {
+            metta_runner: metta_runner.clone(),
+            params: params.clone(),
+        });
         tref.register_token(regex(r"new-das!"), move |_| new_das_op.clone());
 
-        let set_params_op = Atom::gnd(SetDasParamOp { params: params.clone() });
-        tref.register_token(regex(r"das-set-param!"), move |_| { set_params_op.clone() });
+        let set_params_op = Atom::gnd(SetDasParamOp {
+            params: params.clone(),
+        });
+        tref.register_token(regex(r"das-set-param!"), move |_| set_params_op.clone());
 
-        let get_params_op = Atom::gnd(GetDasParamsOp { params: params.clone() });
-        tref.register_token(regex(r"das-get-params!"), move |_| { get_params_op.clone() });
+        let get_params_op = Atom::gnd(GetDasParamsOp {
+            params: params.clone(),
+        });
+        tref.register_token(regex(r"das-get-params!"), move |_| get_params_op.clone());
 
-        let das_create_context_op = Atom::gnd(CreateContextOp { metta_runner: metta_runner.clone(), params: params.clone() });
-        tref.register_token(regex(r"das-create-context!"), move |_| { das_create_context_op.clone() });
+        let das_create_context_op = Atom::gnd(CreateContextOp {
+            metta_runner: metta_runner.clone(),
+            params: params.clone(),
+        });
+        tref.register_token(regex(r"das-create-context!"), move |_| {
+            das_create_context_op.clone()
+        });
 
-        let das_evolution_op = Atom::gnd(EvolutionDasOp { metta_runner, params: params.clone() });
-        tref.register_token(regex(r"das-evolution!"), move |_| { das_evolution_op.clone() });
+        let das_evolution_op = Atom::gnd(EvolutionDasOp {
+            metta_runner,
+            params: params.clone(),
+        });
+        tref.register_token(regex(r"das-evolution!"), move |_| das_evolution_op.clone());
 
         Ok(())
     }
@@ -103,12 +127,24 @@ impl CustomExecute for NewDasOp {
             ))?;
             let (hostname, port_lower, port_upper) = host_id_from_atom(server)?;
             let (known_peer, _, _) = host_id_from_atom(client)?;
-            
+
             let mut params = self.params.lock().unwrap();
-            params.insert(das_properties::HOSTNAME.to_string(), PropertyValue::String(hostname.clone()));
-            params.insert(das_properties::PORT_LOWER.to_string(), PropertyValue::UnsignedInt(port_lower.clone() as u64));
-            params.insert(das_properties::PORT_UPPER.to_string(), PropertyValue::UnsignedInt(port_upper.clone() as u64));
-            params.insert(das_properties::KNOWN_PEER_ID.to_string(), PropertyValue::String(known_peer.clone()));
+            params.insert(
+                das_properties::HOSTNAME.to_string(),
+                PropertyValue::String(hostname.clone()),
+            );
+            params.insert(
+                das_properties::PORT_LOWER.to_string(),
+                PropertyValue::UnsignedInt(port_lower.clone() as u64),
+            );
+            params.insert(
+                das_properties::PORT_UPPER.to_string(),
+                PropertyValue::UnsignedInt(port_upper.clone() as u64),
+            );
+            params.insert(
+                das_properties::KNOWN_PEER_ID.to_string(),
+                PropertyValue::String(known_peer.clone()),
+            );
             drop(params);
 
             let space = Atom::gnd(DynSpace::new(DistributedAtomSpace::new(
@@ -151,22 +187,29 @@ impl CustomExecute for SetDasParamOp {
         let arg_error = || ExecError::from("das-set-param! expects only one argument: atom");
         let atom = args.get(0).ok_or_else(arg_error)?;
         match atom {
-			Atom::Expression(exp_atom) => {
-				let mut params = self.params.lock().unwrap();
-				let children = exp_atom.children();
+            Atom::Expression(exp_atom) => {
+                let mut params = self.params.lock().unwrap();
+                let children = exp_atom.children();
                 if children.len() != 2 {
                     return Err(ExecError::from("das-set-param! expects an expression with two arguments: key and value, eg. !(das-set-param! (max_answers 100))"));
                 }
                 let key = children[0].to_string();
                 if params.try_get(&key).is_none() {
-                    return Err(ExecError::from(format!("DAS Param '{}' does not exist", key)));
+                    return Err(ExecError::from(format!(
+                        "DAS Param '{}' does not exist",
+                        key
+                    )));
                 }
                 let value = PropertyValue::parse_str(&children[1].to_string()).unwrap();
                 params.insert(key.clone(), value.clone());
                 println!("DAS Param Updated: '{}': {:?}", key, value);
-			},
-			_ => return Err(ExecError::from("das-set-param! expects an atom as the argument")),
-		}
+            }
+            _ => {
+                return Err(ExecError::from(
+                    "das-set-param! expects an atom as the argument",
+                ))
+            }
+        }
 
         unit_result()
     }
@@ -200,7 +243,7 @@ impl CustomExecute for GetDasParamsOp {
         if args.len() != 0 {
             return Err(ExecError::from("das-get-params! expects no arguments"));
         }
-		let params = self.params.lock().unwrap();
+        let params = self.params.lock().unwrap();
         println!("DAS Params:");
         for key in params.keys() {
             println!("'{}': {:?}", key, params.try_get(&key).unwrap().clone());
@@ -228,11 +271,10 @@ impl Grounded for CreateContextOp {
     fn type_(&self) -> Atom {
         Atom::expr([
             ARROW_SYMBOL,
-            ATOM_TYPE_STRING,       // context
-            ATOM_TYPE_ATOM,         // ( (query) (determiner_schema) (stimulus_schema) )
+            ATOM_TYPE_STRING, // context
+            ATOM_TYPE_ATOM,   // ( (query) (determiner_schema) (stimulus_schema) )
             ATOM_TYPE_UNDEFINED,
         ])
-        
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -242,8 +284,10 @@ impl Grounded for CreateContextOp {
 
 impl CustomExecute for CreateContextOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("
-            das-create-context expects 2 arguments: context and ( (query) (determiner_schema) (stimulus_schema) )");
+        let arg_error = || {
+            ExecError::from("
+            das-create-context expects 2 arguments: context and ( (query) (determiner_schema) (stimulus_schema) )")
+        };
         if args.len() != 2 {
             return Err(arg_error());
         }
@@ -277,11 +321,10 @@ impl Grounded for EvolutionDasOp {
     fn type_(&self) -> Atom {
         Atom::expr([
             ARROW_SYMBOL,
-            ATOM_TYPE_ATOM,         // ( (query) (fitness-function) (correlation-queries) (correlation-replacements) (correlation-mappings) )
-            ATOM_TYPE_ATOM,         // template
+            ATOM_TYPE_ATOM, // ( (query) (fitness-function) (correlation-queries) (correlation-replacements) (correlation-mappings) )
+            ATOM_TYPE_ATOM, // template
             ATOM_TYPE_UNDEFINED,
         ])
-        
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -290,9 +333,14 @@ impl Grounded for EvolutionDasOp {
 }
 
 impl CustomExecute for EvolutionDasOp {
-    fn execute_bindings(&self, args: &[Atom]) -> Result<BoxedIter<'static, (Atom, Option<Bindings>)>, ExecError> {
-        let arg_error = || ExecError::from("
-            das-evolution expects 2 arguments: ( (query) (fitness-function) (correlation-queries) (correlation-replacements) (correlation-mappings) ) and template");
+    fn execute_bindings(
+        &self,
+        args: &[Atom],
+    ) -> Result<BoxedIter<'static, (Atom, Option<Bindings>)>, ExecError> {
+        let arg_error = || {
+            ExecError::from("
+            das-evolution expects 2 arguments: ( (query) (fitness-function) (correlation-queries) (correlation-replacements) (correlation-mappings) ) and template")
+        };
         if args.len() != 2 {
             return Err(arg_error());
         }
@@ -303,6 +351,8 @@ impl CustomExecute for EvolutionDasOp {
             Ok(result) => result,
             Err(e) => return Err(ExecError::from(format!("Error at das-evolution: {e}"))),
         };
-        Ok(Box::new(result.into_iter().map(move |b| (template.clone(), Some(b)))))
+        Ok(Box::new(
+            result.into_iter().map(move |b| (template.clone(), Some(b))),
+        ))
     }
 }
