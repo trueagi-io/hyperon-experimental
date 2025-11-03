@@ -59,19 +59,31 @@ impl ModuleLoader for DasModLoader {
         });
         tref.register_token(regex(r"new-das!"), move |_| new_das_op.clone());
 
-        let das_join_network_op = Atom::gnd(DasJoinNetworkOp { params: params.clone()});
-        tref.register_token(regex(r"das-join-network!"), move |_| das_join_network_op.clone());
+        let das_join_network_op = Atom::gnd(DasJoinNetworkOp {
+            params: params.clone(),
+        });
+        tref.register_token(regex(r"das-join-network!"), move |_| {
+            das_join_network_op.clone()
+        });
 
-        let das_services_op = Atom::gnd(DasServicesOp { params: params.clone()});
+        let das_services_op = Atom::gnd(DasServicesOp {
+            params: params.clone(),
+        });
         tref.register_token(regex(r"das-services!"), move |_| das_services_op.clone());
 
-        let set_params_op = Atom::gnd(SetDasParamOp { params: params.clone()});
+        let set_params_op = Atom::gnd(SetDasParamOp {
+            params: params.clone(),
+        });
         tref.register_token(regex(r"das-set-param!"), move |_| set_params_op.clone());
 
-        let get_params_op = Atom::gnd(GetDasParamsOp { params: params.clone()});
+        let get_params_op = Atom::gnd(GetDasParamsOp {
+            params: params.clone(),
+        });
         tref.register_token(regex(r"das-get-params!"), move |_| get_params_op.clone());
 
-        let das_create_context_op = Atom::gnd(CreateContextOp { params: params.clone()});
+        let das_create_context_op = Atom::gnd(CreateContextOp {
+            params: params.clone(),
+        });
         tref.register_token(regex(r"das-create-context!"), move |_| {
             das_create_context_op.clone()
         });
@@ -81,6 +93,13 @@ impl ModuleLoader for DasModLoader {
             params: params.clone(),
         });
         tref.register_token(regex(r"das-evolution!"), move |_| das_evolution_op.clone());
+
+        let das_link_creation_op = Atom::gnd(LinkCreationDasOp {
+            params: params.clone(),
+        });
+        tref.register_token(regex(r"das-link-creation!"), move |_| {
+            das_link_creation_op.clone()
+        });
 
         Ok(())
     }
@@ -146,7 +165,10 @@ impl CustomExecute for NewDasOp {
             );
             drop(params);
 
-            let das_space = match DistributedAtomSpace::new(self.params.clone(), self.maybe_metta_runner.clone()) {
+            let das_space = match DistributedAtomSpace::new(
+                self.params.clone(),
+                self.maybe_metta_runner.clone(),
+            ) {
                 Ok(space) => space,
                 Err(e) => return Err(ExecError::from(format!("Error at new-das: {e}"))),
             };
@@ -189,8 +211,11 @@ impl CustomExecute for DasJoinNetworkOp {
         if args.len() != 0 {
             return Err(arg_error());
         }
-        let mut das_space = DistributedAtomSpace::new(self.params.clone(), None).map_err(|e| ExecError::from(format!("{e}")))?;
-        das_space.join_network().map_err(|e| ExecError::from(format!("{e}")))?;
+        let mut das_space = DistributedAtomSpace::new(self.params.clone(), None)
+            .map_err(|e| ExecError::from(format!("{e}")))?;
+        das_space
+            .join_network()
+            .map_err(|e| ExecError::from(format!("{e}")))?;
         unit_result()
     }
 }
@@ -224,8 +249,11 @@ impl CustomExecute for DasServicesOp {
         if args.len() != 0 {
             return Err(arg_error());
         }
-        let das_space = DistributedAtomSpace::new(self.params.clone(), None).map_err(|e| ExecError::from(format!("{e}")))?;
-        das_space.print_services().map_err(|e| ExecError::from(format!("{e}")))?;
+        let das_space = DistributedAtomSpace::new(self.params.clone(), None)
+            .map_err(|e| ExecError::from(format!("{e}")))?;
+        das_space
+            .print_services()
+            .map_err(|e| ExecError::from(format!("{e}")))?;
         unit_result()
     }
 }
@@ -360,8 +388,11 @@ impl CustomExecute for CreateContextOp {
         }
         let context = args.get(0).ok_or_else(arg_error)?.clone();
         let atom = args.get(1).ok_or_else(arg_error)?.clone();
-        let das_space = DistributedAtomSpace::new(self.params.clone(), None).map_err(|e| ExecError::from(format!("{e}")))?;
-        let result = das_space.create_context(context.to_string(), &atom).map_err(|e| ExecError::from(format!("{e}")))?;
+        let das_space = DistributedAtomSpace::new(self.params.clone(), None)
+            .map_err(|e| ExecError::from(format!("{e}")))?;
+        let result = das_space
+            .create_context(context.to_string(), &atom)
+            .map_err(|e| ExecError::from(format!("{e}")))?;
         Ok(vec![result])
     }
 }
@@ -410,8 +441,56 @@ impl CustomExecute for EvolutionDasOp {
         }
         let atom = args.get(0).ok_or_else(arg_error)?.clone();
         let t = args.get(1).ok_or_else(arg_error)?.clone();
-        let das_space = DistributedAtomSpace::new(self.params.clone(), self.maybe_metta_runner.clone()).map_err(|e| ExecError::from(format!("{e}")))?;
-        let r = das_space.evolution(&atom).map_err(|e| ExecError::from(format!("{e}")))?;
+        let das_space =
+            DistributedAtomSpace::new(self.params.clone(), self.maybe_metta_runner.clone())
+                .map_err(|e| ExecError::from(format!("{e}")))?;
+        let r = das_space
+            .evolution(&atom)
+            .map_err(|e| ExecError::from(format!("{e}")))?;
         Ok(Box::new(r.into_iter().map(move |b| (t.clone(), Some(b)))))
+    }
+}
+
+#[derive(Clone)]
+pub struct LinkCreationDasOp {
+    params: Arc<Mutex<Properties>>,
+}
+
+impl Debug for LinkCreationDasOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LinkCreationDasOp")
+    }
+}
+
+grounded_op!(LinkCreationDasOp, "das-link-creation!");
+
+impl Grounded for LinkCreationDasOp {
+    fn type_(&self) -> Atom {
+        Atom::sym("LinkCreationDas")
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for LinkCreationDasOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || {
+            ExecError::from(
+                "das-link-creation expects the arguments: query and at least one template",
+            )
+        };
+        if args.len() < 2 {
+            return Err(arg_error());
+        }
+        let query = args.get(0).ok_or_else(arg_error)?.clone();
+        let templates = args.get(1..).ok_or_else(arg_error)?.to_vec();
+        let das_space = DistributedAtomSpace::new(self.params.clone(), None)
+            .map_err(|e| ExecError::from(format!("{e}")))?;
+        let result = das_space
+            .link_creation(&query, templates)
+            .map_err(|e| ExecError::from(format!("{e}")))?;
+        Ok(vec![result])
     }
 }
