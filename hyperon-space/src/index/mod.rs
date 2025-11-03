@@ -6,6 +6,7 @@ use trie::*;
 
 use hyperon_atom::*;
 use hyperon_atom::matcher::Bindings;
+use hyperon_macros::metta_const;
 
 use std::fmt::{Debug, Display};
 use std::borrow::Cow;
@@ -69,6 +70,8 @@ impl<'a> AtomIter<'a> {
     }
 }
 
+const PLACEHOLDER: Atom = metta_const!(_);
+
 impl<'a> Iterator for AtomIter<'a> {
     type Item = AtomToken<'a>;
 
@@ -104,7 +107,7 @@ impl<'a> Iterator for AtomIter<'a> {
                             match expr {
                                 Cow::Owned(ref mut e) => {
                                     let cell = unsafe { e.children_mut().get_unchecked_mut(idx) };
-                                    let atom = std::mem::replace(cell, Atom::sym(""));
+                                    let atom = std::mem::replace(cell, PLACEHOLDER);
                                     (Cow::Owned(atom), expr)
                                 },
                                 Cow::Borrowed(e) => {
