@@ -151,7 +151,7 @@ impl CustomExecute for NewDasOp {
                 "new-das! first argument must be a valid endpoint with port range (eg. 0.0.0.0:42000-42999)",
             ))?;
             let client = args.get(1).ok_or(ExecError::from(
-                "new-das! second argument must be a valid endpoint (eg. 0.0.0.0:35700)",
+                "new-das! second argument must be a valid endpoint (eg. 0.0.0.0:40002)",
             ))?;
             let (hostname, port_lower, port_upper) = host_id_from_atom(server)?;
             let (known_peer, _, _) = host_id_from_atom(client)?;
@@ -187,7 +187,7 @@ impl CustomExecute for NewDasOp {
             log::debug!(target: "das", "new-das! initialized.");
             Ok(vec![space])
         } else {
-            Err("new-das! expects 2 arguments, eg. !(bind! &das (new-das! 0.0.0.0:42000-42999 0.0.0.0:35700))".into())
+            Err("new-das! expects 2 arguments, eg. !(bind! &das (new-das! 0.0.0.0:42000-42999 0.0.0.0:40002))".into())
         }
     }
 }
