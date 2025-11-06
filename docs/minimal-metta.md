@@ -129,6 +129,10 @@ function calls as a stack and provide controls to put the breakpoints on parts
 of this stack. Nevertheless using `chain` instead of `function` to implement
 the evaluation loop also allows representing stack in a natural form.
 
+Evaluation of the `function` should always end by evaluating `(return <atom>)`
+expression. But as a result of an error some branch may end by non evaluatable
+atom instead. In such case interpreter returns `(Error NoReturn)` error.
+
 ## unify
 
 `unify` operation allows conditioning on the results of the evaluation.
