@@ -1,12 +1,14 @@
 use std::{
     fmt::Debug,
     sync::{Arc, Mutex},
+    thread::sleep,
+    time::Duration,
 };
 
 use hyperon_atom::{matcher::Bindings, Atom, BoxedIter, CustomExecute, ExecError, Grounded};
 use hyperon_space::{DynSpace, ATOM_TYPE_SPACE};
-use metta_bus_client::host_id_from_atom;
 use metta_bus_client::properties::{self as das_properties, Properties};
+use metta_bus_client::{host_id_from_atom, service_bus_singleton::ServiceBusSingleton};
 use metta_bus_client::{properties::PropertyValue, space::DistributedAtomSpace};
 
 use crate::metta::gnd::str::ATOM_TYPE_STRING;
@@ -71,6 +73,11 @@ impl ModuleLoader for DasModLoader {
         });
         tref.register_token(regex(r"das-services!"), move |_| das_services_op.clone());
 
+        let das_service_status_op = Atom::gnd(DasServiceStatusOp {});
+        tref.register_token(regex(r"das-service-status!"), move |_| {
+            das_service_status_op.clone()
+        });
+
         let set_params_op = Atom::gnd(SetDasParamOp {
             params: params.clone(),
         });
@@ -100,6 +107,9 @@ impl ModuleLoader for DasModLoader {
         tref.register_token(regex(r"das-link-creation!"), move |_| {
             das_link_creation_op.clone()
         });
+
+        let das_helpers_op = Atom::gnd(DasHelpersOp {});
+        tref.register_token(regex(r"das-helpers!"), move |_| das_helpers_op.clone());
 
         Ok(())
     }
@@ -255,6 +265,72 @@ impl CustomExecute for DasServicesOp {
             .print_services()
             .map_err(|e| ExecError::from(format!("{e}")))?;
         unit_result()
+    }
+}
+
+#[derive(Clone)]
+pub struct DasServiceStatusOp {}
+
+impl Debug for DasServiceStatusOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DasServiceStatusOp")
+    }
+}
+
+grounded_op!(DasServiceStatusOp, "das-service-status!");
+
+impl Grounded for DasServiceStatusOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_STRING, UNIT_TYPE])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for DasServiceStatusOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error =
+            || ExecError::from("das-service-status! expects one argument: service name");
+        if args.len() != 1 {
+            return Err(arg_error());
+        }
+        let service_name = args.get(0).ok_or_else(arg_error)?.to_string();
+        let service_bus =
+            ServiceBusSingleton::get_instance().map_err(|e| ExecError::from(format!("{e}")))?;
+        let mut locked_bus = service_bus.bus_node.lock().unwrap().bus.clone();
+        // First check if the service is already available
+        if locked_bus.contains(service_name.to_string()) {
+            if locked_bus
+                .get_ownership(service_name.to_string())
+                .is_empty()
+            {
+                log::debug!(target: "das", "Dropping locked bus for service: {}", service_name);
+                drop(locked_bus);
+                sleep(Duration::from_secs(5));
+            }
+            locked_bus = service_bus.bus_node.lock().unwrap().bus.clone();
+            // If the service is not available, wait for 5 seconds and check again
+            if locked_bus
+                .get_ownership(service_name.to_string())
+                .is_empty()
+            {
+                return Err(ExecError::from(format!(
+                    "ServiceNotAvailable: {}",
+                    service_name
+                )));
+            }
+        } else {
+            return Err(ExecError::from(format!(
+                "ServiceNotRegistered: {}",
+                service_name
+            )));
+        }
+        Ok(vec![Atom::sym(format!(
+            "ServiceAvailable: {}",
+            service_name
+        ))])
     }
 }
 
@@ -492,5 +568,59 @@ impl CustomExecute for LinkCreationDasOp {
             .link_creation(&query, templates)
             .map_err(|e| ExecError::from(format!("{e}")))?;
         Ok(vec![result])
+    }
+}
+
+#[derive(Clone)]
+pub struct DasHelpersOp {}
+
+impl Debug for DasHelpersOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DasHelpersOp")
+    }
+}
+
+grounded_op!(DasHelpersOp, "das-helpers!");
+
+impl Grounded for DasHelpersOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for DasHelpersOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || {
+            ExecError::from(
+                "das-helpers! expects 2 arguments: helper function name and its argument",
+            )
+        };
+        if args.len() != 2 {
+            return Err(arg_error());
+        }
+        let helper_name = args.get(0).ok_or_else(arg_error)?.to_string();
+        let argument = args.get(1).ok_or_else(arg_error)?.to_string();
+        match helper_name.as_str() {
+            "sleep" => {
+                let duration = match argument.parse::<u64>() {
+                    Ok(duration) => duration,
+                    Err(_) => {
+                        return Err(ExecError::from(format!("Invalid duration: {}", argument)))
+                    }
+                };
+                sleep(Duration::from_secs(duration));
+                unit_result()
+            }
+            _ => {
+                return Err(ExecError::from(format!(
+                    "Helper function {} not found",
+                    helper_name
+                )));
+            }
+        }
     }
 }
