@@ -111,8 +111,11 @@ There are the number of symbols which are used as the basic types:
 - `Expression` - the type of the expression atom
 - `Grounded` - the type of the grounded atom
 
-All of them except the `Type` affect the order of the expression evaluation
-(TODO add link).
+All of them except the `Type` affect the order of the expression evaluation.
+Last four types correspond to the types of the atoms defined by the grammar.
+These types plus `Atom` are referred below as meta-types. `Atom` is a special
+meta-type which matches any atom and used for changing the order of evaluation.
+
 
 ### Special function results
 
@@ -134,7 +137,7 @@ where `<error message>` is either a string or a symbol or one of the following:
   for more information)
 - `IncorrectNumberOfArguments` - the number of argument in the call doesn't
   equal to the number of parameters of the called function
-- `(BadArgType <arg position> <expected type> <actual type>)`- the argument
+- `(BadArgType <arg position> <expected type> <actual type>)` - the argument
   type error
 - `(BadType <expected type> <actual type>)` - the type cast error
 
@@ -189,7 +192,352 @@ Minimal MeTTa instructions:
 (*) `call-native` instruction cannot be called from a MeTTa program, but it can
 be returned by a grounded function for the further evaluation.
 
-# Evaluation
+# Interpretation
 
-MeTTa program is evaluated atom by atom. If atom is not prefixed by '!' it is
-added into the top atomspace.
+MeTTa program is interpreted atom by atom. If an atom is not prefixed by `!` it
+is added into the atomspace of the top module. Hierarchy of modules is
+explained later. For now one can count that there is no atomspaces except the
+top module's atomspace. When an atom is prefixed by `!` sign it is evaluated
+and the result of the evaluation is returned to the user. The result is not
+added into the atomspace. The "atom by atom" evaluation means that each atom
+sees the effects which were applied by the preceding atom evaluations or
+atomspace modifications.
+
+The evaluation of the atom is a call of the `metta` symbol with four arguments:
+atom to be evaluated, expected type, context space, and variable bindings. The
+expected type of the evaluated atom is `%Undefined%` because we don't have the
+syntax for specifying it. The variable bindings are empty at the beginning of
+the evaluation.
+
+`metta` symbol itself is a part of the interpreter implementation. It allows
+calling the interpreter within the MeTTa program itself. Thus the algorithm of
+the evaluation of the `metta` symbol is the algorithm of the interpreter
+implementation. This algorithm is listed below in [Evaluation section](#evaluation).
+This algorithm is not equal to the Rust implementation of the HE but in many
+aspects it is similar and usually one can see the correspondence with the Rust
+code.
+
+The algorithm is presented in a form of a program on some Python-like pseudo
+programming language.  `<...>` notation is used to embed the statements which
+depend on the data structures used because this details are not the part of the
+specification. The names of the variables in the pseudo code are started with
+`$` sign to differentiate them from MeTTa symbols which are written in the same
+way they are used in MeTTa programs. Also there is a `~` operator which
+designates the matching of the atom variable with some atom pattern. This
+operator is used to make the specification shorter.
+
+Two special functions are not specified: `match_atoms` and `merge_bindings`.
+They will be specified in the following sections. For now one can rely on
+intuitive understanding how two-side unification and bindings merging works.
+
+## Evaluation
+
+### Evaluate atom (metta)
+
+```
+Input:
+- $atom - atom to be evaluated
+- $type - expected type of the result
+- $space - context atomspace
+- $bindings - current variable bindings
+
+Output:
+- [(Atom, Bindings)]
+
+$metatype =  <meta-type of the $atom>
+if $atom == Empty or $atom ~ (Error ...):
+    return [($atom, $bindings)]
+elif $type == Atom or $type == $metatype or $metatype == Variable:
+    return [(atom, bindings)]
+elif $metatype == Expression and <$atom is evaluated already>:
+    return [(atom, bindings)]
+elif $metatype == Symbol or $metatype == Grounded or $atom == ():
+    return type_cast(atom, bindings, type, space)
+else:
+    $results = interpret_expression($atom, $type, $space, $bindings)
+    $error = filter(lambda $a: $a ~ (Error ...), $results)
+    $success = filter(lambda $a: not($a ~ (Error ...)), $results)
+    if len($success) > 0:
+        for $a in $success:
+            if <$a is expression>:
+                # this is an optimization step
+                <mark $a as evaluated>
+        return $success
+    else:
+        return $error
+```
+
+### Cast types (type_cast)
+
+```
+Input:
+- $atom - atom to cast
+- $type - type to cast to
+- $space - context atomspace
+- $bindings - current variable bindings
+
+Output:
+- [(Atom, Bindings)]
+
+$types = <list of the types of the $atom from the $space>
+$no_match = []
+for $t in $types:
+    $matches = match_types($t, $type, $bindings):
+    if $matches == []:
+        $no_match += [$t]
+    else:
+        return [($atom, $m) for $m in $matches]
+return [((Error $atom (BadType $type $t)), $bindings) for $t in $no_match]
+```
+
+### Match types (match_types)
+
+```
+Input:
+- $type1 - first type
+- $type2 - second type
+- $bindings - current variable bindings
+
+Output:
+- [Bindings]
+
+if $type1 == %Undefined% or $type1 == Atom
+    or $type2 == %Undefined% or $type2 == Atom:
+        return [$bindings]
+
+return match_atoms($type1, $type2)
+```
+
+### Interpret expression (interpret_expression)
+
+```
+Input:
+- $atom - atom to be evaluated
+- $type - expected type of the result
+- $space - context atomspace
+- $bindings - current variable bindings
+
+Output:
+- [(Atom, Bindings)]
+
+$op = <first item of the $atom tuple>
+if <$op is an atom with incorrect type>:
+    # it may happen if $op is a function call
+    return <list of (Error $op (BadArgType ...)) for each erroneous type found>
+$actual_types = <list of the types of the $op>
+
+$errors = []
+for $f in <items from $actual_types which are valid function types>:
+    match check_if_function_type_is_applicable($atom, $f, $type, $space, $bindings):
+        case Err($errs):
+            $errors += [($e, $bindings) for $e in $errs]
+        case Ok($succs):
+            $ret_type = <return type of $f>
+            if $ret_type == Expression:
+                # it is to prevent Expression working like Atom return type
+                $ret_type = %Undefined%
+            $result = []
+            for $b in $succs:
+                for ($a, $b) in interpret_function($atom, $f, $type, $space, $b):
+                    result += metta_call($a, $ret_type, $space, $b)
+                return $result
+
+$tuples = []
+if <$actual_types contains non function types or %Undefined% type>:
+    for ($a, $b) in interpret_tuple($atom, $space, $bindings):
+        $tuples += metta_call($a, $type, $space, $b)
+
+return $tuples + $errors
+```
+
+### Interpret tuple (interpret_tuple)
+
+```
+Input:
+- $atom - atom to be evaluated
+- $space - context atomspace
+- $bindings - current variable bindings
+
+Output:
+- [(Atom, Bindings)]
+
+$result = []
+$head = <head of the $atom tuple>
+$tail = <tail of the $atom tuple>
+for ($h, $hb) in metta($head, %Undefined%, $space, $bindings):
+    if $h == Empty or $h ~ (Error ...):
+        $result += [($h, $hb)]
+    else:
+        for ($t, $tb) in interpret_tuple($tail, $space, $hb):
+            if $t == Empty or $t ~ (Error ...):
+                $result += [($t, $tb)]
+            else:
+                $result += [(<tuple with head $h and tail $t>, $tb)]
+return $result
+```
+
+### Check if function type is applicable (check_if_function_type_is_applicable)
+
+```
+Input:
+- $atom - function call to check
+- $func_type - function type
+- $expected_type - expected return type
+- $space - context atomspace
+- $bindings - current variable bindings
+
+Output:
+- Err([Atom]) | Ok([Bindings])
+
+if <number of arguments in $func_type> != <number of arguments in $atom>:
+    return [Err((Error $atom IncorrectNumberOfArguments), $bindings)]
+
+$errors = []
+$results = [$bindings]
+for $idx in range(1, len($atom)):
+    $arg = $atom[$idx]
+    $next = []
+    for $r in $results:
+        $check = check_argument_type($arg, $func_type[$idx], $space, $r)
+        for $c in $check:
+            if $c ~ Err($t):
+                $errors += [(Error $atom (BadArgType ($idx - 1) $func_type[$idx] $t))]
+            if $c ~ Ok($b):
+                $next += [$b]
+    $results = $next
+
+$next = []
+for $r in $results:
+    $matched = match_types($expected_type, $func_type.last, $r)
+    if matched == []:
+        $errors += [(Error $atom (BadType $expected_type $func_type.last))]
+    else:
+        $next += $matched
+$results = $next
+
+if len($results) == 0:
+    return Err($errors)
+else:
+    return Ok($results)
+```
+
+### Check argument type (check_argument_type)
+
+```
+Input:
+- $argument - argument to check
+- $expected_type - expected type
+- $space - context atomspace
+- $bindings - current variable bindings
+
+Output:
+- [Err(Type) | Ok(Bindings)]
+
+$actual_types = <list of the types of the $argument from the $space>
+$result = []
+for $t in $actual_types:
+    $matched = match_types($expected_type, $t, $bindings)
+    if $matches == []:
+        $result += [Err($t)]
+    else:
+        $result += [Ok($m) for $m in $matches]
+return $result
+```
+
+### Interpret function (interpret_function)
+```
+Input:
+- $atom - atom to be evaluated
+- $op_type - type of the function
+- $return_type - expected return type
+- $space - context atomspace
+- $bindings - current variable bindings
+
+Output:
+- [(Atom, Bindings)]
+
+$result = []
+$op = <head of the $atom tuple>
+$args = <tail of the $atom tuple>
+$arg_types = <list of the argument types extracted from $op_type>
+for ($h, $hb) in metta($op, $op_type, $space, $bindings):
+    if $h == Empty or $h ~ (Error ...):
+        $result += [($h, $hb)]
+    else:
+        for ($t, $tb) in interpret_args($args, $arg_types, $space, $hb):
+            if $t == Empty or $t ~ (Error ...):
+                $result += [($t, $tb)]
+            else:
+                $result += [(<tuple with head $h and tail $t>, $tb)]
+return $result
+```
+
+### Interpret arguments (interpret_args)
+
+```
+Input:
+- $args - args to be evaluated
+- $types - types of the args
+- $space - context atomspace
+- $bindings - current variable bindings
+
+Output:
+- [(Atom, Bindings)]
+
+$result = []
+$atom = <head of the $args tuple>
+$args_tail = <tail of the $args tuple>
+$type = <head of the $types tuple>
+$types_tail = <tail of the $types tuple>
+for ($h, $hb) in metta($atom, $type, $space, $bindings):
+    if ($h == Empty or $h ~ (Error ...)) and $h != $atom:
+        $result += [($h, $hb)]
+    else:
+        for ($t, $tb) in interpret_args($args_tail, $types_tail, $space, $hb):
+            if $t == Empty or $t ~ (Error ...):
+                $result += [($t, $tb)]
+            else:
+                $result += [(<tuple with head $h and tail $t>, $tb)]
+return $result
+```
+
+### Call MeTTa expression (metta_call)
+
+```
+Input:
+- $atom - atom to be evaluated
+- $type - expected type of the result
+- $space - context atomspace
+- $bindings - current variable bindings
+
+Output:
+- [(Atom, Bindings)]
+
+if $atom ~ (Error ...):
+    return [($atom, $bindings)]
+
+$op = <head atom of the $atom expression>
+$args = <tail of the $atom expression>
+$results = []
+if <$op is executable grounded atom>:
+    match <call $op native function passing $args as arguments>:
+        case Ok($results):
+            $results = [metta($r, $type, $space, $mb) for ($r, $rb) in $results for $mb in merge_bindings($rb, $bindings)]
+        case RuntimeError($message):
+            return [(Error $atom <symbol atom containing $message>)]
+        case NoReduce:
+            return [($atom, $bindings)]
+        case IncorrectArgument:
+            return [($atom, $bindings)]
+else:
+    for $rb in query($space, (= $atom $X)):
+        for $mb in merge_bindings($rb, $bindings):
+            if not(<$mb has loop bindings>) and <$mb contains value for the $X variable>:
+                $x = <get value of the $X variable from $mb>
+                $results += [metta($x, $type, $space, $mb)]
+
+if len($results) == 0:
+    return [(Empty, $bindings)]
+else:
+    return $results
+```
