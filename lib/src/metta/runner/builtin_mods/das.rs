@@ -5,7 +5,10 @@ use std::{
     time::Duration,
 };
 
-use hyperon_atom::{matcher::Bindings, Atom, BoxedIter, CustomExecute, ExecError, Grounded};
+use hyperon_atom::{
+    expr, gnd::GroundedFunctionAtom, matcher::Bindings, Atom, BoxedIter, CustomExecute, ExecError,
+    Grounded,
+};
 use hyperon_space::{DynSpace, ATOM_TYPE_SPACE};
 use metta_bus_client::properties::{self as das_properties, Properties};
 use metta_bus_client::{host_id_from_atom, service_bus_singleton::ServiceBusSingleton};
@@ -73,10 +76,11 @@ impl ModuleLoader for DasModLoader {
         });
         tref.register_token(regex(r"das-services!"), move |_| das_services_op.clone());
 
-        let das_service_status_op = Atom::gnd(DasServiceStatusOp {});
-        tref.register_token(regex(r"das-service-status!"), move |_| {
-            das_service_status_op.clone()
-        });
+        tref.register_function(GroundedFunctionAtom::new(
+            r"das-service-status!".into(),
+            expr!("->" "ServiceName" ("->")),
+            |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { das_service_status(args) },
+        ));
 
         let set_params_op = Atom::gnd(SetDasParamOp {
             params: params.clone(),
@@ -268,70 +272,46 @@ impl CustomExecute for DasServicesOp {
     }
 }
 
-#[derive(Clone)]
-pub struct DasServiceStatusOp {}
-
-impl Debug for DasServiceStatusOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DasServiceStatusOp")
+fn das_service_status(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    let arg_error = || ExecError::from("das-service-status! expects one argument: service name");
+    if args.len() != 1 {
+        return Err(arg_error());
     }
-}
-
-grounded_op!(DasServiceStatusOp, "das-service-status!");
-
-impl Grounded for DasServiceStatusOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_STRING, UNIT_TYPE])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for DasServiceStatusOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error =
-            || ExecError::from("das-service-status! expects one argument: service name");
-        if args.len() != 1 {
-            return Err(arg_error());
+    let service_name = args.get(0).ok_or_else(arg_error)?.to_string();
+    let service_bus =
+        ServiceBusSingleton::get_instance().map_err(|e| ExecError::from(format!("{e}")))?;
+    let mut locked_bus = service_bus.bus_node.lock().unwrap().bus.clone();
+    // First check if the service is already available
+    if locked_bus.contains(service_name.to_string()) {
+        if locked_bus
+            .get_ownership(service_name.to_string())
+            .is_empty()
+        {
+            log::debug!(target: "das", "Dropping locked bus for service: {}", service_name);
+            drop(locked_bus);
+            sleep(Duration::from_secs(5));
         }
-        let service_name = args.get(0).ok_or_else(arg_error)?.to_string();
-        let service_bus =
-            ServiceBusSingleton::get_instance().map_err(|e| ExecError::from(format!("{e}")))?;
-        let mut locked_bus = service_bus.bus_node.lock().unwrap().bus.clone();
-        // First check if the service is already available
-        if locked_bus.contains(service_name.to_string()) {
-            if locked_bus
-                .get_ownership(service_name.to_string())
-                .is_empty()
-            {
-                log::debug!(target: "das", "Dropping locked bus for service: {}", service_name);
-                drop(locked_bus);
-                sleep(Duration::from_secs(5));
-            }
-            locked_bus = service_bus.bus_node.lock().unwrap().bus.clone();
-            // If the service is not available, wait for 5 seconds and check again
-            if locked_bus
-                .get_ownership(service_name.to_string())
-                .is_empty()
-            {
-                return Err(ExecError::from(format!(
-                    "ServiceNotAvailable: {}",
-                    service_name
-                )));
-            }
-        } else {
+        locked_bus = service_bus.bus_node.lock().unwrap().bus.clone();
+        // If the service is not available, wait for 5 seconds and check again
+        if locked_bus
+            .get_ownership(service_name.to_string())
+            .is_empty()
+        {
             return Err(ExecError::from(format!(
-                "ServiceNotRegistered: {}",
+                "ServiceNotAvailable: {}",
                 service_name
             )));
         }
-        Ok(vec![Atom::sym(format!(
-            "ServiceAvailable: {}",
+    } else {
+        return Err(ExecError::from(format!(
+            "ServiceNotRegistered: {}",
             service_name
-        ))])
+        )));
     }
+    Ok(vec![Atom::sym(format!(
+        "ServiceAvailable: {}",
+        service_name
+    ))])
 }
 
 #[derive(Clone)]

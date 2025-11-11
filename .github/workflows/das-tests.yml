@@ -48,21 +48,17 @@ jobs:
           cd "$TEMP_DIR"
           git clone https://github.com/singnet/das-toolbox.git
           cd das-toolbox
-          git checkout tags/0.5.0
-          cd das-cli/src
-          # TODO: should be a part of das-cli/setup.py file
-          python3 -m pip install -r requirements.txt
-          # TODO: -e should not be needed and temporary dir could be cleaned
-          # up after installation
-          python3 -m pip install -e .
+          git checkout tags/0.5.9
+          python3 -m pip install ./das-cli
           cd "$GITHUB_WORKSPACE"
+          rm -rf "$TEMP_DIR"
 
       - name: das-toolbox - DAS configuration
         shell: bash
         run: |
           source ./dastoolbox/bin/activate
           # Configure DAS with default settings
-          echo -e "\n\n\n\n\n\n\n37007\n\n\n\n\n\n\n\n\n\n\n" | das-cli config set
+          echo -e "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n" | das-cli config set
 
       - name: das-toolbox - start databases
         shell: bash
@@ -83,7 +79,7 @@ jobs:
           # Attention Broker
           das-cli ab start
           # Query Agent
-          echo "52000:52999" | das-cli qa start
+          das-cli qa start
 
       - name: Run DAS module tests
         shell: bash
