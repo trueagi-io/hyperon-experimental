@@ -10,7 +10,7 @@ wget -O - http://45.77.4.33/apt-repo/setup.sh | sudo bash
 
 sudo apt -y install das-toolbox
 
-# >= 0.5.0
+# >= 0.5.8
 das-cli --version
 ```
 
@@ -19,13 +19,13 @@ You can also run `das-cli` from source, using python3 (other OS):
 git clone https://github.com/singnet/das-toolbox.git
 
 cd das-toolbox
-git checkout tags/0.5.0
+git checkout tags/0.5.8
 
 # Optional - Create a virtual env
 python3 -m venv .venv
 source .venv/bin/activate
 
-pip3 install -r das-cli/src/requirements.txt
+pip install -e das-cli/
 ```
 
 1. Set up `das-cli` configurations
@@ -34,10 +34,10 @@ das-cli config set
 # Or
 python3 das-cli/src/das_cli.py config set
 
-# NOTE: Be sure to set Attention Broker's port to 37007
 # For all other prompts, you can just hit ENTER
 
 >>>
+? Choose the AtomDB backend:  MongoDB + Redis
 Enter Redis port [40020]: 
 Is it a Redis cluster? [y/N]: 
 Enter MongoDB port [40021]: 
@@ -45,18 +45,13 @@ Enter MongoDB username [admin]:
 Enter MongoDB password [admin]: 
 Is it a MongoDB cluster? [y/N]: 
 Enter Jupyter Notebook port [40019]: 
-Enter the Attention Broker port [40001]: 37007 <--- HERE
+Enter the Attention Broker port [40001]: 
 Enter the Query Agent port [40002]: 
 Enter the Link Creation Agent Server port [40003]: 
-Enter the Link Creation Agent buffer file [/tmp/requests_buffer.bin]: 
-Enter the Link Creation Agent request interval (in seconds) [1]: 
-Enter the Link Creation Agent thread count [1]: 
-Enter the Link Creation Agent default timeout (in seconds) [10]: 
-Do you want to save links to a Metta file? [Y/n]: 
-Do you want to save links to the database? [Y/n]: 
 Enter the Inference Agent port [40004]: 
 Enter the Evolution agent port [40005]: 
-Configuration file saved -> /home/gontijo/.das
+Enter the Context Broker port [40006]: 
+Configuration file saved -> /Users/arturgontijo/.das
 
 ```
 
@@ -68,27 +63,27 @@ python3 das-cli/src/das_cli.py db start
 
 >>>
 Starting Redis service...
-Redis has started successfully on port 29000 at localhost, operating under the server user arturgontijo.
+Redis has started successfully on port 40020 at localhost, operating under the server user arturgontijo.
 Starting MongoDB service...
-MongoDB has started successfully on port 28000 at localhost, operating under the server user arturgontijo.
+MongoDB has started successfully on port 40021 at localhost, operating under the server user arturgontijo.
 ```
 
-3. Load Databases with `das_kb.metta` content:
+3. Load Databases with `animals.metta` content:
 ```
 # We need the metta file's absolute path, moving it to /tmp for convinience
-cp lib/tests/das_kb.metta /tmp
+cp integration_tests/das/animals.metta /tmp
 
 # Then
-das-cli metta load /tmp/das_kb.metta
+das-cli metta load /tmp/animals.metta
 # Or
-python3 das-cli/src/das_cli.py metta load /tmp/das_kb.metta
+python3 das-cli/src/das_cli.py metta load /tmp/animals.metta
 
 >>>
-das-cli-mongodb-28000 is running on port 28000
-das-cli-redis-29000 is running on port 29000
-Loading metta file /tmp/das_kb.metta...
-Connecting to Redis at localhost:29000
-Connecting to MongoDB at localhost:28000
+das-cli-mongodb-40021 is running on port 40021
+das-cli-redis-40020 is running on port 40020
+Loading metta file /tmp/animals.metta...
+Connecting to Redis at localhost:40020
+Connecting to MongoDB at localhost:40021
 Done.
 ```
 
@@ -100,7 +95,7 @@ python3 das-cli/src/das_cli.py ab start
 
 >>>
 Starting Attention Broker service...
-Attention Broker started on port 37007
+Attention Broker started on port 40001
 ```
 
 5. Start Query Broker service
@@ -110,8 +105,6 @@ das-cli qa start
 python3 das-cli/src/das_cli.py qa start
 
 >>>
-# Chose a port range (using 52000:52999)
-Enter port range (e.g., 3000:3010): 52000:52999
 Starting Query Agent service...
 Query Agent started on port 40002
 ```
@@ -119,11 +112,12 @@ Query Agent started on port 40002
 6. Running DAS tests
 ```
 # Run it passing a metta file (from repo's root)
-# NOTE: this run will freeze for ~20s as client tries to get all available services from peers
-cargo run -r --bin metta-repl lib/tests/das.metta
+cargo run -r --bin metta-repl integration_tests/das/test.metta
 
 >>>
-[2025-08-19T12:41:03Z WARN  metta_bus_client::bus_node] BusNode::join_network(): Unable to get all services (1/4) from peer localhost:35700
+[()]
+[()]
+[ServiceAvailable: pattern_matching_query]
 [()]
 [()]
 [()]
@@ -131,7 +125,7 @@ cargo run -r --bin metta-repl lib/tests/das.metta
 [()]
 
 # Optional: use RUST_LOG=das=LEVEL to inspect workflow
-RUST_LOG=das=debug ./target/release/metta-repl lib/tests/das.metta
+RUST_LOG=das=debug ./target/release/metta-repl integration_tests/das/test.metta
 ```
 
 7. Stop all services (removing their containers)
