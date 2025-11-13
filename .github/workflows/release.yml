@@ -45,7 +45,7 @@ jobs:
         if: ${{ startsWith(matrix.os, 'windows') }}
         uses: pypa/cibuildwheel@v2.19.2
         env:
-          CIBW_BEFORE_ALL: ".\\python\\install-hyperonc.bat -u https://github.com/DaddyWesker/hyperon-experimental.git -r release-win"
+          CIBW_BEFORE_ALL: ".\\python\\install-hyperonc.bat -u https://github.com/DaddyWesker/hyperon-experimental.git -r release-win-clean"
         with:
           package-dir: ./python
 
