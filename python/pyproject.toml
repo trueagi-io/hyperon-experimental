@@ -45,7 +45,6 @@ before-all = "sh -c ./python/install-hyperonc.sh"
 skip = "*musllinux*"
 test-requires = ["pytest==7.3.2"]
 test-command = "pytest {project}/python/tests"
-test-skip = ["*-win32"]
 
 [tool.cibuildwheel.windows]
 before-all = ".\\python\\install-hyperonc.bat"
