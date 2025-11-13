@@ -60,7 +60,6 @@ class CMakeBuild(build_ext):
                 # CMake 3.12+ only.
                 build_args += [f"-j{self.parallel}"]
 
-
         build_temp = Path(self.build_temp) / ext.name
         if not build_temp.exists():
             build_temp.mkdir(parents=True)
@@ -69,15 +68,38 @@ class CMakeBuild(build_ext):
             ["conan", "install", ext.sourcedir, "--output-folder=.",
              "--build=missing"], cwd=build_temp, check=True
         )
+
+        if os.name == 'nt':
+            dcmake_toolchain_file_path = f"{build_temp}/build/generators/conan_toolchain.cmake"
+        else:
+            dcmake_toolchain_file_path = f"./build/{cfg}/generators/conan_toolchain.cmake"
         subprocess.run(
             ["cmake", ext.sourcedir,
-             f"-DCMAKE_TOOLCHAIN_FILE=./build/{cfg}/generators/conan_toolchain.cmake", *cmake_args],
+             f"-DCMAKE_TOOLCHAIN_FILE={dcmake_toolchain_file_path}", *cmake_args],
             cwd=build_temp, check=True
         )
         subprocess.run(
             ["cmake", "--build", ".", *build_args], cwd=build_temp, check=True
         )
+        if os.name == 'nt':
+            import platform
+            bin_dir = ".\\"
+            current_python_version = sys.version.split(" ")[0].split(".")
+            platform = platform.python_implementation()
+            if platform == "CPython":
+                line_in_file = f"cp{current_python_version[0]}{current_python_version[1]}"
+            elif platform == "PyPy":
+                line_in_file = f"pypy{current_python_version[0]}{current_python_version[1]}"
+            else:
+                raise Exception("Unknown python implementation") # should be unreachable except new implementation appears in the future.
+            pyd_path = [os.path.join(bin_dir, _pyd) for _pyd in
+                        os.listdir(bin_dir) if
+                        os.path.isfile(os.path.join(bin_dir, _pyd)) and
+                        os.path.splitext(_pyd)[0].startswith("hyperonpy") and
+                        os.path.splitext(_pyd)[1].endswith(".pyd") and
+                        line_in_file in _pyd][0]
 
+            shutil.copyfile(pyd_path, ext_fullpath)
 
 def get_version(rel_path):
     try:
