@@ -1,6 +1,6 @@
 @echo off
-set HYPERONC_URL=https://github.com/DaddyWesker/hyperon-experimental.git
-set HYPERONC_REV=release-win-clean
+set HYPERONC_URL=https://github.com/trueagi-io/hyperon-experimental.git
+set HYPERONC_REV=main
 
 :loop
 IF NOT "%1"=="" (
