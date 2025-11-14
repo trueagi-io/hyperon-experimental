@@ -6,7 +6,12 @@ option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
 enable_testing()
 option(BUILD_SHARED_LIBS "Build shared library" ON)
-add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
+get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+list(APPEND CTEST_ARGS --output-on-failure)
+if(IS_MULTI_CONFIG)
+    list(APPEND CTEST_ARGS -C $<CONFIG>)
+endif()
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} ${CTEST_ARGS})
 
 # HYPERONC_TARGET_DIR is used as a target dir for cargo. Cargo automatically adds
 # `debug/release` suffix to the value of --target-dir argument so we need to

@@ -17,6 +17,7 @@ classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows"
 ]
 
 dynamic = [
@@ -44,3 +45,7 @@ before-all = "sh -c ./python/install-hyperonc.sh"
 skip = "*musllinux*"
 test-requires = ["pytest==7.3.2"]
 test-command = "pytest {project}/python/tests"
+
+[tool.cibuildwheel.windows]
+before-all = ".\\python\\install-hyperonc.bat"
+archs = ["native"]
