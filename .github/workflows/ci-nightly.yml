@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:  ["ubuntu-22.04", "ubuntu-24.04", "macos-14", "macos-15", "windows-latest"]
+        os:  ["ubuntu-22.04", "ubuntu-24.04-arm", "windows-2025", "macos-15-intel", "macos-15"]
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
         cmake-version: ["3.24.x"]
         build-type: ["Debug", "Release"]
