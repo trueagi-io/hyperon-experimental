@@ -2,6 +2,7 @@ import os
 import sys
 import shutil
 import subprocess
+import glob
 from pathlib import Path
 
 from setuptools import Extension, setup
@@ -85,21 +86,16 @@ class CMakeBuild(build_ext):
             import platform
             bin_dir = ".\\"
             current_python_version = sys.version.split(" ")[0].split(".")
-            platform = platform.python_implementation()
-            if platform == "CPython":
-                line_in_file = f"cp{current_python_version[0]}{current_python_version[1]}"
-            elif platform == "PyPy":
-                line_in_file = f"pypy{current_python_version[0]}{current_python_version[1]}"
+            machine = platform.machine().lower()
+            _platform = platform.python_implementation()
+            if _platform == "CPython":
+                _pyd = f"hyperonpy.cp{current_python_version[0]}{current_python_version[1]}*{machine}*.pyd"
+            elif _platform == "PyPy":
+                _pyd = f"hyperonpy.pypy{current_python_version[0]}{current_python_version[1]}*{machine}*.pyd"
             else:
                 raise Exception("Unknown python implementation") # should be unreachable except new implementation appears in the future.
-            pyd_path = [os.path.join(bin_dir, _pyd) for _pyd in
-                        os.listdir(bin_dir) if
-                        os.path.isfile(os.path.join(bin_dir, _pyd)) and
-                        os.path.splitext(_pyd)[0].startswith("hyperonpy") and
-                        os.path.splitext(_pyd)[1].endswith(".pyd") and
-                        line_in_file in _pyd][0]
-
-            shutil.copyfile(pyd_path, ext_fullpath)
+            pyd_file = glob.glob(os.path.join(bin_dir, _pyd))
+            shutil.copyfile(pyd_file[0], ext_fullpath)
 
 def get_version(rel_path):
     try:
