@@ -11,7 +11,7 @@ on:
       os:
         description: 'JSON array of OS to be checked'
         required: true
-        default: "[\"ubuntu-22.04\", \"ubuntu-24.04\", \"macos-13\", \"macos-14\", \"macos-15\", \"windows-latest\"]"
+        default: "[\"ubuntu-22.04\", \"ubuntu-24.04-arm\", \"windows-2025\", \"macos-15-intel\", \"macos-15\"]"
         type: string
       python-version:
         description: 'JSON array of Python versions to be checked'
