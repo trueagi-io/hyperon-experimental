@@ -35,10 +35,10 @@ use crate::space::grounding::GroundingSpace;
 /// Execute !(help!) to get list of the standard library functions.
 /// > !(import! &self das)
 /// [()]
-/// > !(bind! &das (new-das! localhost:42000-42999 localhost:40002))
+/// > !(bind! &das (new-das! (localhost:52000-52099) (localhost:40002)))
 /// [()]
 /// > !(match &das (Similarity "human" $S) ($S))
-/// [(a408f6dd446cdd4fa56f82e77fe6c870), (3225ea795289574ceee32e091ad54ef4), (181a19436acef495c8039a610be59603)]
+/// [("ent"), ("chimp"), ("monkey")]
 /// >
 
 /// Loader to Initialize the "das" module

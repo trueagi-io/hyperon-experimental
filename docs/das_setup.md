@@ -10,7 +10,7 @@ wget -O - http://45.77.4.33/apt-repo/setup.sh | sudo bash
 
 sudo apt -y install das-toolbox
 
-# >= 0.5.8
+# >= 1.0.0
 das-cli --version
 ```
 
@@ -19,7 +19,7 @@ You can also run `das-cli` from source, using python3 (other OS):
 git clone https://github.com/singnet/das-toolbox.git
 
 cd das-toolbox
-git checkout tags/0.5.8
+git checkout tags/1.0.0
 
 # Optional - Create a virtual env
 python3 -m venv .venv

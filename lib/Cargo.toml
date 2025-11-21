@@ -30,7 +30,7 @@ hyperon-macros = { workspace = true }
 # das deps
 [dependencies.metta-bus-client]
 git = "https://github.com/singnet/das"
-tag = "0.11.14"
+tag = "1.0.0"
 package = "metta-bus-client"
 optional = true
 
