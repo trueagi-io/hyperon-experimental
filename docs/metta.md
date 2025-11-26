@@ -541,3 +541,134 @@ if len($results) == 0:
 else:
     return $results
 ```
+
+## Matching
+
+This section explains the atom matching algorithm. The result of matching is
+list of variable binding sets. If two atoms matched don't contain grounded
+atoms with custom matching procedure then the result of matching is exactly one
+binding set (because two atoms are either equal or not). But in general case
+custom matching is possible and the result may be a list of binding sets.
+
+Each binding is a set of two kinds of relations. First kind of relation is
+assigning a value to a variable. This relation is designated by `<-` arrow. For
+example `$x <- SomeValue` means the symbol atom `SomeValue` is assigned to the
+variable `$x`.  Second kind of relation is equality of two variables. This
+relation is designated by `=` sign. For eample `$x = $y` means variables `$x`
+and `$y` are equal. The equality means variables have equal or matchable
+values. The full set of bindings is designated using curly braces with
+relations inside listed using comma. For example: `{ $x <- SomeValue, $x = $y
+}`. The order of relations doesn't matter.
+
+For a sake of simplicity I used operations `+` and `-` in algorithms below to
+explain how binding set is modified. For example `$bindings - { $b <- $b_value
+} + { $a = $b }` means one need remove relation `$b <- $b_value` from $bindings
+and add relation `$a = $b`.
+
+### Match atoms (match_atoms)
+
+```
+Input:
+- $left - atom to be evaluated
+- $right - expected type of the result
+
+Output:
+- [Bindings]
+
+$ml = <meta type of the $left atom>
+$mr = <meta type of the $right atom>
+$result = [{}] 
+
+if $ml == Symbol and $mr == Symbol and $left == $right:
+    $result = [{}]
+elif $ml == Variable and $mr == Variable:
+    $result = [{ $left = $right }]
+elif $ml == Variable:
+    $result = [{ $left <- $right }]
+elif $mr == Variable:
+    $result = [{ $right <- $left }]
+elif $ml == Expression and $mr == Expression and len($left) == len($right):
+    for $i in range(0, len($left)):
+        $sub = match_atoms($left[$i], $right[$i])
+        $next = []
+        for $a in $result:
+            for $b in $sub:
+                $next += merge_bindings($a, $b)
+        $result = $next
+elif $ml == Grounded and <$left has custom matching implementation>:
+    $result = <call $left custom matching on $right>
+elif $mr == Grounded and <$right has custom matching implementation>:
+    $result = <call $right custom matching on $left>
+elif $ml == Grounded and $mr == Grounded:
+    $result = [{}]
+else:
+    $result = []
+
+return filter(lambda $b: <$b doesn't have variable loops>, $results)
+```
+
+### Merge bindings (merge_bindings)
+
+```
+Input:
+- $left - variable bindings
+- $right - variable bindings
+
+Output:
+- [Bindings]
+
+$result = [$left]
+for $rel in <set of "assign value to var" or "vars are equal" relations of $right>:
+    if <$rel is "assign value $val to var $var" relation>:
+        $result = [ add_var_binding($r, $var, $val) for $r in $result]
+    if <$rel is "var $a is equal to var $b">:
+        $result = [ add_var_equality($r, $a, $b) for $r in $result]
+return $result
+```
+
+### Add variable binding to binding set (add_var_binding)
+
+```
+Input:
+- $bindings - variable bindings
+- $var - variable atom
+- $val - value atom
+
+Output:
+- [Bindings]
+
+$prev = <value of $var in $bindings or None>
+if $prev is None:
+    return [$bindings + { $var <- $val }]
+elif $val == $prev:
+    return [$bindings]
+else:
+    $match = match_atoms($prev, $val)
+    for $b in $match:
+        $result += merge_bindings($bindings, $b)
+    return $result
+```
+
+### Add variable equality to binding set (add_var_equality)
+
+```
+Input:
+- $bindings - variable bindings
+- $a - first variable atom
+- $b - second variable atom
+
+Output:
+- [Bindings]
+
+$a_value = <value of $a in $bindings or None>
+$b_value = <value of $b in $bindings or None>
+
+if $a_value is None or $b_value is None or $a_value == $b_value:
+    return [$bindings - { $b <- $b_value } + { $a = $b }]
+else:
+    $result = []
+    $match = match_atoms($a_value, $b_value)
+    for $b in $match:
+        $result += merge_bindings($bindings, $b)
+    return $result
+```
