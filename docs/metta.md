@@ -541,3 +541,61 @@ if len($results) == 0:
 else:
     return $results
 ```
+
+## Matching
+
+### Match atoms (match_atoms)
+
+```
+Input:
+- $left - atom to be evaluated
+- $right - expected type of the result
+
+Output:
+- [Bindings]
+
+$ml = <meta type of the $left atom>
+$mr = <meta type of the $right atom>
+$result = [{}] 
+
+if $ml == Symbol and $mr == Symbol and $left == $right:
+    $result = [{}]
+elif $ml == Variable and $mr == Variable:
+    $result = [{ $left = $right }]
+elif $ml == Variable:
+    $result = [{ $left <- $right }]
+elif $mr == Variable:
+    $result = [{ $right <- $left }]
+elif $ml == Expression and $mr == Expression and len($left) == len($right):
+    for $i in range(0, len($left)):
+        $sub = match_atoms($left[$i], $right[$i])
+        $next = []
+        for $a in $result:
+            for $b in $sub:
+                $next += merge_bindings($a, $b)
+        $result = $next
+elif $ml == Grounded and <$left has custom matching implementation>:
+    $result = <call $left custom matching on $right>
+elif $mr == Grounded and <$right has custom matching implementation>:
+    $result = <call $right custom matching on $left>
+elif $ml == Grounded and $mr == Grounded:
+    $result = [{}]
+else:
+    $result = []
+
+return filter(lambda $b: <$b doesn't have variable loops>, $results)
+```
+
+### Merge bindings (merge_bindings)
+
+```
+Input:
+- $left - variable bindings
+- $right - variable bindings
+
+Output:
+- [Bindings]
+
+
+
+```
