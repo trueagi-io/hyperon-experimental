@@ -51,7 +51,6 @@ jobs:
           git checkout tags/1.0.2
           pip install -e ./das-cli
           cd "$GITHUB_WORKSPACE"
-          rm -rf "$TEMP_DIR"
 
       - name: das-toolbox - DAS configuration
         shell: bash
