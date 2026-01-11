@@ -49,7 +49,7 @@ jobs:
           git clone https://github.com/singnet/das-toolbox.git
           cd das-toolbox
           git checkout tags/1.0.2
-          python3 -m pip install ./das-cli
+          pip install -e ./das-cli
           cd "$GITHUB_WORKSPACE"
           rm -rf "$TEMP_DIR"
 
