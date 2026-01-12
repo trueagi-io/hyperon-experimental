@@ -248,11 +248,11 @@ $metatype =  <meta-type of the $atom>
 if $atom == Empty or $atom ~ (Error ...):
     return [($atom, $bindings)]
 elif $type == Atom or $type == $metatype or $metatype == Variable:
-    return [(atom, bindings)]
+    return [($atom, $bindings)]
 elif $metatype == Expression and <$atom is evaluated already>:
-    return [(atom, bindings)]
+    return [($atom, $bindings)]
 elif $metatype == Symbol or $metatype == Grounded or $atom == ():
-    return type_cast(atom, bindings, type, space)
+    return type_cast($atom, $bindings, $type, $space)
 else:
     $results = interpret_expression($atom, $type, $space, $bindings)
     $error = filter(lambda $a: $a ~ (Error ...), $results)
