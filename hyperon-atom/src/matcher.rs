@@ -420,17 +420,6 @@ impl Bindings {
         result
     }
 
-    fn with_var_no_value(mut self, var: &VariableAtom) -> Self {
-        self.add_var_no_value(var);
-        self
-    }
-
-    fn add_var_no_value(&mut self, var: &VariableAtom) {
-        if !self.binding_by_var.contains_key(var) {
-            self.new_binding(var.clone(), None);
-        }
-    }
-
     /// Merges `b` bindings into self if they are compatible.  May return a [BindingsSet] containing
     /// multiple [Bindings] if appropriate.  If no compatible bindings can be merged, [BindingsSet::empty()]
     /// will be returned.
@@ -475,8 +464,7 @@ impl Bindings {
                         all_results.extend(results.into_iter()
                             .flat_map(|r| r.add_var_binding_internal(var, atom)));
                     } else {
-                        all_results.extend(results.into_iter()
-                            .flat_map(|r| BindingsSet::from(r.with_var_no_value(var))));
+                        all_results = results;
                     }
                 }
 
@@ -1503,10 +1491,9 @@ mod test {
 
     #[test]
     fn bindings_get_variable_no_value() {
-        let mut bindings = Bindings::new();
-        bindings.add_var_no_value(&VariableAtom::new("x"));
+        let bindings = Bindings::new();
 
-        assert_eq!(bindings.resolve(&VariableAtom::new("x")), Some(Atom::var("x")));
+        assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
     }
 
     #[test]
@@ -1665,8 +1652,7 @@ mod test {
     fn bindings_add_var_equality_self_recursion() -> Result<(), &'static str> {
         let a = VariableAtom::new("a");
         let b = VariableAtom::new("b");
-        let mut bindings = Bindings::new();
-        bindings.add_var_no_value(&a);
+        let bindings = Bindings::new();
         let bindings = bindings.add_var_binding(b.clone(), Atom::expr([Atom::sym("S"), Atom::Variable(a.clone())]))?;
         let bindings = bindings.add_var_equality(&a, &b);
         assert_eq!(bindings, Ok(bind!{ b: expr!("S" a),  a: expr!(b) }));
@@ -1742,12 +1728,10 @@ mod test {
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
             .add_var_binding(VariableAtom::new("b"), expr!("B" d))?
             .add_var_binding(VariableAtom::new("c"), expr!("C"))?
-            .add_var_binding(VariableAtom::new("d"), expr!("D"))?
-            .with_var_no_value(&VariableAtom::new("e"));
+            .add_var_binding(VariableAtom::new("d"), expr!("D"))?;
         bindings.apply_and_retain(&mut atom, |v| *v == VariableAtom::new("b") || *v == VariableAtom::new("e"));
         let expected = Bindings::new()
-            .add_var_binding(VariableAtom::new("b"), expr!("B" "D"))?
-            .with_var_no_value(&VariableAtom::new("e"));
+            .add_var_binding(VariableAtom::new("b"), expr!("B" "D"))?;
         assert_eq!(bindings, expected);
         assert_eq!(atom, expr!(("B" "D") b "C" "D" e));
         Ok(())
@@ -1798,11 +1782,6 @@ mod test {
         assert_eq!(bindings.rename_binding(binding_id), Ok(()));
         assert_eq!(bindings.resolve(a), Some(Atom::Variable(b.clone())));
         assert_eq!(bindings.resolve(b), Some(Atom::Variable(b.clone())));
-
-        let mut bindings = Bindings::new().with_var_no_value(a);
-        let binding_id = bindings.get_binding(a).unwrap().id;
-        assert_eq!(bindings.rename_binding(binding_id), Err(()));
-        assert_eq!(bindings.resolve(a), Some(Atom::Variable(a.clone())));
         Ok(())
     }
 
