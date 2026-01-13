@@ -329,7 +329,14 @@ impl Bindings {
         let b_binding = &self.bindings[b_binding_id];
         match (&a_binding.atom, &b_binding.atom) {
             (Some(a_atom), Some(b_atom)) => {
-                self.match_values(&a_atom, &b_atom)
+                if a_atom == b_atom {
+                    let a_binding = a_binding.id;
+                    let b_binding = self.bindings.remove(b_binding.id);
+                    self.add_var_to_binding(a_binding, b_binding.var);
+                    BindingsSet::from(self)
+                } else {
+                    self.match_values(&a_atom, &b_atom)
+                }
             },
             (None, Some(_)) => {
                 self.move_binding_to_binding(a_binding_id, b_binding_id);
