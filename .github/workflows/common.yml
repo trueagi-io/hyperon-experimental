@@ -29,6 +29,11 @@ on:
         default: "Debug"
         required: false
         type: string
+      publish-doc:
+        description: "Build and publish documentation flag"
+        default: false
+        required: false
+        type: boolean
 
 env:
   CMAKE_CONFIG_ARGUMENT: "${{ startsWith(inputs.os, 'windows') && format('--config {0}', inputs.build-type) || '' }}"
@@ -71,6 +76,15 @@ jobs:
           cargo check
           cargo check --features python,git
 
+      - name: Test Rust build
+        shell: bash
+        run: cargo test --features git,online-test
+
+      - name: Build Rust API documentation
+        if: ${{ inputs.publish-doc }}
+        shell: bash
+        run: cargo doc --no-deps
+
       - name: Install cbindgen
         uses: actions-rs/cargo@v1.0.1
         with:
@@ -97,9 +111,11 @@ jobs:
         run: |
           conan profile detect --force
 
-      - name: Test Rust build
-        shell: bash
-        run: cargo test --features git,online-test
+      - name: Install Doxygen
+        if: ${{ inputs.publish-doc }}
+        uses: ssciwr/doxygen-install@v1
+        with:
+          version: "1.14.0"
 
       - name: Print environment
         shell: bash
@@ -148,3 +164,26 @@ jobs:
         working-directory: ./build
         shell: bash
         run: cmake --build . --target check ${{ env.CMAKE_CONFIG_ARGUMENT }}
+
+      - name: Build C API documentation
+        if: ${{ inputs.publish-doc }}
+        working-directory: ./build
+        shell: bash
+        env:
+          CMAKE_CURRENT_SOURCE_DIR: ../c/
+          HYPERONC_INCLUDE_DIR: ./hyperonc-install/include/hyperonc/hyperon/
+        run: doxygen ../c/hyperonc.doxyfile
+
+      - name: Build Python API documentation
+        if: ${{ inputs.publish-doc }}
+        run: |
+          pip install mkdocs-material==9.7.0 mkdocs-minify-plugin==0.8.0 mkdocstrings[python]==0.26.1
+          mkdocs build
+
+      - name: Deploy documentation
+        if: ${{ inputs.publish-doc }}
+        run: |
+          mv ./target/doc ./site/rust
+          mv ./build/html ./site/c
+          pip install ghp-import==2.1.0
+          ghp-import -m 'Deploy documentation' --push --force --no-history --remote=origin --branch=gh-pages ./site

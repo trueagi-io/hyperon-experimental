@@ -14,6 +14,8 @@ Please look at the [Python unit tests](./python/tests) to understand how one can
 More complex usage scenarios are located at [MeTTa examples repo](https://github.com/trueagi-io/metta-examples).
 A lot of different materials can be found on [OpenCog wiki server](https://wiki.opencog.org/w/Hyperon).
 Also see [MeTTa specification](https://wiki.opencog.org/w/File:MeTTa_Specification.pdf).
+One can find the API reference and other documentation from this repository on
+[Hyperon experimental documentation page](https://trueagi-io.github.io/hyperon-experimental).
 
 If you want to contribute the project please see the [contributing guide](./docs/CONTRIBUTING.md) first.
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
