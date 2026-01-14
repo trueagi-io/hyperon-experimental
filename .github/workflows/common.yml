@@ -185,8 +185,5 @@ jobs:
         run: |
           mv ./target/doc ./site/rust
           mv ./build/html ./site/c
-          cd site
-          git init
-          git remote add origin git@github.com:trueagi-io/hyperon-experimental.git
-          git commit -a -m 'Deploy API documentation'
-          git push origin +master:refs/heads/gh-pages
+          pip install ghp-import==2.1.0
+          ghp-import -m 'Deploy documentation' --push --force --no-history --remote=origin --branch=gh-pages ./site
