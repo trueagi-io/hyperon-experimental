@@ -11,13 +11,23 @@ jobs:
   deploy-docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.8"
-      - uses: actions/cache@v4
+
+      - name: Initialize cache
+        uses: actions/cache@v4
         with:
           key: ${{ github.ref }}
           path: .cache
-      - run: pip install mkdocs-material==9.7.0 mkdocs-minify-plugin==0.8.0 mkdocstrings[python]==0.26.1
-      - run: mkdocs gh-deploy --force
+
+      - name: Build Python docs
+        run: pip install mkdocs-material==9.7.0 mkdocs-minify-plugin==0.8.0 mkdocstrings[python]==0.26.1
+
+      - name: Deploy documentation
+        run: mkdocs gh-deploy --force
