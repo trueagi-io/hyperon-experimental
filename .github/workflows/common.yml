@@ -111,6 +111,12 @@ jobs:
         run: |
           conan profile detect --force
 
+      - name: Install Doxygen
+        if: ${{ inputs.publish-doc }}
+        uses: ssciwr/doxygen-install@v1
+        with:
+          version: "1.14.0"
+
       - name: Print environment
         shell: bash
         run: |
