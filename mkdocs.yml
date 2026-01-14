@@ -141,7 +141,10 @@ nav:
   - Python API Reference:
     - Atoms: reference/atoms.md
     - Base: reference/base.md
+    - Conversion: reference/conversion.md
     - Ext: reference/ext.md
+    - Metta: reference/metta.md
+    - Module: reference/module.md
     - Runner: reference/runner.md
     - Stdlib: reference/stdlib.md
   - Development: DEVELOPMENT.md
