@@ -132,7 +132,8 @@ markdown_extensions:
 # Page tree
 nav:
   - Home: index.md
-  - Minimal Metta: minimal-metta.md
+  - MeTTa specification: metta.md
+  - Minimal Metta specification: minimal-metta.md
   - MeTTa modules: modules_dev.md
   - DAS setup: das_setup.md
   - Rust API Reference: ./rust/hyperon/index.html

@@ -329,7 +329,14 @@ impl Bindings {
         let b_binding = &self.bindings[b_binding_id];
         match (&a_binding.atom, &b_binding.atom) {
             (Some(a_atom), Some(b_atom)) => {
-                self.match_values(&a_atom, &b_atom)
+                if a_atom == b_atom {
+                    let a_binding = a_binding.id;
+                    let b_binding = self.bindings.remove(b_binding.id);
+                    self.add_var_to_binding(a_binding, b_binding.var);
+                    BindingsSet::from(self)
+                } else {
+                    self.match_values(&a_atom, &b_atom)
+                }
             },
             (None, Some(_)) => {
                 self.move_binding_to_binding(a_binding_id, b_binding_id);
@@ -420,17 +427,6 @@ impl Bindings {
         result
     }
 
-    fn with_var_no_value(mut self, var: &VariableAtom) -> Self {
-        self.add_var_no_value(var);
-        self
-    }
-
-    fn add_var_no_value(&mut self, var: &VariableAtom) {
-        if !self.binding_by_var.contains_key(var) {
-            self.new_binding(var.clone(), None);
-        }
-    }
-
     /// Merges `b` bindings into self if they are compatible.  May return a [BindingsSet] containing
     /// multiple [Bindings] if appropriate.  If no compatible bindings can be merged, [BindingsSet::empty()]
     /// will be returned.
@@ -461,34 +457,33 @@ impl Bindings {
             return self.into()
         }
 
-        let results = other.binding_by_var.iter().fold(smallvec::smallvec![(self, HashMap::new())],
-            |results, (var, binding_id)| -> smallvec::SmallVec<[(Bindings, HashMap<usize, &VariableAtom>); 1]> {
+        let (results, _) = other.binding_by_var.iter().fold((smallvec::smallvec![self], HashMap::new()),
+            |(results, mut other_vars_merged), (var, binding_id)| -> (smallvec::SmallVec<[Bindings; 1]>, HashMap<usize, &VariableAtom>) {
                 let mut all_results = smallvec::smallvec![];
+                log::trace!("next_var: var: {}, binding_id: {}", var, binding_id);
 
-                for (result, mut other_vars_merged) in results {
-                    log::trace!("next_var: var: {}, binding_id: {}", var, binding_id);
-                    let new_results = if let Some(first_binding) = other_vars_merged.get(binding_id) {
-                        result.add_var_equality_internal(first_binding, var)
+                if let Some(first_binding) = other_vars_merged.get(binding_id) {
+                    all_results.extend(results.into_iter()
+                        .flat_map(|r| r.add_var_equality_internal(first_binding, var)));
+                } else {
+                    let binding = other.get_binding(var).expect("Unexpected state");
+                    if let Some(atom) = &binding.atom {
+                        all_results.extend(results.into_iter()
+                            .flat_map(|r| r.add_var_binding_internal(var, atom)));
                     } else {
-                        let binding = other.get_binding(var).expect("Unexpected state");
-                        other_vars_merged.insert(binding.id, var);
-                        if let Some(atom) = &binding.atom {
-                            result.add_var_binding_internal(var, atom)
-                        } else {
-                            BindingsSet::from(result.with_var_no_value(var))
-                        }
-                    };
-                    all_results.extend(new_results.into_iter().map(|new_binding| (new_binding, other_vars_merged.clone())));
-                    log::trace!("all_results: {:?}", all_results);
+                        all_results = results;
+                    }
                 }
-                all_results
+
+                log::trace!("all_results: {:?}", all_results);
+                other_vars_merged.insert(*binding_id, var);
+                (all_results, other_vars_merged)
             });
 
-        let results = results.into_iter().map(|(result, _)| result).collect();
         if let Some(self_copy) = trace_self {
             log::trace!("Bindings::merge: {} ^ {} -> {:?}", self_copy, other, results);
         }
-        results
+        BindingsSet(results)
     }
 
     fn find_deps<'a>(&'a self, var: &'a VariableAtom, deps: &mut HashSet<&'a VariableAtom>) {
@@ -1101,13 +1096,26 @@ pub fn match_atoms<'a>(left: &'a Atom, right: &'a Atom) -> MatchResultIter {
 fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
     let res = match (left, right) {
         (Atom::Symbol(a), Atom::Symbol(b)) if a == b => BindingsSet::single(),
-        (Atom::Variable(dv), Atom::Variable(pv)) => BindingsSet::single().add_var_equality(dv, pv),
+        (Atom::Variable(dv), Atom::Variable(pv)) => {
+            let mut bind = Bindings::new();
+            let binding_id = bind.new_binding(dv.clone(), None);
+            bind.add_var_to_binding(binding_id, pv.clone());
+            BindingsSet::from(bind)
+        },
         // TODO: If GroundedAtom is matched with VariableAtom there are
         // two way to calculate match: (1) pass variable to the
         // GroundedAtom::match(); (2) assign GroundedAtom to the Variable.
         // Returning both results breaks tests right now.
-        (Atom::Variable(v), b) => BindingsSet::single().add_var_binding(v, b),
-        (a, Atom::Variable(v)) => BindingsSet::single().add_var_binding(v, a),
+        (Atom::Variable(v), b) => {
+            let mut bind = Bindings::new();
+            bind.new_binding(v.clone(), Some(b.clone()));
+            BindingsSet::from(bind)
+        }, 
+        (a, Atom::Variable(v)) => {
+            let mut bind = Bindings::new();
+            bind.new_binding(v.clone(), Some(a.clone()));
+            BindingsSet::from(bind)
+        }, 
         (Atom::Expression(ExpressionAtom{ children: a, ..  }), Atom::Expression(ExpressionAtom{ children: b, .. }))
         if a.len() == b.len() => {
             a.iter().zip(b.iter()).fold(BindingsSet::single(),
@@ -1490,10 +1498,9 @@ mod test {
 
     #[test]
     fn bindings_get_variable_no_value() {
-        let mut bindings = Bindings::new();
-        bindings.add_var_no_value(&VariableAtom::new("x"));
+        let bindings = Bindings::new();
 
-        assert_eq!(bindings.resolve(&VariableAtom::new("x")), Some(Atom::var("x")));
+        assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
     }
 
     #[test]
@@ -1652,8 +1659,7 @@ mod test {
     fn bindings_add_var_equality_self_recursion() -> Result<(), &'static str> {
         let a = VariableAtom::new("a");
         let b = VariableAtom::new("b");
-        let mut bindings = Bindings::new();
-        bindings.add_var_no_value(&a);
+        let bindings = Bindings::new();
         let bindings = bindings.add_var_binding(b.clone(), Atom::expr([Atom::sym("S"), Atom::Variable(a.clone())]))?;
         let bindings = bindings.add_var_equality(&a, &b);
         assert_eq!(bindings, Ok(bind!{ b: expr!("S" a),  a: expr!(b) }));
@@ -1729,12 +1735,10 @@ mod test {
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
             .add_var_binding(VariableAtom::new("b"), expr!("B" d))?
             .add_var_binding(VariableAtom::new("c"), expr!("C"))?
-            .add_var_binding(VariableAtom::new("d"), expr!("D"))?
-            .with_var_no_value(&VariableAtom::new("e"));
+            .add_var_binding(VariableAtom::new("d"), expr!("D"))?;
         bindings.apply_and_retain(&mut atom, |v| *v == VariableAtom::new("b") || *v == VariableAtom::new("e"));
         let expected = Bindings::new()
-            .add_var_binding(VariableAtom::new("b"), expr!("B" "D"))?
-            .with_var_no_value(&VariableAtom::new("e"));
+            .add_var_binding(VariableAtom::new("b"), expr!("B" "D"))?;
         assert_eq!(bindings, expected);
         assert_eq!(atom, expr!(("B" "D") b "C" "D" e));
         Ok(())
@@ -1785,11 +1789,6 @@ mod test {
         assert_eq!(bindings.rename_binding(binding_id), Ok(()));
         assert_eq!(bindings.resolve(a), Some(Atom::Variable(b.clone())));
         assert_eq!(bindings.resolve(b), Some(Atom::Variable(b.clone())));
-
-        let mut bindings = Bindings::new().with_var_no_value(a);
-        let binding_id = bindings.get_binding(a).unwrap().id;
-        assert_eq!(bindings.rename_binding(binding_id), Err(()));
-        assert_eq!(bindings.resolve(a), Some(Atom::Variable(a.clone())));
         Ok(())
     }
 
