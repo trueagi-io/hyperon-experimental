@@ -151,12 +151,6 @@ Running benchmarks requires nightly toolchain so they can be run using:
 cargo +nightly bench --features benchmark
 ```
 
-Generate docs:
-```
-cargo doc --no-deps
-```
-Docs can be found at `./target/doc/hyperon/index.html`.
-
 ## C and Python API
 
 Create build directory and initialize CMake project:
