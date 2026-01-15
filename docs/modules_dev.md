@@ -1,5 +1,6 @@
+# MeTTa modules
 
-# MeTTa Modules (Rust / Python Developer Documentation)
+## MeTTa Modules (Rust / Python Developer Documentation)
 
 TODO: Integrate this documentation within the larger MeTTa Book
 
@@ -7,7 +8,7 @@ Modules are implementations of free-standing MeTTa functionality that can be imp
 
 **_NOTE:_** Importantly, a module can have sub-module dependencies, aka "downward" dependencies, but it cannot have "upward" dependencies, ie. dependencies on the client code importing the module.
 
-## What *is* a Module?
+### What *is* a Module?
 
 Fundamentally a module in a persistent encapsulation of a context within which MeTTa code can run.  Every module has a unique [Space] (and also a [Tokenizer], for now).  For MeTTa code running within the context of a module, the `&self` token will resolve to the module's space.
 
@@ -15,13 +16,13 @@ A loaded module is represented with the [MettaMod] struct.  In addition to a [Sp
 
 To execute code in the context of any loaded module, use the [RunnerState::new_with_module] method.
 
-## Loading a Module
+### Loading a Module
 
 Modules are loaded into a [Metta] runner using one of the module loading methods: [Metta::load_module_direct], [Metta::load_module_at_path], or [RunContext::load_module].  Loaded modules are referred to with a [ModId].
 
 Fundamentally, all modules are loaded via a loader object that implements the [ModuleLoader] trait.  Irrespective of the module's original format or host language, a loader object's [ModuleLoader::load] function ultimately loads the module into the runner.
 
-### Module Names & Name Paths
+#### Module Names & Name Paths
 
 Each loaded module must have a name.  A legal module name is an ascii string, containing only alpha-numeric characters plus `_` and `-`.
 
@@ -55,7 +56,7 @@ will cause the name `some_module` to be resolved into a specific module instance
 
 **NOTE**: The same module name may occur in multiple places in the hierarchy, and there is no guaranteed a name will always refer to the same module.  However, within a given node of the module name hierarchy, a module name will always be unique.
 
-## Importing a Module
+### Importing a Module
 
 A module is imported into another module using one of the import methods:
  - [MettaMod::import_dependency_as], corresponding to `import module as name`
@@ -64,7 +65,7 @@ A module is imported into another module using one of the import methods:
 
 Once imported, a sub-module is accessed via an embedded [Space] atom in the destination module's space, [Tokenizer] entries for accessing the source module's space, tokens, or a combination of the two.
 
-### Behavior WIP
+#### Behavior WIP
 
 TODO: The precise semantics of importing (in other words, linking) are still under discussion and development.  Specifically we may wish to provide a mechanism to explicitly declare what is exported from a module (and thus available for import).  This would be similar to the `export` key words in some languages, or the `pub` visibility qualifiers in Rust.
 
@@ -77,7 +78,7 @@ Some issues regarding this are:
 
 More discussion on these topics is in the section: "Importing / Linking" of the `modules_internal_discussion.md` file.
 
-# Package Management
+## Package Management
 
 Package Management is the set of features that allow for:
 - searching for modules across multiple locations (Catalogs)
@@ -86,7 +87,7 @@ Package Management is the set of features that allow for:
 
 Modularity is a fundamental and inseparable aspect of the MeTTa runner, but Package Management features could be optional.
 
-## Module File Formats
+### Module File Formats
 
 Modules may be loaded from files and other file-system-like resources (for example, a github repo) using the objects that implement the [FsModuleFormat] trait.  This trait contains the interface to interpret a file or a directory and instantiate a [ModuleLoader] to load the module(s) contained within.
 
@@ -94,7 +95,7 @@ The objects [SingleFileModuleFmt] and [DirModuleFmt] are part of the default env
 
 More information on the individual module file formats is available in the MeTTa usage documentation and MeTTa Python documentation respectively.
 
-## The PkgInfo Structure
+### The PkgInfo Structure
 
 Each module has an associated [PkgInfo] structure, which provides the module author a place to specify meta-data about the module and express requirements for the module's dependencies.  Additionally a [PkgInfo] can provide explicit loading instructions such as file system paths or github URLs for dependent modules.  The [PkgInfo] structure is the same concept as the Cargo.toml file used in Cargo/Rust.
 
@@ -105,7 +106,7 @@ docs on https://docs.rs when Rust crate is published).
 
 TODO: PkgInfo documentation also belongs in user-facing docs.  In that section, cover how to specify the pkginfo as a MeTTa structure and/or in a `_pkg-info.metta` or `_pkg-info.json` file as opposed to as a Rust struct.
 
-## Module Name Resolution
+### Module Name Resolution
 
 When MeTTa code executes the `!(import! &space some_module)` operation, the module name needs to be mapped to a loaded or loadable module.  This process occurs according to the logic described by the flowchart below.
 
@@ -130,7 +131,7 @@ Depending on the host OS, the config directory locations will be:
 
 In the future we may create a centralized module catalog along the lines of `PyPI` or `crates.io`.
 
-## Catalogs
+### Catalogs
 
 An object that implements the [ModuleCatalog] trait exposes an interface to locate modules based on name and version constraints, and create [ModuleLoader] objects to retrieve and load those modules.
 
@@ -138,7 +139,7 @@ One built-in [ModuleCatalog] object type is the [DirCatalog].  As described in t
 
 Additional catalogs may be implemented for other module repository formats or protocols - for example a central package service similar to `PyPI` or `crates.io`, as mentioned earlier.
 
-## Implementing a [ModuleLoader]
+### Implementing a [ModuleLoader]
 
 All modules are ultimately loaded programmatically through the MeTTa API, and it's the role of a [ModuleLoader] to make the necessary API calls.
 

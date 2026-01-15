@@ -7,7 +7,7 @@ Python packages are released using
 it. Usually it means setup docker and install the package from PyPi (see [setup
 instructions](https://cibuildwheel.pypa.io/en/stable/setup/#local)).
 
-There are additional preparations to be made. First of all it is needed to
+There are additional preparations to be made. First it is needed to
 allow building and installing `libhyperonc` library on a build environment.
 `cibuildwheel` uses isolated docker container for each kind of platform it
 supports. Only code of the Python package is copied into container
@@ -62,7 +62,7 @@ tag which should be in form of `v<version>` (for example if version is
 `0.1.7` then tag is `v0.1.7`). After typing the tag press `Create new tag
 on publish`. Now press `Generate release notes` button. It will automatically
 fill the `Release title` and `Release description` fields. Tick `Set as a
-pre-release` checkbox if needed and press `Publish release` button.  Now you
+pre-release` checkbox if needed and press `Publish release` button. Now you
 have published new GitHub release and triggered a job to build release
 artifacts.
 
