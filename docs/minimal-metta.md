@@ -1,12 +1,14 @@
+# Minimal MeTTa specification
+
 This document describes the minimal set of embedded MeTTa instructions which is
 designed to write the complete MeTTa interpreter in MeTTa. Current version of the
 document includes improvements which were added after experimenting with the
 first version of such an interpreter. It is not a final version and some
 directions of the future work is explained at the end of the document.
 
-# Minimal instruction set
+## Minimal instruction set
 
-## Interpreter state
+### Interpreter state
 
 The MeTTa interpreter evaluates an atom passed as an input. It evaluates it
 step by step executing a single instruction on each step. In order to do that
@@ -39,7 +41,7 @@ minimal set it is not interpreted further and returned as a part of the final
 result. Thus only the instructions of the minimal set are considered a code
 other atoms are considered a data.
 
-## Evaluation order
+### Evaluation order
 
 MeTTa implements the applicative evaluation order by default, arguments are
 evaluated before they are passed to the function. User can change this order
@@ -50,7 +52,7 @@ there is a [chain](#chain) operation which can be used to evaluate an argument
 before passing it. Thus `chain` can be used to change evaluation order in MeTTa
 interpreter.
 
-## Error/Empty/NotReducible/()
+### Error/Empty/NotReducible/()
 
 There are atoms which can be returned to designate a special situation in a code:
 - `(Error <atom> <message>)` means the interpretation is finished with error;
@@ -70,7 +72,7 @@ There are atoms which can be returned to designate a special situation in a code
 These atoms are not interpreted further as they are not a part of the minimal
 set of instructions and considered a data.
 
-## eval
+### eval
 
 `(eval <atom>)` is a first instruction which evaluates an atom passed as an
 argument. Evaluation is different for the grounded function calls (the
@@ -80,7 +82,7 @@ expressions. For the pure MeTTa expression the interpreter searches the `(=
 the result of evaluation. Execution of the grounded atom leads to the call of
 the foreign function passing the tail of the expression as arguments. For
 example `(+ 1 2)` calls the implementation of addition with `1` and `2` as
-arguments.  The list of atoms returned by the grounded function is a result of
+arguments. The list of atoms returned by the grounded function is a result of
 the evaluation in this case. A grounded function can have side effects as well.
 In both cases bindings of the `eval`'s argument are merged to the bindings of
 the result.
@@ -98,7 +100,7 @@ the instruction for a special values are the following:
   grounded function. Function can return `()/Empty/NotReducible` to express "no
   result"/"remove my result"/"not defined on data".
 
-## chain
+### chain
 
 Minimal MeTTa implements normal evaluation order (see [Evaluation
 order](#evaluation-order). Arguments are passed to the function without
@@ -113,7 +115,7 @@ evaluation and returns result of the substitution. When evaluation of the
 `<atom>` brings more than a single result `chain` returns one instance of the
 `<template>` expression for each result.
 
-## function/return
+### function/return
 
 `function` operation has the signature `(function <atom>)`. It evaluates the
 `<atom>` until it becomes `(return <atom>)`. Then `(function (return <atom>))`
@@ -130,10 +132,10 @@ of this stack. Nevertheless using `chain` instead of `function` to implement
 the evaluation loop also allows representing stack in a natural form.
 
 Evaluation of the `function` should always end by evaluating `(return <atom>)`
-expression. But as a result of an error some branch may end by non evaluatable
+expression. But as a result of an error some branch may end by non evaluable
 atom instead. In such case interpreter returns `(Error NoReturn)` error.
 
-## unify
+### unify
 
 `unify` operation allows conditioning on the results of the evaluation.
 `unify`'s signature is `(unify <atom> <pattern> <then> <else>)`. The operation
@@ -142,7 +144,7 @@ matches `<atom>` with a `<pattern>`. If match is successful then it returns
 variable bindings. If matching is not successful then it returns the `<else>`
 branch with the original variable bindings.
 
-## cons-atom/decons-atom
+### cons-atom/decons-atom
 
 `cons-atom` and `decons-atom` allows constructing and deconstructing the expression atom
 from/to pair of the head and tail. `(decons-atom <expr>)` expects non-empty
@@ -150,7 +152,7 @@ expression as an argument and returns a pair `(<head> <tail>)`. `(cons-atom <hea
 <tail>)` returns an expression where the first sub-atom is `<head>` and others
 are copied from `<tail>`.
 
-## collapse-bind
+### collapse-bind
 
 `collapse-bind` has the signature `(collapse-bind <atom>)`. It evaluates the
 `<atom>` and returns an expression which contains all alternative evaluations
@@ -164,7 +166,7 @@ of the atom and filter out ones which led to errors.
 Name `collapse-bind` is temporary and chosen to eliminate conflict with
 `collapse` which is part of the standard library.
 
-## superpose-bind
+### superpose-bind
 
 `superpose-bind` has the signature `(superpose-bind ((<atom> <bindings>)
 ...))`. It puts list of the results into the interpreter plan each pair as a
@@ -175,7 +177,7 @@ separate alternative.
 can collect the list of alternatives using `collapse-bind` filter them and
 return filtered items to the plan using `superpose-bind`.
 
-## Scope of a variable
+### Scope of a variable
 
 Each separately evaluated expression is a variable scope, and therefore variable names are treated as unique inside an expression.
 reason is that the whole expression is a variable scope. For example one can
@@ -204,7 +206,7 @@ following example:
 Here the value will not be assigned to the `$a` from the caller expression because
 each of the two variables has a different scope and they do not reference each other.
 
-# Examples
+## Examples
 
 Examples of the programs written using minimal MeTTa interpreter:
 
@@ -243,9 +245,9 @@ Evaluate atom in a loop until result is calculated:
         (eval (reduce $res $var $templ)) )))))
 ```
 
-# Properties
+## Properties
 
-## Turing completeness
+### Turing completeness
 
 The following program implements a Turing machine using the minimal MeTTa
 instruction set (the full code of the example can be found
@@ -282,16 +284,16 @@ instruction set (the full code of the example can be found
         (return (() 0 $next-tail)) )))))
 ```
 
-## Comparison with MeTTa Operational Semantics
+### Comparison with MeTTa Operational Semantics
 
 One difference from MOPS [1] is that the minimal instruction set allows
 relatively easy write deterministic programs and non-determinism is injected
-only via matching and evaluation. `Query` and `Chain` from MOPS are very
-similar to `eval`. `Transform` is very similar to `unify`. `chain` has no
+only via matching and evaluation. `Query` and `Chain` from MOPS are
+similar to `eval`. `Transform` is similar to `unify`. `chain` has no
 analogue in MOPS. `cons-atom`/`decons-atom` to some extent are analogues of
 `AtomAdd`/`AtomRemove` in a sense that they can be used to change the state.
 
-## Partial and complete functions
+### Partial and complete functions
 
 Each instruction in a minimal instruction set is a total function.
 Nevertheless `Empty` allows defining partial functions in MeTTa. For example
@@ -300,7 +302,7 @@ partial `if` can be defined as follows:
 (= (if $condition $then) (unify $condition True $then Empty))
 ```
 
-## eval or return
+### eval or return
 
 Using `eval` to designate evaluation of the atom seems too verbose. But we need
 to give a programmer some way to designate whether the atom should be evaluated
@@ -356,7 +358,7 @@ used on each exit path while nothing in code of function points to this. Using
 - functions which evaluate result in a loop and have to use `return`;
 - functions which just replace the calling expression by their bodies.
 
-# MeTTa interpreter written in Rust
+## MeTTa interpreter written in Rust
 
 MeTTa interpreter written in minimal MeTTa has poor performance. To fix this
 the interpreter is rewritten in Rust. Rust implementation can be called using
@@ -373,16 +375,16 @@ returning bindings as a results. Returning bindings as results is a nice to
 have feature anyway to be able representing any functionality as a grounded
 atom. But it is not implemented yet.
 
-# Future work
+## Future work
 
-## Explicit atomspace variable bindings
+### Explicit atomspace variable bindings
 
 Current implementation implicitly keeps and applies variable bindings during
 the process of the interpretation. Explicit bindings are used to implement
-`collapse-bind` where they are absolutely necessary. Bindings can be easily
+`collapse-bind` where they are necessary. Bindings can be easily
 made explicit everywhere but the value of explicit bindings is not obvious see
 [discussion in issue
-#290](https://github.com/trueagi-io/hyperon-experimental/issues/290#issuecomment-1541314289).
+##290](https://github.com/trueagi-io/hyperon-experimental/issues/290#issuecomment-1541314289).
 
 Making atomspace part of the explicit context could make import semantics more
 straightforward. In the current implementation of the minimal instruction set
@@ -395,7 +397,7 @@ Nevertheless defining `eval` through `unify` requires rework of the grounded
 functions interface to allow calling them by executing `unify` instructions.
 Which is an interesting direction to follow.
 
-## Special matching syntax
+### Special matching syntax
 
 Sometimes it is convenient to change the semantics of the matching within a
 pattern. Some real examples are provided below. One possible way to extend
@@ -404,7 +406,7 @@ first position. For instance `(:<mod> <atom>)` could apply `<mod>` rule to
 match the `<atom>`. How to eliminate interference of this syntax with symbol
 atoms used by programmers is an open question.
 
-### Syntax to match atom by equality
+#### Syntax to match atom by equality
 
 In many situations we need to check that atom is equal to some symbol. `unify`
 doesn't work well in such cases because when checked atom is a variable it is
@@ -413,7 +415,7 @@ matched with anything (for instance `(unify $x Empty then else)` returns
 equality. For instance `(unify <atom> (:= Empty) then else)` should match
 `<atom>` with pattern only when `<atom>` is `Empty`.
 
-### Syntax to match part of the expression
+#### Syntax to match part of the expression
 
 We could have a specific syntax which would allow matching part of the
 expressions. For example such syntax could be used to match head and tail of
@@ -421,7 +423,7 @@ the expression without using `cons-atom`/`decons-atom`. Another example is match
 of the expression with some gap, i.e. `(A ... D ...)` could match `(A B C D E)`
 atom.
 
-# Links
+## Links
 
 1. Lucius Gregory Meredith, Ben Goertzel, Jonathan Warrell, and Adam
    Vandervorst. Meta-MeTTa: an operational semantics for MeTTa.

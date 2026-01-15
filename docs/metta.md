@@ -677,3 +677,5 @@ else:
         $result += merge_bindings($bindings, $b)
     return $result
 ```
+
+## Standard library
