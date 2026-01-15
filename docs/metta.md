@@ -1,6 +1,11 @@
-# Syntax
+# MeTTa language specification
 
-## S-expression grammar
+This document covers MeTTa language specification implemented by
+hyperon-experimental interpreter.
+
+## Syntax
+
+### S-expression grammar
 
 This is the S-expression grammar of the MeTTa language. The program is
 consisted of the atoms prefixed or not prefixed by the `!` sign.
@@ -49,7 +54,7 @@ the `<token regexp>` from the tokenizer then a grounded atom is constructed by
 argument. For instance it is possible instantiating the integer grounded atoms
 by adding the pair `([0-9]+, <int parser>)` into the tokenizer.
 
-## Special expressions
+### Special expressions
 
 This section lists atoms with some special meaning in the interpreter.  The
 expressions listed below are not the only expressions possible when the special
@@ -63,7 +68,7 @@ other languages. In MeTTa the programmer still can use these symbols in an
 unusual context but it should be noted that the interpreter has a special
 meaning for them.
 
-### Function expression
+#### Function expression
 
 The `=` atom is used to define a function expression in the following form:
 ```
@@ -76,7 +81,7 @@ For example the `if` function can be defined as following:
 (= (if False $then $else) $else)
 ```
 
-### Type assignment
+#### Type assignment
 
 The `:` atom is used to define the type of the atom:
 ```
@@ -88,7 +93,7 @@ For example the `if` function could have the following type definition:
 (: if (-> Bool Atom Atom $t))
 ```
 
-### Function type
+#### Function type
 
 The `->` atom is used to introduce a type of a function:
 ```
@@ -100,7 +105,7 @@ For example the type of the `if` function:
 (-> Bool Atom Atom $t)
 ```
 
-### Elementary types
+#### Elementary types
 
 There are the number of symbols which are used as the basic types:
 - `Type` - the type of any type
@@ -117,7 +122,7 @@ These types plus `Atom` are referred below as meta-types. `Atom` is a special
 meta-type which matches any atom and used for changing the order of evaluation.
 
 
-### Special function results
+#### Special function results
 
 - `Empty` - the function doesn't return any result, it is different from the
   void or unit result in other languages
@@ -147,7 +152,7 @@ it could be used to introduce custom type constructors. This could be
 implemented by making an interpreter treating any expression which has
 `ErrorType` type as an error.
 
-### Minimal MeTTa instructions
+#### Minimal MeTTa instructions
 
 The minimal MeTTa is an attempt to create an assembly language for MeTTa.
 Minimal MeTTa related atoms are listed here because while they are not a part
@@ -192,7 +197,7 @@ Minimal MeTTa instructions:
 (*) `call-native` instruction cannot be called from a MeTTa program, but it can
 be returned by a grounded function for the further evaluation.
 
-# Interpretation
+## Interpretation
 
 MeTTa program is interpreted atom by atom. If an atom is not prefixed by `!` it
 is added into the atomspace of the top module. Hierarchy of modules is
@@ -230,9 +235,9 @@ Two special functions are not specified: `match_atoms` and `merge_bindings`.
 They will be specified in the following sections. For now one can rely on
 intuitive understanding how two-side unification and bindings merging works.
 
-## Evaluation
+### Evaluation
 
-### Evaluate atom (metta)
+#### Evaluate atom (metta)
 
 ```
 Input:
@@ -267,7 +272,7 @@ else:
         return $error
 ```
 
-### Cast types (type_cast)
+#### Cast types (type_cast)
 
 ```
 Input:
@@ -290,7 +295,7 @@ for $t in $types:
 return [((Error $atom (BadType $type $t)), $bindings) for $t in $no_match]
 ```
 
-### Match types (match_types)
+#### Match types (match_types)
 
 ```
 Input:
@@ -308,7 +313,7 @@ if $type1 == %Undefined% or $type1 == Atom
 return match_atoms($type1, $type2)
 ```
 
-### Interpret expression (interpret_expression)
+#### Interpret expression (interpret_expression)
 
 ```
 Input:
@@ -350,7 +355,7 @@ if <$actual_types contains non function types or %Undefined% type>:
 return $tuples + $errors
 ```
 
-### Interpret tuple (interpret_tuple)
+#### Interpret tuple (interpret_tuple)
 
 ```
 Input:
@@ -376,7 +381,7 @@ for ($h, $hb) in metta($head, %Undefined%, $space, $bindings):
 return $result
 ```
 
-### Check if function type is applicable (check_if_function_type_is_applicable)
+#### Check if function type is applicable (check_if_function_type_is_applicable)
 
 ```
 Input:
@@ -421,7 +426,7 @@ else:
     return Ok($results)
 ```
 
-### Check argument type (check_argument_type)
+#### Check argument type (check_argument_type)
 
 ```
 Input:
@@ -444,7 +449,7 @@ for $t in $actual_types:
 return $result
 ```
 
-### Interpret function (interpret_function)
+#### Interpret function (interpret_function)
 ```
 Input:
 - $atom - atom to be evaluated
@@ -472,7 +477,7 @@ for ($h, $hb) in metta($op, $op_type, $space, $bindings):
 return $result
 ```
 
-### Interpret arguments (interpret_args)
+#### Interpret arguments (interpret_args)
 
 ```
 Input:
@@ -501,7 +506,7 @@ for ($h, $hb) in metta($atom, $type, $space, $bindings):
 return $result
 ```
 
-### Call MeTTa expression (metta_call)
+#### Call MeTTa expression (metta_call)
 
 ```
 Input:
@@ -542,7 +547,7 @@ else:
     return $results
 ```
 
-## Matching
+### Matching
 
 This section explains the atom matching algorithm. The result of matching is
 list of variable binding sets. If two atoms matched don't contain grounded
@@ -565,7 +570,7 @@ explain how binding set is modified. For example `$bindings - { $b <- $b_value
 } + { $a = $b }` means one need remove relation `$b <- $b_value` from $bindings
 and add relation `$a = $b`.
 
-### Match atoms (match_atoms)
+#### Match atoms (match_atoms)
 
 ```
 Input:
@@ -607,7 +612,7 @@ else:
 return filter(lambda $b: <$b doesn't have variable loops>, $results)
 ```
 
-### Merge bindings (merge_bindings)
+#### Merge bindings (merge_bindings)
 
 ```
 Input:
@@ -626,7 +631,7 @@ for $rel in <set of "assign value to var" or "vars are equal" relations of $righ
 return $result
 ```
 
-### Add variable binding to binding set (add_var_binding)
+#### Add variable binding to binding set (add_var_binding)
 
 ```
 Input:
@@ -649,7 +654,7 @@ else:
     return $result
 ```
 
-### Add variable equality to binding set (add_var_equality)
+#### Add variable equality to binding set (add_var_equality)
 
 ```
 Input:
