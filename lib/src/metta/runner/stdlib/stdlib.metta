@@ -493,15 +493,9 @@
   (@return "Result of applying operation to the list of values"))
 (: foldl-atom (-> Expression Atom Variable Variable Atom %Undefined%))
 (= (foldl-atom $list $init $a $b $op)
-  (function (chain (decons-atom $list) $ht
-    (unify ($head $tail) $ht
-      (chain (eval (sealed ($a $b) $op)) $op_sealed
-        (chain (eval (atom-subst $init $a $op_sealed)) $op-init
-          (chain (eval (atom-subst $head $b $op-init)) $op-head
-            (chain (context-space) $space
-              (chain (metta $op-head %Undefined% $space) $head-folded
-                (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))))
-      (return $init) ))))
+  (function
+    (chain (context-space) $space
+      (eval (_minimal-foldl-atom $list $init $a $b $op $space)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Standard library written in MeTTa ;

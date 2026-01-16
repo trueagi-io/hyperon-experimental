@@ -133,6 +133,9 @@ markdown_extensions:
 nav:
   - Home: index.md
   - MeTTa specification: metta.md
+  - MeTTa API Reference:
+    - Standard library: corelib.md
+    - File I/O: fileio.md
   - Minimal Metta specification: minimal-metta.md
   - MeTTa modules: modules_dev.md
   - DAS setup: das_setup.md
