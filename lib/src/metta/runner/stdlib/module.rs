@@ -6,6 +6,8 @@ use hyperon_common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ResourceKey};
 use super::{grounded_op, regex, unit_result};
 use hyperon_atom::gnd::str::expect_string_like_atom;
+use hyperon_atom::gnd::GroundedFunctionAtom;
+use crate::space::module::ModuleSpace;
 
 use regex::Regex;
 
@@ -194,6 +196,17 @@ impl CustomExecute for ModSpaceOp {
     }
 }
 
+fn module_space_no_deps(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    let arg_error = "module-space-no-deps expects a space as an argument";
+    let space = args.get(0).ok_or(arg_error)?;
+    let space = Atom::as_gnd::<DynSpace>(space).ok_or(arg_error)?;
+
+    if let Some(space) = space.borrow().as_any().downcast_ref::<ModuleSpace>() {
+        return Ok(vec![Atom::gnd(space.main())]);
+    }
+    Ok(vec![Atom::gnd(space.clone())])
+}
+
 /// This operation prints the modules loaded from the top of the runner
 ///
 /// NOTE: This is a temporary stop-gap to help MeTTa users inspect which modules they have loaded and
@@ -262,6 +275,14 @@ impl CustomExecute for BindOp {
         self.tokenizer.borrow_mut().register_token(token_regex, move |_| { atom.clone() });
         unit_result()
     }
+}
+
+pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
+    tref.register_function(GroundedFunctionAtom::new(
+        r"module-space-no-deps".into(),
+        expr!("->" "SpaceType" "SpaceType"),
+        module_space_no_deps,
+    ));
 }
 
 pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, metta: &Metta) {

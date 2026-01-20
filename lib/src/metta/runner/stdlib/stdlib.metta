@@ -789,42 +789,43 @@
 (@doc get-doc
   (@desc "Returns documentation for the given Atom/Function")
   (@params (
+    (@param "Atomspace where documentation should be searched")
     (@param "Atom/Function name for which documentation is needed")))
   (@return "Documentation for the given atom/function"))
-(: get-doc (-> Atom %Undefined%))
-(= (get-doc $atom)
+(: get-doc (-> SpaceType Atom %Undefined%))
+(= (get-doc $space $atom)
   (let $meta-type (get-metatype $atom)
     (case $meta-type (
-      (Expression (get-doc-atom $atom))
-      ($_ (get-doc-single-atom $atom)) ))))
+      (Expression (get-doc-atom $space $atom))
+      ($_ (get-doc-single-atom $space $atom)) ))))
 
 (@doc get-doc-single-atom
   (@desc "Function used by get-doc to get documentation on either function or atom. It checks if input name is the name of function or atom and calls correspondent function")
   (@params (
+    (@param "Atomspace where documentation should be searched")
     (@param "Atom/Function name for which documentation is needed")))
   (@return "Documentation for the given atom/function"))
-(: get-doc-single-atom (-> Atom %Undefined%))
-(= (get-doc-single-atom $atom)
-  (let $top-space (mod-space! top)
-  (let $type (get-type-space $top-space $atom)
+(: get-doc-single-atom (-> SpaceType Atom %Undefined%))
+(= (get-doc-single-atom $space $atom)
+  (let $type (get-type-space $space $atom)
     (if (is-function $type)
-      (get-doc-function $atom $type)
-      (get-doc-atom $atom) ))))
+      (get-doc-function $space $atom $type)
+      (get-doc-atom $space $atom) )))
 
 (@doc get-doc-function
   (@desc "Function used by get-doc-single-atom to get documentation on a function. It returns documentation on a function if it exists or default documentation with no description otherwise")
   (@params (
+    (@param "Atomspace where documentation should be searched")
     (@param "Function name for which documentation is needed")
     (@param "Type notation for this function")))
   (@return "Documentation for the given function"))
-(: get-doc-function (-> Atom Type %Undefined%))
-(= (get-doc-function $name $type)
-  (let $top-space (mod-space! top)
-  (unify $top-space (@doc $name $desc (@params $params) $ret)
+(: get-doc-function (-> SpaceType Atom Type %Undefined%))
+(= (get-doc-function $space $name $type)
+  (unify $space (@doc $name $desc (@params $params) $ret)
     (let $type' (if (== $type %Undefined%) (undefined-doc-function-type $params) (cdr-atom $type))
     (let ($params' $ret') (get-doc-params $params $ret $type')
       (@doc-formal (@item $name) (@kind function) (@type $type) $desc (@params $params') $ret')))
-    (@doc-formal (@item $name) (@kind function) (@type $type) (@desc "No documentation")) )))
+    (@doc-formal (@item $name) (@kind function) (@type $type) (@desc "No documentation")) ))
 
 (@doc undefined-doc-function-type
   (@desc "Function used by get-doc-single-atom in case of absence of function's type notation")
@@ -861,17 +862,17 @@
 (@doc get-doc-atom
   (@desc "Function used by get-doc (in case of input type Expression) and get-doc-single-atom (in case input value is not a function) to get documentation on input value")
   (@params (
+    (@param "Atomspace where documentation should be searched")
     (@param "Atom's name to get documentation for")))
   (@return "Documentation on input Atom"))
-(: get-doc-atom (-> Atom %Undefined%))
-(= (get-doc-atom $atom)
-  (let $top-space (mod-space! top)
-  (let $type (get-type-space $top-space $atom)
-    (unify $top-space (@doc $atom $desc)
+(: get-doc-atom (-> SpaceType Atom %Undefined%))
+(= (get-doc-atom $space $atom)
+  (let $type (get-type-space $space $atom)
+    (unify $space (@doc $atom $desc)
       (@doc-formal (@item $atom) (@kind atom) (@type $type) $desc)
-      (unify $top-space (@doc $atom $desc' (@params $params) $ret)
-        (get-doc-function $atom %Undefined%)
-        (@doc-formal (@item $atom) (@kind atom) (@type $type) (@desc "No documentation")) )))))
+      (unify $space (@doc $atom $desc' (@params $params) $ret)
+        (get-doc-function $space $atom %Undefined%)
+        (@doc-formal (@item $atom) (@kind atom) (@type $type) (@desc "No documentation")) ))))
 
 (@doc help!
   (@desc "Function prints documentation for the input atom. Without parameters prints the list of the stdlib functions.")
@@ -880,7 +881,8 @@
   (@return "Unit atom"))
 (: help! (-> Atom (->)))
 (= (help! $atom)
-  (case (get-doc $atom) (
+  (let $corelib-space (module-space-no-deps (mod-space! corelib))
+  (case (get-doc $corelib-space $atom) (
     ((@doc-formal (@item $item) (@kind function) (@type $type) (@desc $descr)
                  (@params $params)
                  (@return (@type $ret-type) (@desc $ret-desc)))
@@ -895,15 +897,17 @@
     ((@doc-formal (@item $item) (@kind atom) (@type $type) (@desc $descr))
       (let () (println! (format-args "Atom {}: {} {}" ($item $type $descr)))
       () ))
-    ($other (Error $other "Cannot match @doc-formal structure") ))))
+    ($other (Error $other "Cannot match @doc-formal structure") )))))
 
 (: help! (-> (->)))
-(= (help!) (let $top-space (mod-space! top)
-    (unify $top-space (@doc $name (@desc $desc) $params $ret)
+(= (help!)
+  (let $corelib-space (module-space-no-deps (mod-space! corelib))
+    (unify $corelib-space (@doc $name (@desc $desc) $params $ret)
       (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
       Empty)))
-(= (help!) (let $top-space (mod-space! top)
-    (unify $top-space (@doc $name (@desc $desc))
+(= (help!)
+  (let $corelib-space (module-space-no-deps (mod-space! corelib))
+    (unify $corelib-space (@doc $name (@desc $desc))
       (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
       Empty)))
 
@@ -1041,6 +1045,12 @@
   (@params (
     (@param "Module name")))
   (@return "Space name"))
+
+(@doc module-space-no-deps
+  (@desc "Gets module space and returns the space without dependencies. It is useful when one need to search the module space itself not including imported modules.")
+  (@params (
+    (@param "Module space")))
+  (@return "Space without dependencies included"))
 
 (@doc print-mods!
   (@desc "Prints all modules with their correspondent spaces")

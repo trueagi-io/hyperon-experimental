@@ -26,6 +26,10 @@ impl ModuleSpace {
         Self { main: space, deps: Vec::new() }
     }
 
+    pub fn main(&self) -> DynSpace {
+        self.main.clone()
+    }
+
     pub fn query(&self, query: &Atom) -> BindingsSet {
         complex_query(query, |query| self.single_query(query))
     }
