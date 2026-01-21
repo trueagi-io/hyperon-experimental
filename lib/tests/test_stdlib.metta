@@ -131,3 +131,6 @@
 (issue911 A B)
 (= (isa911 $x $y) (match &self (issue911 $x $y) True))
 !(assertEqual ((isa911 $a B) $a) (True A))
+
+; Test sort-strings function
+!(assertEqual (sort-strings ("c" "b" "a" "c")) ("a" "b" "c" "c"))

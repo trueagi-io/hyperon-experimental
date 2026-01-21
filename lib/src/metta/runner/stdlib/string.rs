@@ -1,4 +1,5 @@
 use hyperon_atom::*;
+use hyperon_atom::gnd::GroundedFunctionAtom;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use hyperon_atom::gnd::str::*;
@@ -60,6 +61,20 @@ impl CustomExecute for FormatArgsOp {
     }
 }
 
+fn sort_strings(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    let arg_error = "sort-strings expects expression with strings as a first argument";
+    let list = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or(arg_error)?).map_err(|_| arg_error)?;
+    let mut strings = Vec::<&str>::with_capacity(list.children().len());
+    for s in list.children() {
+        let s = Atom::as_gnd::<Str>(s).ok_or(arg_error)?;
+        strings.push(s.as_str());
+    }
+    strings.sort();
+    let sorted: Vec::<Atom> = strings.into_iter()
+        .map(|s| Atom::gnd(Str::from_string(s.into()))).collect();
+    Ok(vec![Atom::expr(sorted)])
+}
+
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let println_op = Atom::gnd(PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
@@ -67,6 +82,11 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
     tref.register_token(regex(r#"(?s)^".*"$"#),
         |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
+    tref.register_function(GroundedFunctionAtom::new(
+        r"sort-strings".into(), 
+        expr!("->" "Expression" "Expression"),
+        sort_strings
+    ));
 }
 
 #[cfg(test)]
