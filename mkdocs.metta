@@ -40,8 +40,6 @@
       (help-md! $space $name)
       Empty ))
 
-!(import! &self fileio)
-
 (= (document-module $title $mod)
   (let $_ (import! &self $mod)
   (let $helps (collapse (help-md-space! (module-space-no-deps (mod-space! $mod))))
