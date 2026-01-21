@@ -1264,6 +1264,12 @@ Possible pragmas:
     (@param "Atoms to be placed inside expression instead of {}")))
   (@return "Expression with replaced {} with atoms"))
 
+(@doc sort-strings
+  (@desc "Sorts expression which contains strings in alphabet order")
+  (@params (
+    (@param "List of strings")))
+  (@return "Sorted list of strings"))
+
 (@doc sealed
   (@desc "Replaces all occurrences of any var inside atom (second argument) by unique variable, except list of variables to ignore (first argument). Can be used to create a locally scoped variables")
   (@params (
