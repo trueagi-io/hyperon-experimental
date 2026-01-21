@@ -25,6 +25,13 @@ Docs can be found at `./target/doc/hyperon/index.html`.
 
 The top page for the rendered HTML results will be written to `./html/index.html`, and latex results will be similarly written to `./latex/index.tex`
 
+## Building MeTTa Standard Library Documentation
+
+Run the following command under the root directory of the repository:
+```
+cargo run --release --bin metta-repl ./mkdocs.metta
+```
+
 ## Building Python Documentation
 
 Install `mkdocs` and dependencies.

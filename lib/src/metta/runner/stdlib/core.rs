@@ -267,6 +267,72 @@ fn collapse_add_next_atom_from_collapse_bind_result(args: &[Atom]) -> Result<Vec
     Ok(vec![Atom::Expression(list)])
 }
 
+#[derive(Clone, Debug)]
+pub struct MinimalFoldlAtomOp { }
+
+grounded_op!(MinimalFoldlAtomOp, "_minimal-foldl-atom");
+
+impl Grounded for MinimalFoldlAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_VARIABLE, ATOM_TYPE_VARIABLE, ATOM_TYPE_ATOM, ATOM_TYPE_SPACE, ATOM_TYPE_UNDEFINED])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for MinimalFoldlAtomOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg0_error = || ExecError::from("Expression is expected as a first argument");
+        let arg1_error = || ExecError::from("Initial value is expected as a second argument");
+        let arg2_error = || ExecError::from("Variable is expected as a third argument");
+        let arg3_error = || ExecError::from("Variable is expected as a forth argument");
+        let arg4_error = || ExecError::from("Operation expression is expected as a fifth argument");
+        let arg5_error = || ExecError::from("Atomspace is expected as a sixth argument");
+
+        let list = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg0_error)?).map_err(|_| arg0_error())?;
+        let init = args.get(1).ok_or_else(arg1_error)?;
+        let a = TryInto::<&VariableAtom>::try_into(args.get(2).ok_or_else(arg2_error)?).map_err(|_| arg2_error())?;
+        let b = TryInto::<&VariableAtom>::try_into(args.get(3).ok_or_else(arg3_error)?).map_err(|_| arg3_error())?;
+        let op = args.get(4).ok_or_else(arg4_error)?;
+        let space = args.get(5).ok_or_else(arg5_error)?;
+
+
+        let mut children: Vec<Atom> = list.children().into();
+        if children.is_empty() {
+            Ok(vec![Atom::expr([RETURN_SYMBOL, init.clone()])])
+        } else {
+            let head = children.remove(0);
+            let tail = Atom::expr(children);
+            let mut var_mapper = CachingMapper::new(|var: &VariableAtom| -> Atom {
+                if var == a {
+                    init.clone()
+                } else if var == b {
+                    head.clone() 
+                } else {
+                    // FIXME: do we need clone here?
+                    Atom::Variable(var.clone().make_unique())
+                }
+            });
+            let mut step_op = op.clone();
+            step_op.iter_mut().for_each(|atom: &mut Atom| {
+                match atom {
+                    Atom::Variable(var) => *atom = var_mapper.replace(var),
+                    _ => {},
+                }
+            });
+
+            let x = Atom::Variable(VariableAtom::new("x").make_unique());
+            let next = Atom::expr([CHAIN_SYMBOL, Atom::expr([METTA_SYMBOL, step_op.clone(), ATOM_TYPE_UNDEFINED, space.clone()]), x.clone(),
+                    Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(self.clone()), tail, x, Atom::Variable(a.clone()), Atom::Variable(b.clone()), op.clone(), space.clone()])]),
+                ]);
+            log::debug!("MinimalFoldlAtomOp:execute({:?}) -> {}", args, next);
+            Ok(vec![next])
+        }
+    }
+}
+
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let is_equivalent = Atom::gnd(IfEqualOp{});
     tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
@@ -292,6 +358,8 @@ pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &Dy
     tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
+    let foldl_atom_op = Atom::gnd(MinimalFoldlAtomOp{});
+    tref.register_token(regex(r"_minimal-foldl-atom"), move |_| { foldl_atom_op.clone() });
 }
 
 #[cfg(test)]

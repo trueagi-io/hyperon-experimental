@@ -90,6 +90,7 @@ fn register_context_independent_tokens(tref: &mut Tokenizer) {
     arithmetics::register_context_independent_tokens(tref);
     string::register_context_independent_tokens(tref);
     space::register_context_independent_tokens(tref);
+    module::register_context_independent_tokens(tref);
 }
 
 
@@ -616,7 +617,7 @@ mod tests {
               (@return "Return value")
             )
             
-            !(get-doc some-func)
+            !(get-doc &self some-func)
         "#);
 
         assert_eq_metta_results!(metta.run(parser), Ok(vec![
@@ -639,7 +640,7 @@ mod tests {
             (: SomeAtom SomeType)
             (@doc SomeAtom (@desc "Test symbol atom having specific type"))
 
-            !(get-doc SomeAtom)
+            !(get-doc &self SomeAtom)
         "#);
 
         assert_eq_metta_results!(metta.run(parser), Ok(vec![
@@ -665,7 +666,7 @@ mod tests {
               ))
               (@return "Return value")
             )
-            !(get-doc some-gnd-atom)
+            !(get-doc &self some-gnd-atom)
         "#);
 
         assert_eq_metta_results!(metta.run(parser), Ok(vec![
@@ -685,7 +686,7 @@ mod tests {
     fn test_get_doc_no_doc() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
         let parser = SExprParser::new(r#"
-            !(get-doc NoSuchAtom)
+            !(get-doc &self NoSuchAtom)
         "#);
 
         assert_eq_metta_results!(metta.run(parser), Ok(vec![
@@ -714,7 +715,7 @@ mod tests {
               (@return "Return value")
             )
 
-            !(get-doc (some-func arg1 arg2))
+            !(get-doc &self (some-func arg1 arg2))
         "#);
 
         assert_eq_metta_results!(metta.run(parser), Ok(vec![
@@ -739,7 +740,7 @@ mod tests {
               (@return "Return value")
             )
 
-            !(get-doc some-func-no-type)
+            !(get-doc &self some-func-no-type)
         "#);
 
         assert_eq_metta_results!(metta.run(parser), Ok(vec![
