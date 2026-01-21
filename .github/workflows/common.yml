@@ -174,7 +174,11 @@ jobs:
           HYPERONC_INCLUDE_DIR: ./hyperonc-install/include/hyperonc/hyperon/
         run: doxygen ../c/hyperonc.doxyfile
 
-      - name: Build Python API documentation
+      - name: Build MeTTa API documentation
+        if: ${{ inputs.publish-doc }}
+        run: cargo run --release --bin metta-repl ./mkdocs.metta
+
+      - name: Build Python API documentation and common site
         if: ${{ inputs.publish-doc }}
         run: |
           pip install mkdocs-material==9.7.0 mkdocs-minify-plugin==0.8.0 mkdocstrings[python]==0.26.1
