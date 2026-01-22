@@ -56,5 +56,5 @@
 !(document-module "File Input/Output" fileio)
 !(document-module "JSON" json)
 !(document-module "Random" random)
+!(document-module "Module catalog" catalog)
 ;!(document-module "DAS" das)
-;!(document-module "Modules catalog" catlog_mods)
