@@ -138,6 +138,7 @@ nav:
     - Random: random.md
     - File I/O: fileio.md
     - JSON: json.md
+    - Module catalogs: catalog.md
   - Minimal Metta specification: minimal-metta.md
   - MeTTa modules: modules_dev.md
   - DAS setup: das_setup.md

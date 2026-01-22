@@ -1,4 +1,5 @@
 use hyperon_atom::{Atom, Grounded, ExecError, CustomExecute};
+use crate::metta::text::SExprParser;
 use crate::space::grounding::GroundingSpace;
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE};
 use crate::metta::runner::{Metta, ModuleLoader, RunContext};
@@ -49,6 +50,8 @@ use crate::metta::runner::modules::MettaMod;
 //    At the very least, it makes `!(catalog-list! all)` much more noisy
 //
 
+pub static CATALOG_METTA: &'static str = include_str!("catalog.metta");
+
 /// Loader to Initialize the "catalog" module
 #[derive(Debug)]
 pub(crate) struct CatalogModLoader;
@@ -57,7 +60,10 @@ impl ModuleLoader for CatalogModLoader {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let space = GroundingSpace::new();
         context.init_self_module(space.into(), None);
-        self.load_tokens(context.module(), context.metta.clone())
+        let _ = self.load_tokens(context.module(), context.metta.clone());
+        let parser = SExprParser::new(CATALOG_METTA);
+        context.push_parser(Box::new(parser));
+        Ok(())
     }
 
     fn load_tokens(&self, target: &MettaMod, metta: Metta) -> Result<(), String> {
