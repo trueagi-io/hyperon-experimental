@@ -31,6 +31,7 @@ Run the following command under the root directory of the repository:
 ```
 cargo run --release --bin metta-repl ./mkdocs.metta
 ```
+Docs can be found at `./doc/generated/*.md`.
 
 ## Building Python Documentation
 
