@@ -57,4 +57,4 @@
 !(document-module "File Input/Output" fileio)
 !(document-module "JSON" json)
 !(document-module "Module catalog" catalog)
-;!(document-module "DAS" das)
+!(document-module "DAS" das)

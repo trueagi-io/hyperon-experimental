@@ -139,6 +139,7 @@ nav:
     - File I/O: generated/fileio.md
     - JSON: generated/json.md
     - Module catalogs: generated/catalog.md
+    - DAS: generated/das.md
   - Minimal Metta specification: minimal-metta.md
   - MeTTa modules: modules_dev.md
   - DAS setup: das_setup.md
