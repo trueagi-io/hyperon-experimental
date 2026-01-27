@@ -41,6 +41,8 @@ use crate::space::grounding::GroundingSpace;
 /// [("ent"), ("chimp"), ("monkey")]
 /// >
 
+pub static DAS_METTA: &'static str = include_str!("das.metta");
+
 /// Loader to Initialize the "das" module
 #[derive(Debug)]
 pub(crate) struct DasModLoader;
@@ -49,7 +51,10 @@ impl ModuleLoader for DasModLoader {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let space = GroundingSpace::new();
         context.init_self_module(space.into(), None);
-        self.load_tokens(context.module(), context.metta.clone())
+        let _ = self.load_tokens(context.module(), context.metta.clone())?;
+        let parser = SExprParser::new(DAS_METTA);
+        context.push_parser(Box::new(parser));
+        Ok(())
     }
 
     fn load_tokens(&self, target: &MettaMod, metta: Metta) -> Result<(), String> {
