@@ -875,14 +875,14 @@
         (@doc-formal (@item $atom) (@kind atom) (@type $type) (@desc "No documentation")) ))))
 
 (@doc help!
-  (@desc "Function prints documentation for the input atom. Without parameters prints the list of the stdlib functions.")
+  (@desc "Function prints documentation for the input atom or module. Without parameters prints the list of the corelib functions.")
   (@params (
-    (@param "Input to get documentation for")))
+    (@param "Input to get documentation for atom or module")))
   (@return "Unit atom"))
 (: help! (-> Atom (->)))
 (= (help! $atom)
-  (let $corelib-space (module-space-no-deps (mod-space! corelib))
-  (case (get-doc $corelib-space $atom) (
+  (let $top-space (mod-space! top)
+  (case (get-doc $top-space $atom) (
     ((@doc-formal (@item $item) (@kind function) (@type $type) (@desc $descr)
                  (@params $params)
                  (@return (@type $ret-type) (@desc $ret-desc)))
@@ -899,17 +899,28 @@
       () ))
     ($other (Error $other "Cannot match @doc-formal structure") )))))
 
+(: help! (-> Symbol (->)))
+(= (help! $mod)
+  (let $space (module-space-no-deps (mod-space! $mod))
+    (help-space! $space) ))
+
 (: help! (-> (->)))
-(= (help!)
-  (let $corelib-space (module-space-no-deps (mod-space! corelib))
-    (unify $corelib-space (@doc $name (@desc $desc) $params $ret)
+(= (help!) (help! corelib))
+
+(@doc help-space!
+  (@desc "Function prints documentation for all of the atoms from the given space.")
+  (@params (
+    (@param "Space to print documentation for")))
+  (@return "Unit atom"))
+(: help-space! (-> SpaceType (->)))
+(= (help-space! $space)
+    (unify $space (@doc $name (@desc $desc) $params $ret)
       (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
-      Empty)))
-(= (help!)
-  (let $corelib-space (module-space-no-deps (mod-space! corelib))
-    (unify $corelib-space (@doc $name (@desc $desc))
+      Empty))
+(= (help-space! $space)
+    (unify $space (@doc $name (@desc $desc))
       (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
-      Empty)))
+      Empty))
 
 (@doc help-param!
   (@desc "Function used by function help! to output parameters using println!")
