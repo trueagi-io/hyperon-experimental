@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MOD_NAME_SEPARATOR","SELF_MOD_NAME","TOP_MOD_NAME"],"enum":["Resource","ResourceKey"],"struct":["MettaMod","ModId"],"trait":["ModuleLoader"]};

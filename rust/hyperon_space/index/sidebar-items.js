@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["storage","trie"],"struct":["AtomIndex"],"type":["QueryResult"]};

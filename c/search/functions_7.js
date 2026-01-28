@@ -1,0 +1,24 @@
+var searchData=
+[
+  ['metta_5fatom_0',['METTA_ATOM',['../group__metta__language__group.html#gae0dddcd227ab71ef5d2bff94986bfccf',1,'hyperon.h']]],
+  ['metta_5fclone_5fhandle_1',['metta_clone_handle',['../group__interpreter__group.html#ga3f1bc3621331808c16eaa05ad22b1417',1,'hyperon.h']]],
+  ['metta_5feq_2',['metta_eq',['../group__interpreter__group.html#gac72e96d47a54a372ec1d32c59420ba2d',1,'hyperon.h']]],
+  ['metta_5ferr_5fstr_3',['metta_err_str',['../group__interpreter__group.html#gafdfc4efb62fd521a004958ddd55702ea',1,'hyperon.h']]],
+  ['metta_5fevaluate_5fatom_4',['metta_evaluate_atom',['../group__interpreter__group.html#ga2d304e7181fd9d1fb41b618e7d4e0e38',1,'hyperon.h']]],
+  ['metta_5ffree_5',['metta_free',['../group__interpreter__group.html#ga0db9c5ab905ebe5285ff2418779b5dee',1,'hyperon.h']]],
+  ['metta_5fget_5fmodule_5fspace_6',['metta_get_module_space',['../group__interpreter__group.html#gabf884db2b979249261339770d3de86ff',1,'hyperon.h']]],
+  ['metta_5fload_5fmodule_5fat_5fpath_7',['metta_load_module_at_path',['../group__interpreter__group.html#ga83161daec4c3c076f2bebaf1b675ceb2',1,'hyperon.h']]],
+  ['metta_5fload_5fmodule_5fdirect_8',['metta_load_module_direct',['../group__interpreter__group.html#gaa191e65a9443e87f8c81b80136fb6439',1,'hyperon.h']]],
+  ['metta_5fmod_5fref_5ftokenizer_9',['metta_mod_ref_tokenizer',['../group__module__group.html#gae100fc269ee1b49a55f9d9076330a676',1,'hyperon.h']]],
+  ['metta_5fnew_10',['metta_new',['../group__interpreter__group.html#ga0fae150c70a9749a63d02af3dec13dcf',1,'hyperon.h']]],
+  ['metta_5fnew_5fcore_11',['metta_new_core',['../group__interpreter__group.html#ga9bd33f0ebf40f201c1378534f49d0eaf',1,'hyperon.h']]],
+  ['metta_5fnew_5fwith_5fstdlib_5floader_12',['metta_new_with_stdlib_loader',['../group__interpreter__group.html#ga40bfcb434d9cf2fe79ceb84625894c6d',1,'hyperon.h']]],
+  ['metta_5frun_13',['metta_run',['../group__interpreter__group.html#ga9a5092224ff87fd7de602a2667614c4d',1,'hyperon.h']]],
+  ['metta_5fspace_14',['metta_space',['../group__interpreter__group.html#ga7adfab973fdd5ca4806fcba1ec049f13',1,'hyperon.h']]],
+  ['metta_5ftokenizer_15',['metta_tokenizer',['../group__interpreter__group.html#ga82e95ca93f0c1bb8b65816d1dbd5974d',1,'hyperon.h']]],
+  ['metta_5fworking_5fdir_16',['metta_working_dir',['../group__interpreter__group.html#ga0fac7779f10dededa29013b902ff7455',1,'hyperon.h']]],
+  ['module_5fdescriptor_5fclone_17',['module_descriptor_clone',['../group__module__group.html#gaade7e8d0ec9a65dcc83a4daaeb539309',1,'hyperon.h']]],
+  ['module_5fdescriptor_5ffree_18',['module_descriptor_free',['../group__module__group.html#gaa7f136e7cb9462b090911a5b39254f6a',1,'hyperon.h']]],
+  ['module_5fdescriptor_5fnew_19',['module_descriptor_new',['../group__module__group.html#gabefe4044b27a30231d1fa76d9ab25bdf',1,'hyperon.h']]],
+  ['module_5fid_5fis_5fvalid_20',['module_id_is_valid',['../group__module__group.html#ga10af9f5e33088afd0c67c05ba850be00',1,'hyperon.h']]]
+];
