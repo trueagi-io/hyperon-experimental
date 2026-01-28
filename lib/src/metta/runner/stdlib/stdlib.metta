@@ -1213,10 +1213,14 @@
   (@return "Result of evaluating of Atom bound to met condition"))
 (: case (-> Atom Expression %Undefined%))
 (= (case $atom $cases)
-   (let $c (collapse $atom)
-     (if (== (noeval $c) ())
-       (id (switch-minimal Empty $cases))
-       (chain (eval (superpose $c)) $e (id (switch-minimal $e $cases))) )))
+  (function
+    (chain (context-space) $space
+    (chain (collapse-bind (metta $atom %Undefined% $space)) $c
+    (chain (eval (== $c ())) $is_empty
+    (unify $is_empty True
+      (chain (eval (switch-minimal Empty $cases)) $r (return $r))
+      (chain (superpose-bind $c) $e
+        (chain (eval (switch-minimal $e $cases)) $r (return $r)) )))))))
 
 (@doc capture
   (@desc "Wraps an atom and capture the current space")
