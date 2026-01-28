@@ -689,13 +689,7 @@ mod tests {
             !(get-doc &self NoSuchAtom)
         "#);
 
-        assert_eq_metta_results!(metta.run(parser), Ok(vec![
-            vec![expr!("@doc-formal"
-                ("@item" "NoSuchAtom")
-                ("@kind" "atom")
-                ("@type" "%Undefined%")
-                ("@desc" {Str::from_str("No documentation")}) )],
-        ]));
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![vec![]]));
     }
 
     #[test]
@@ -718,13 +712,7 @@ mod tests {
             !(get-doc &self (some-func arg1 arg2))
         "#);
 
-        assert_eq_metta_results!(metta.run(parser), Ok(vec![
-            vec![expr!("@doc-formal"
-                ("@item" ("some-func" "arg1" "arg2"))
-                ("@kind" "atom")
-                ("@type" "RetType")
-                ("@desc" {Str::from_str("No documentation")}) )],
-        ]));
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![vec![]]));
     }
 
     #[test]

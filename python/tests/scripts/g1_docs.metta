@@ -67,13 +67,13 @@
 ; description.
 !(assertEqual
    (get-doc NoSuchAtom)
-   (@doc-formal (@item NoSuchAtom) (@kind atom) (@type %Undefined%) (@desc "No documentation")))
+   Empty)
 
 ; Same result is returned if for instance documentation for the function
 ; application is queried.
 !(assertEqual
    (get-doc (some-func arg1 arg2))
-   (@doc-formal (@item (some-func arg1 arg2)) (@kind atom) (@type ReturnType) (@desc "No documentation")))
+   Empty)
 
 ; `help!` function gets the documentation and prints it in a human readable
 ; format.
