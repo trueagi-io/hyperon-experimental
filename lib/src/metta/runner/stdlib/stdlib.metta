@@ -825,7 +825,7 @@
     (let $type' (if (== $type %Undefined%) (undefined-doc-function-type $params) (cdr-atom $type))
     (let ($params' $ret') (get-doc-params $params $ret $type')
       (@doc-formal (@item $name) (@kind function) (@type $type) $desc (@params $params') $ret')))
-    (@doc-formal (@item $name) (@kind function) (@type $type) (@desc "No documentation")) ))
+    Empty ))
 
 (@doc undefined-doc-function-type
   (@desc "Function used by get-doc-single-atom in case of absence of function's type notation")
@@ -872,17 +872,26 @@
       (@doc-formal (@item $atom) (@kind atom) (@type $type) $desc)
       (unify $space (@doc $atom $desc' (@params $params) $ret)
         (get-doc-function $space $atom %Undefined%)
-        (@doc-formal (@item $atom) (@kind atom) (@type $type) (@desc "No documentation")) ))))
+        Empty ))))
 
 (@doc help!
-  (@desc "Function prints documentation for the input atom. Without parameters prints the list of the stdlib functions.")
+  (@desc "Function prints documentation for the input atom or module. Without parameters prints the list of the corelib functions.")
   (@params (
-    (@param "Input to get documentation for")))
+    (@param "Input to get documentation for atom or module")))
   (@return "Unit atom"))
 (: help! (-> Atom (->)))
 (= (help! $atom)
-  (let $corelib-space (module-space-no-deps (mod-space! corelib))
-  (case (get-doc $corelib-space $atom) (
+  (case (help-internal! $atom) (
+    (Empty (println! (format-args "No documentation found for {}" ($atom))))
+    ($other $other) )))
+
+(: help! (-> (->)))
+(= (help!) (help! corelib))
+
+(: help-internal! (-> Atom (->)))
+(= (help-internal! $atom)
+  (let $top-space (mod-space! top)
+  (case (get-doc $top-space $atom) (
     ((@doc-formal (@item $item) (@kind function) (@type $type) (@desc $descr)
                  (@params $params)
                  (@return (@type $ret-type) (@desc $ret-desc)))
@@ -897,19 +906,31 @@
     ((@doc-formal (@item $item) (@kind atom) (@type $type) (@desc $descr))
       (let () (println! (format-args "Atom {}: {} {}" ($item $type $descr)))
       () ))
+    (Empty Empty)
     ($other (Error $other "Cannot match @doc-formal structure") )))))
 
-(: help! (-> (->)))
-(= (help!)
-  (let $corelib-space (module-space-no-deps (mod-space! corelib))
-    (unify $corelib-space (@doc $name (@desc $desc) $params $ret)
-      (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
-      Empty)))
-(= (help!)
-  (let $corelib-space (module-space-no-deps (mod-space! corelib))
-    (unify $corelib-space (@doc $name (@desc $desc))
-      (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
-      Empty)))
+(: help-internal! (-> Symbol (->)))
+(= (help-internal! $mod)
+  (case (module-space-no-deps (mod-space! $mod)) (
+    ((Error $atom $msg) Empty) ; return Empty because other instance returns ()
+    ($space (help-space! $space)) )))
+
+(@doc help-space!
+  (@desc "Function prints documentation for all of the atoms from the given space.")
+  (@params (
+    (@param "Space to print documentation for")))
+  (@return "Unit atom"))
+(: help-space! (-> SpaceType (->)))
+(= (help-space! $space)
+    (let $_ (collapse
+      (unify $space (@doc $name (@desc $desc) $params $ret)
+        (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
+        Empty )) ()))
+(= (help-space! $space)
+    (let $_ (collapse
+      (unify $space (@doc $name (@desc $desc))
+        (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
+        Empty )) Empty)) ; return Empty because other instance returns ()
 
 (@doc help-param!
   (@desc "Function used by function help! to output parameters using println!")
@@ -1202,10 +1223,14 @@
   (@return "Result of evaluating of Atom bound to met condition"))
 (: case (-> Atom Expression %Undefined%))
 (= (case $atom $cases)
-   (let $c (collapse $atom)
-     (if (== (noeval $c) ())
-       (id (switch-minimal Empty $cases))
-       (chain (eval (superpose $c)) $e (id (switch-minimal $e $cases))) )))
+  (function
+    (chain (context-space) $space
+    (chain (collapse-bind (metta $atom %Undefined% $space)) $c
+    (chain (eval (== $c ())) $is_empty
+    (unify $is_empty True
+      (chain (eval (switch-minimal Empty $cases)) $r (return $r))
+      (chain (superpose-bind $c) $e
+        (chain (eval (switch-minimal $e $cases)) $r (return $r)) )))))))
 
 (@doc capture
   (@desc "Wraps an atom and capture the current space")
