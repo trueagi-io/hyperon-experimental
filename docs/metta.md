@@ -345,7 +345,7 @@ for $f in <items from $actual_types which are valid function types>:
             for $b in $succs:
                 for ($a, $b) in interpret_function($atom, $f, $type, $space, $b):
                     result += metta_call($a, $ret_type, $space, $b)
-                return $result
+            return $result
 
 $tuples = []
 if <$actual_types contains non function types or %Undefined% type>:
