@@ -535,11 +535,15 @@ if <$op is executable grounded atom>:
         case IncorrectArgument:
             return [($atom, $bindings)]
 else:
-    for $rb in query($space, (= $atom $X)):
-        for $mb in merge_bindings($rb, $bindings):
-            if not(<$mb has loop bindings>) and <$mb contains value for the $X variable>:
-                $x = <get value of the $X variable from $mb>
-                $results += [metta($x, $type, $space, $mb)]
+    $query_output = query($space, (= $atom $X))
+    if len($query_output) > 0:
+        for $rb in $query_output:
+            for $mb in merge_bindings($rb, $bindings):
+                if not(<$mb has loop bindings>) and <$mb contains value for the $X variable>:
+                    $x = <get value of the $X variable from $mb>
+                    $results += [metta($x, $type, $space, $mb)]
+    else:
+        $results += [($atom, $bindings)]
 
 if len($results) == 0:
     return [(Empty, $bindings)]
