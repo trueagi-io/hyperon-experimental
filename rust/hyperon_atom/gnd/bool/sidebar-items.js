@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ATOM_TYPE_BOOL"],"struct":["Bool"]};

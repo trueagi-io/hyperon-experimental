@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["GetMetaTypeOp","GetTypeOp","GetTypeSpaceOp","IndexAtomOp","IntersectionAtomOp","MaxAtomOp","MinAtomOp","SizeAtomOp","SubtractionAtomOp","UnionAtomOp","UniqueAtomOp"]};

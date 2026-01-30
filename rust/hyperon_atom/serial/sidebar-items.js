@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error"],"struct":["NullSerializer"],"trait":["Serializer"],"type":["Result"]};

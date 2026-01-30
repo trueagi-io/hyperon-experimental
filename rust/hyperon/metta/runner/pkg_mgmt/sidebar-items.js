@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["UpdateMode"],"fn":["mod_name_from_url"],"struct":["DepEntry","DirCatalog","DirModuleFmt","LocalCatalog","ModuleDescriptor","PkgInfo","SingleFileModuleFmt"],"trait":["FsModuleFormat","ManagedCatalog","ModuleCatalog"]};

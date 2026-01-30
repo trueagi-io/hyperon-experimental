@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["cstr_as_str","cstr_into_string","log_error","log_info","log_warn","str_as_cstr","string_as_cstr","write_str"],"struct":["CWrite","write_t"]};

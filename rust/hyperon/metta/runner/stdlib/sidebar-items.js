@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["interpret"],"mod":["arithmetics","atom","core","debug","math","module","package","space","string"],"static":["METTA_CODE"]};
