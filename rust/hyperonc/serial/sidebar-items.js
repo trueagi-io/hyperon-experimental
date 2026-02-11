@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["serial_result_t"],"struct":["serializer_api_t"]};

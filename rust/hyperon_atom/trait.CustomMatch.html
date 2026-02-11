@@ -1,0 +1,46 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Trait for implementing custom matching logic. In order to make it work one should also implement Grounded::as_match method."><title>CustomMatch in hyperon_atom - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="hyperon_atom" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../static.files/storage-e2aeef58.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">CustomMatch</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../hyperon_atom/index.html">hyperon_<wbr>atom</a><span class="version">0.2.10</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Custom<wbr>Match</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.match_" title="match_">match_</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate hyperon_<wbr>atom</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">hyperon_atom</a></div><h1>Trait <span class="trait">Custom<wbr>Match</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/hyperon_atom/lib.rs.html#622-628">Source</a> </span></div><pre class="rust item-decl"><code>pub trait CustomMatch {
+    // Required method
+    fn <a href="#tymethod.match_" class="fn">match_</a>(&amp;self, other: &amp;<a class="enum" href="enum.Atom.html" title="enum hyperon_atom::Atom">Atom</a>) -&gt; <a class="type" href="matcher/type.MatchResultIter.html" title="type hyperon_atom::matcher::MatchResultIter">MatchResultIter</a>;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Trait for implementing custom matching logic. In order to make it work
+one should also implement <a href="trait.Grounded.html#method.as_match" title="method hyperon_atom::Grounded::as_match">Grounded::as_match</a> method.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>hyperon_atom::<span class="kw-2">*</span>;
+<span class="kw">use </span>hyperon_atom::matcher::{BindingsSet, Bindings, MatchResultIter, match_atoms};
+<span class="kw">use </span>std::fmt::{Display, Formatter};
+<span class="kw">use </span>std::iter::once;
+
+<span class="attr">#[derive(Debug, PartialEq, Clone)]
+</span><span class="kw">struct </span>MyGrounded {}
+
+<span class="kw">impl </span>Grounded <span class="kw">for </span>MyGrounded {
+    <span class="kw">fn </span>type_(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Atom {
+        rust_type_atom::&lt;MyGrounded&gt;()
+    }
+
+    <span class="kw">fn </span>as_match(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">dyn </span>CustomMatch&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>)
+    }
+}
+
+<span class="kw">impl </span>CustomMatch <span class="kw">for </span>MyGrounded {
+    <span class="kw">fn </span>match_(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Atom) -&gt; MatchResultIter {
+        <span class="comment">// Doesn't match with anything even with itself
+        </span>Box::new(BindingsSet::empty().into_iter())
+    }
+}
+
+<span class="kw">impl </span>Display <span class="kw">for </span>MyGrounded {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">"MyGrounded"</span>)
+    }
+}
+
+<span class="kw">let </span>atom = Atom::gnd(MyGrounded{});
+<span class="kw">let </span>same = Atom::gnd(MyGrounded{});
+
+<span class="macro">assert_eq!</span>(atom, same);
+<span class="macro">assert_eq!</span>(match_atoms(<span class="kw-2">&amp;</span>atom, <span class="kw-2">&amp;</span>same).collect::&lt;Vec&lt;Bindings&gt;&gt;(), <span class="macro">vec!</span>[]);</code></pre></div></div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.match_" class="method"><a class="src rightside" href="../src/hyperon_atom/lib.rs.html#627">Source</a><h4 class="code-header">fn <a href="#tymethod.match_" class="fn">match_</a>(&amp;self, other: &amp;<a class="enum" href="enum.Atom.html" title="enum hyperon_atom::Atom">Atom</a>) -&gt; <a class="type" href="matcher/type.MatchResultIter.html" title="type hyperon_atom::matcher::MatchResultIter">MatchResultIter</a></h4></section></summary><div class="docblock"><p>Implements custom matching logic of the grounded atom.
+Gets <code>other</code> atom as input, returns the iterator of the
+<a href="matcher/struct.Bindings.html" title="struct hyperon_atom::matcher::Bindings">matcher::Bindings</a> for the variables of the <code>other</code> atom.
+See <a href="matcher/index.html" title="mod hyperon_atom::matcher">matcher</a> for detailed explanation.</p>
+</div></details></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../trait.impl/hyperon_atom/trait.CustomMatch.js" async></script></section></div></main></body></html>

@@ -1,0 +1,33 @@
+@startuml
+package "Rust ./hyperon-common/*" {
+  [libhyperon_common.rlib] as libhyperon_common
+}
+
+package "Rust ./hyperon-atom/*" {
+  [libhyperon_atom.rlib] as libhyperon_atom
+}
+
+package "Rust ./lib/*" {
+  [libhyperon.rlib] as libhyperon
+}
+
+package "Rust, C ./c/*" {
+  [libhyperonc.so\nlibhyperon.a\nhyperon/hyperon.h] as libhyperonc
+}
+
+package "Python ./python/*" {
+  [libhyperonpy.so\n./python/libhyperon.cpp] as libhyperonpy
+  [hyperon\n./python/hyperon/*] as hyperonpy
+}
+
+package "Rust ./repl/*" {
+  [metta_repl] as metta_repl
+}
+
+libhyperon_atom -u-> libhyperon_common
+libhyperon -u-> libhyperon_atom
+libhyperonc -u-> libhyperon
+libhyperonpy -u-> libhyperonc
+hyperonpy -u-> libhyperonpy
+metta_repl -u-> libhyperon
+@enduml

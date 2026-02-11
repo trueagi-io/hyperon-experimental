@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['remove_0',['remove',['../structspace__api__t.html#af5255f31eaa7cf43385efa44afd65ca2',1,'space_api_t']]],
+  ['replace_1',['replace',['../structspace__api__t.html#a47324a9fe62fdf61f3ed154f4f8f89ed',1,'space_api_t']]],
+  ['result_2',['result',['../structstep__result__t.html#a40eb358244c04dad7c9ccfb9ae1ad403',1,'step_result_t']]],
+  ['run_5fcontext_5fget_5fmetta_3',['run_context_get_metta',['../group__interpreter__group.html#gafbbe0e25cd3e024eb6fa8cd8f2b2b9e5',1,'hyperon.h']]],
+  ['run_5fcontext_5fget_5fspace_4',['run_context_get_space',['../group__interpreter__group.html#ga7f5e200571764a8f6b24fdf4a993d40e',1,'hyperon.h']]],
+  ['run_5fcontext_5fget_5ftokenizer_5',['run_context_get_tokenizer',['../group__interpreter__group.html#ga7b0eda1064b72452c001980e172de85a',1,'hyperon.h']]],
+  ['run_5fcontext_5fimport_5fdependency_6',['run_context_import_dependency',['../group__module__group.html#gadbe139b7af4b5d35090837f4395a8521',1,'hyperon.h']]],
+  ['run_5fcontext_5finit_5fself_5fmodule_7',['run_context_init_self_module',['../group__module__group.html#ga427f1a6b74db8f7a029bdd1ff67f8a54',1,'hyperon.h']]],
+  ['run_5fcontext_5fload_5fmodule_8',['run_context_load_module',['../group__module__group.html#gaa2116d9ded6a33281d43b23a72e5a57c',1,'hyperon.h']]],
+  ['run_5fcontext_5fpush_5fparser_9',['run_context_push_parser',['../group__interpreter__group.html#ga807a3a941df92f54e28ceb245671c4f3',1,'hyperon.h']]],
+  ['run_5fcontext_5fraise_5ferror_10',['run_context_raise_error',['../group__interpreter__group.html#ga5b7ae412e6cc3f7126b1ec6011ce483e',1,'hyperon.h']]],
+  ['run_5fcontext_5ft_11',['run_context_t',['../structrun__context__t.html',1,'']]],
+  ['runner_5fstate_5fcurrent_5fresults_12',['runner_state_current_results',['../group__interpreter__group.html#gae96248f793285f209d526284a382963f',1,'hyperon.h']]],
+  ['runner_5fstate_5ferr_5fstr_13',['runner_state_err_str',['../group__interpreter__group.html#ga3018cdbc5d450c8b7bb322c641bd7d87',1,'hyperon.h']]],
+  ['runner_5fstate_5ffree_14',['runner_state_free',['../group__interpreter__group.html#gadf3ade0caafe291b2fb3a5ada6154478',1,'hyperon.h']]],
+  ['runner_5fstate_5fis_5fcomplete_15',['runner_state_is_complete',['../group__interpreter__group.html#gabe67b8549e322ba0f36c1ef1133b430f',1,'hyperon.h']]],
+  ['runner_5fstate_5fnew_5fwith_5fatoms_16',['runner_state_new_with_atoms',['../group__interpreter__group.html#gad99336318e713daa7ed30ebc56b82762',1,'hyperon.h']]],
+  ['runner_5fstate_5fnew_5fwith_5fparser_17',['runner_state_new_with_parser',['../group__interpreter__group.html#ga573f10ed5f78555dc9ee2edc429bd8f4',1,'hyperon.h']]],
+  ['runner_5fstate_5fstep_18',['runner_state_step',['../group__interpreter__group.html#gac5d60583dda4bd7c31a876582c42810e',1,'hyperon.h']]],
+  ['runner_5fstate_5ft_19',['runner_state_t',['../structrunner__state__t.html',1,'']]],
+  ['runner_5fstate_5fto_5fstr_20',['runner_state_to_str',['../group__interpreter__group.html#ga039ce982dfdf406bf1b05f8b78ec4b1b',1,'hyperon.h']]],
+  ['rustmettamodref_21',['RustMettaModRef',['../hyperon_8h.html#a7e5a19c608c5c2cb5436ebc29e66aeb9',1,'hyperon.h']]]
+];

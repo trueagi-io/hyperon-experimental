@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["check_type","get_atom_types","get_meta_type","is_func","match_reducted_types","validate_atom"],"struct":["AtomType"]};

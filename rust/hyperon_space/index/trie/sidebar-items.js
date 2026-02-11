@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ALLOW_DUPLICATION","NO_DUPLICATION"],"enum":["InsertKey","QueryKey"],"struct":["AllowDuplication","AtomTrie","NoDuplication"],"trait":["DuplicationStrategy","DuplicationStrategyImplementor"]};

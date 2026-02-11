@@ -1,0 +1,422 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `metta` mod in crate `hyperonc`."><title>hyperonc::metta - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="hyperonc" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module metta</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../hyperonc/index.html">hyperonc</a><span class="version">0.2.10</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module metta</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate hyperonc</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">hyperonc</a></div><h1>Module <span>metta</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/hyperonc/metta.rs.html#1-1683">Source</a> </span></div><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.env_builder_t.html" title="struct hyperonc::metta::env_builder_t">env_<wbr>builder_<wbr>t</a></dt><dd>@brief Represents an environment initialization, in progress
+@ingroup environment_group
+@note <code>env_builder_t</code> must be given to <code>environment_init_finish()</code> to properly release it</dd><dt><a class="struct" href="struct.metta_t.html" title="struct hyperonc::metta::metta_t">metta_t</a></dt><dd>@brief A top-level MeTTa runner
+@ingroup interpreter_group
+@note A <code>metta_t</code> must be freed with <code>metta_free()</code>
+@see metta_new
+@see metta_free</dd><dt><a class="struct" href="struct.run_context_t.html" title="struct hyperonc::metta::run_context_t">run_<wbr>context_<wbr>t</a></dt><dd>@brief An interface object providing access to the MeTTa run interface
+@ingroup interpreter_group</dd><dt><a class="struct" href="struct.runner_state_t.html" title="struct hyperonc::metta::runner_state_t">runner_<wbr>state_<wbr>t</a></dt><dd>@brief Represents the state of an in-flight MeTTa execution run
+@ingroup interpreter_group
+@note A <code>runner_state_t</code> is initially created by <code>runner_state_new_with_parser()</code>.  Each call to <code>metta_run_step()</code>, in
+a loop, advances the evaluation progress by some amount.  When the runner operations have
+fully resolved, <code>runner_state_is_complete()</code> will return true.  Ownership of the <code>runner_state_t</code>
+must ultimately be released with <code>runner_state_free()</code>.</dd><dt><a class="struct" href="struct.sexpr_parser_t.html" title="struct hyperonc::metta::sexpr_parser_t">sexpr_<wbr>parser_<wbr>t</a></dt><dd>@brief Represents an S-Expression Parser state machine, to parse input text into an Atom
+@ingroup tokenizer_and_parser_group
+@note <code>sexpr_parser_t</code> objects must be freed with <code>sexpr_parser_free()</code></dd><dt><a class="struct" href="struct.step_result_t.html" title="struct hyperonc::metta::step_result_t">step_<wbr>result_<wbr>t</a></dt><dd>@brief Contains the state for an in-flight interpreter operation
+@ingroup interpreter_group
+@note The <code>step_result_t</code> API is very low-level; It provides direct access to the interpreter
+without a an environment, parser, or tokenizer.  Usually the <code>runner_state_t</code> API is a better
+choice for executing MeTTa code in most situations.
+@note A <code>step_result_t</code> is initially created by <code>interpret_init()</code>.  Each call to <code>interpret_step()</code>, in
+a loop, consumes the <code>step_result_t</code> and creates a new one.  When the interpreter operation has
+fully resolved, <code>step_get_result()</code> can provide the final results.  Ownership of the <code>step_result_t</code>
+must ultimately be released with <code>step_get_result()</code>.
+@see interpret_init
+@see interpret_step
+@see step_get_result</dd><dt><a class="struct" href="struct.syntax_node_t.html" title="struct hyperonc::metta::syntax_node_t">syntax_<wbr>node_<wbr>t</a></dt><dd>@brief Represents a component in a syntax tree created by parsing MeTTa code
+@ingroup tokenizer_and_parser_group
+@note <code>syntax_node_t</code> objects must be freed with <code>syntax_node_free()</code></dd><dt><a class="struct" href="struct.token_api_t.html" title="struct hyperonc::metta::token_api_t">token_<wbr>api_<wbr>t</a></dt><dd>@struct token_api_t
+@brief A table of callback functions to implement custom atom parsing
+@ingroup tokenizer_and_parser_group
+@see tokenizer_register_token</dd><dt><a class="struct" href="struct.tokenizer_t.html" title="struct hyperonc::metta::tokenizer_t">tokenizer_<wbr>t</a></dt><dd>@brief Represents a handle to a Tokenizer, capable of recognizing meaningful Token substrings in text
+@ingroup tokenizer_and_parser_group
+@note <code>tokenizer_t</code> handles must be freed with <code>tokenizer_free()</code></dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.syntax_node_type_t.html" title="enum hyperonc::metta::syntax_node_type_t">syntax_<wbr>node_<wbr>type_<wbr>t</a></dt><dd>@brief The type of language construct respresented by a syntax_node_t
+@ingroup tokenizer_and_parser_group</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.ATOM_TYPE_ATOM.html" title="fn hyperonc::metta::ATOM_TYPE_ATOM">ATOM_<wbr>TYPE_<wbr>ATOM</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol: “Atom”, used to indicate that an atom’s type is a generic atom
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Symbol atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_BOOL.html" title="fn hyperonc::metta::ATOM_TYPE_BOOL">ATOM_<wbr>TYPE_<wbr>BOOL</a></dt><dd>@brief Creates an atom used to indicate that an atom’s type is a Bool type.
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_EXPRESSION.html" title="fn hyperonc::metta::ATOM_TYPE_EXPRESSION">ATOM_<wbr>TYPE_<wbr>EXPRESSION</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol: “Expression”, used to indicate that an atom’s type is an expression atom
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Symbol atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_GROUNDED.html" title="fn hyperonc::metta::ATOM_TYPE_GROUNDED">ATOM_<wbr>TYPE_<wbr>GROUNDED</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol: “Grounded”, used to indicate that an atom’s type is a grounded atom
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Symbol atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_GROUNDED_SPACE.html" title="fn hyperonc::metta::ATOM_TYPE_GROUNDED_SPACE">ATOM_<wbr>TYPE_<wbr>GROUNDED_<wbr>SPACE</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol used to indicate that an atom’s type is a wrapper around a Space
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Symbol atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_NUMBER.html" title="fn hyperonc::metta::ATOM_TYPE_NUMBER">ATOM_<wbr>TYPE_<wbr>NUMBER</a></dt><dd>@brief Creates an atom used to indicate that an atom’s type is a Number type.
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_STRING.html" title="fn hyperonc::metta::ATOM_TYPE_STRING">ATOM_<wbr>TYPE_<wbr>STRING</a></dt><dd>@brief Creates an atom used to indicate that an atom’s type is a String type.
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_SYMBOL.html" title="fn hyperonc::metta::ATOM_TYPE_SYMBOL">ATOM_<wbr>TYPE_<wbr>SYMBOL</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol: “Symbol”, used to indicate that an atom’s type is a symbol atom
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Symbol atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_TYPE.html" title="fn hyperonc::metta::ATOM_TYPE_TYPE">ATOM_<wbr>TYPE_<wbr>TYPE</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol: “Type”, used to indicate that an atom represents the type of another atom
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Symbol atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_UNDEFINED.html" title="fn hyperonc::metta::ATOM_TYPE_UNDEFINED">ATOM_<wbr>TYPE_<wbr>UNDEFINED</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol: “%Undefined%”
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Symbol atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_UNIT.html" title="fn hyperonc::metta::ATOM_TYPE_UNIT">ATOM_<wbr>TYPE_<wbr>UNIT</a></dt><dd>@brief Creates an atom used to indicate that an atom’s type is a unit type.
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.ATOM_TYPE_VARIABLE.html" title="fn hyperonc::metta::ATOM_TYPE_VARIABLE">ATOM_<wbr>TYPE_<wbr>VARIABLE</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol: “Variable”, used to indicate that an atom’s type is a variable atom
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Symbol atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.EMPTY_ATOM.html" title="fn hyperonc::metta::EMPTY_ATOM">EMPTY_<wbr>ATOM</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol used to indicate empty results
+returned by function.
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Empty atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.METTA_ATOM.html" title="fn hyperonc::metta::METTA_ATOM">METTA_<wbr>ATOM</a></dt><dd>@brief Creates a Symbol atom for the special MeTTa symbol used to indicate
+calling MeTTa interpreter.
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the interpret atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.UNIT_ATOM.html" title="fn hyperonc::metta::UNIT_ATOM">UNIT_<wbr>ATOM</a></dt><dd>@brief Creates an atom used to return from functions which are not
+supposed to return results (print for example).
+@ingroup metta_language_group
+@return  The <code>atom_t</code> representing the Unit atom
+@note The returned <code>atom_t</code> must be freed with <code>atom_free()</code></dd><dt><a class="fn" href="fn.atom_error_message.html" title="fn hyperonc::metta::atom_error_message">atom_<wbr>error_<wbr>message</a></dt><dd>@brief Renders the text message from an error expression atom into a buffer
+@ingroup metta_language_group
+@param[in]  atom  The error expression atom from which to extract the error message
+@param[out]  buf  A buffer into which the text will be rendered
+@param[in]  buf_len  The maximum allocated size of <code>buf</code>
+@return The length of the message string, minus the string terminator character.  If
+<code>return_value &gt; buf_len + 1</code>, then the text was not fully rendered and this function should be
+called again with a larger buffer.
+@warning The <code>atom</code> argument must be an error expression, otherwise this function will panic</dd><dt><a class="fn" href="fn.atom_is_error.html" title="fn hyperonc::metta::atom_is_error">atom_<wbr>is_<wbr>error</a></dt><dd>@brief Checks if an atom is a MeTTa error expression
+@ingroup metta_language_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> representing the atom to check
+@return <code>true</code> is the atom is a MeTTa error expression</dd><dt><a class="fn" href="fn.check_type.html" title="fn hyperonc::metta::check_type">check_<wbr>type</a></dt><dd>@brief Checks whether Atom <code>atom</code> has Type <code>typ</code> in context of <code>space</code>
+@ingroup metta_language_group
+@param[in]  space  A pointer to the <code>space_t</code> representing the space context in which to perform the check
+@param[in]  atom  A pointer to the <code>atom_t</code> or <code>atom_ref_t</code> representing the atom whose Type the function will check
+@param[in]  typ  A pointer to the <code>atom_t</code> or <code>atom_ref_t</code> representing the type to check against
+@return  <code>true</code> if the Atom’s Type is a match, otherwise <code>false</code>
+@note This function can be used for a simple type check when there is no need to know type parameters</dd><dt><a class="fn" href="fn.env_builder_create_config_dir.html" title="fn hyperonc::metta::env_builder_create_config_dir">env_<wbr>builder_<wbr>create_<wbr>config_<wbr>dir</a></dt><dd>@brief Sets whether the config dir should be created if it doesn’t already exist
+@ingroup environment_group
+@param[in]  builder  A pointer to the in-process environment builder state
+@param[in]  should_create  Whether the directory will be created.  Defaults to <code>true</code></dd><dt><a class="fn" href="fn.env_builder_init_common_env.html" title="fn hyperonc::metta::env_builder_init_common_env">env_<wbr>builder_<wbr>init_<wbr>common_<wbr>env</a></dt><dd>@brief Finishes initialization of the common environment
+@ingroup environment_group
+@param[in]  builder  The in-process environment builder state to install as the common environment
+@return  True if the environment was sucessfully initialized with the provided builder state.  False
+if the environment had already been initialized by a prior call</dd><dt><a class="fn" href="fn.env_builder_push_fs_module_format.html" title="fn hyperonc::metta::env_builder_push_fs_module_format">env_<wbr>builder_<wbr>push_<wbr>fs_<wbr>module_<wbr>format</a></dt><dd>@brief Adds logic to interpret a foreign format for MeTTa modules loaded from the file system
+@ingroup environment_group
+@param[in]  builder  A pointer to the in-process environment builder state
+@param[in]  format  A pointer to a user-defined structure to store information related to this format</dd><dt><a class="fn" href="fn.env_builder_push_include_path.html" title="fn hyperonc::metta::env_builder_push_include_path">env_<wbr>builder_<wbr>push_<wbr>include_<wbr>path</a></dt><dd>@brief Adds a directory to search for module imports
+@ingroup environment_group
+@param[in]  builder  A pointer to the in-process environment builder state
+@param[in]  path  A C-style string specifying a path to a directory, to search for modules to load
+@note The paths will be searched in the order they are added to the `env_builder_t``</dd><dt><a class="fn" href="fn.env_builder_set_config_dir.html" title="fn hyperonc::metta::env_builder_set_config_dir">env_<wbr>builder_<wbr>set_<wbr>config_<wbr>dir</a></dt><dd>@brief Sets the config directory for the environment.
+@ingroup environment_group
+@param[in]  builder  A pointer to the in-process environment builder state
+@param[in]  path  A C-style string specifying a path to the config directory</dd><dt><a class="fn" href="fn.env_builder_set_default_config_dir.html" title="fn hyperonc::metta::env_builder_set_default_config_dir">env_<wbr>builder_<wbr>set_<wbr>default_<wbr>config_<wbr>dir</a></dt><dd>@brief Sets the default config directory for the environment.
+@ingroup environment_group
+@param[in]  builder  A pointer to the in-process environment builder state</dd><dt><a class="fn" href="fn.env_builder_set_is_test.html" title="fn hyperonc::metta::env_builder_set_is_test">env_<wbr>builder_<wbr>set_<wbr>is_<wbr>test</a></dt><dd>@brief Configures the environment for use in unit testing
+@ingroup environment_group
+@param[in]  builder  A pointer to the in-process environment builder state
+@param[in]  is_test  True if the environment is a unit-test environment, False otherwise</dd><dt><a class="fn" href="fn.env_builder_set_working_dir.html" title="fn hyperonc::metta::env_builder_set_working_dir">env_<wbr>builder_<wbr>set_<wbr>working_<wbr>dir</a></dt><dd>@brief Sets the working directory for the environment
+@ingroup environment_group
+@param[in]  builder  A pointer to the in-process environment builder state
+@param[in]  path  A C-string specifying a path to a working directory, to search for modules to load.
+Passing <code>NULL</code> will unset the working directory
+@note This working directory is not required to be the same as the process working directory, and
+it will not change as the process’ working directory is changed</dd><dt><a class="fn" href="fn.env_builder_start.html" title="fn hyperonc::metta::env_builder_start">env_<wbr>builder_<wbr>start</a></dt><dd>@brief Begins initialization of an environment
+@ingroup environment_group
+@return The <code>env_builder_t</code> object representing the in-process environment initialization
+@note The <code>env_builder_t</code> must be passed to either <code>env_builder_init_common_env</code>
+or <code>metta_new_with_space</code> in order to properly deallocate it</dd><dt><a class="fn" href="fn.env_builder_use_default.html" title="fn hyperonc::metta::env_builder_use_default">env_<wbr>builder_<wbr>use_<wbr>default</a></dt><dd>@brief Creates an <code>env_builder_t</code> to specify that the default common environment should be used
+@ingroup environment_group
+@return The <code>env_builder_t</code> object specifying the common environment
+@note This function exists to supply an argument to <code>metta_new_with_space</code> when no special
+behavior is desired
+@note The <code>env_builder_t</code> must be passed to <code>metta_new_with_space</code></dd><dt><a class="fn" href="fn.env_builder_use_test_env.html" title="fn hyperonc::metta::env_builder_use_test_env">env_<wbr>builder_<wbr>use_<wbr>test_<wbr>env</a></dt><dd>@brief A convenience to create an <code>env_builder_t</code>, to specify that a unit-test environment should be used
+@ingroup environment_group
+@return The <code>env_builder_t</code> object specifying the unit test environment
+@note This function exists to supply an argument to <code>metta_new_with_space</code> when performing unit testing
+@note The <code>env_builder_t</code> must be passed to <code>metta_new_with_space</code></dd><dt><a class="fn" href="fn.environment_config_dir.html" title="fn hyperonc::metta::environment_config_dir">environment_<wbr>config_<wbr>dir</a></dt><dd>@brief Renders the config_dir path from the common environment into a text buffer
+@ingroup environment_group
+@param[out]  buf  A buffer into which the text will be written
+@param[in]  buf_len  The maximum allocated size of <code>buf</code>
+@return The length of the path string, minus the string terminator character.  If
+<code>return_value &gt; buf_len + 1</code>, then the text was not fully written and this function should be
+called again with a larger buffer.  This function will return 0 if there is no config_dir.</dd><dt><a class="fn" href="fn.get_atom_types.html" title="fn hyperonc::metta::get_atom_types">get_<wbr>atom_<wbr>types</a></dt><dd>@brief Provides all types for <code>atom</code> in the context of <code>space</code>
+@ingroup metta_language_group
+@param[in]  space  A pointer to the <code>space_t</code> representing the space context in which to access the Atom’s types
+@param[in]  atom  A pointer to the <code>atom_t</code> or <code>atom_ref_t</code> representing the atom whose Types the function will access
+@param[in]  callback  A function that will be called to provide a vector of all type atoms associated with the <code>atom</code> argument atom
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function
+@note <code>%Undefined%</code> will be provided if <code>atom</code> has no type assigned. An empty vector will be provided if <code>atom</code>
+is a function call but expected types of arguments are not compatible with passed values</dd><dt><a class="fn" href="fn.interpret_init.html" title="fn hyperonc::metta::interpret_init">interpret_<wbr>init</a></dt><dd>@brief Initializes an interpreter operation and take the initial step
+@ingroup interpreter_group
+@param[in]  space  A pointer to the Space in which to perform the operation
+@param[in]  expr  A pointer to an <code>atom_t</code> or <code>atom_ref_t</code> Expression atom to interpret
+@return A <code>step_result_t</code> representing the outcome from the initial step
+@note The returned value may represent an error, an immediate result value, or it may be necessary to
+call <code>interpret_step()</code> in a loop to fully evaluate the execution plan.  Ultimately <code>step_get_result()</code>
+must be called to release the returned <code>step_result_t</code></dd><dt><a class="fn" href="fn.interpret_step.html" title="fn hyperonc::metta::interpret_step">interpret_<wbr>step</a></dt><dd>@brief Takes a subsequent step in an in-flight interpreter operation
+@ingroup interpreter_group
+@param[in]  step  The existing state for the in-flight interpreter operation
+@return A new <code>step_result_t</code> representing the outcome from the step</dd><dt><a class="fn" href="fn.metta_clone_handle.html" title="fn hyperonc::metta::metta_clone_handle">metta_<wbr>clone_<wbr>handle</a></dt><dd>@brief Clones a <code>metta_t</code> handle
+@ingroup interpreter_group
+@param[in]  metta  The handle to clone
+@return The newly cloned <code>metta_t</code> handle, pointing to the same underlying runner
+@note The caller must take ownership responsibility for the returned <code>metta_t</code>, and free it with <code>metta_free()</code></dd><dt><a class="fn" href="fn.metta_eq.html" title="fn hyperonc::metta::metta_eq">metta_<wbr>eq</a></dt><dd>@brief Compares two <code>metta_t</code> handles to test whether the referenced MeTTa runner is the same
+@ingroup interpreter_group
+@param[in]  a  A pointer to the first runner handle
+@param[in]  b  A pointer to the first runner handle
+@return True if the two handles reference the same runner, otherwise False</dd><dt><a class="fn" href="fn.metta_err_str.html" title="fn hyperonc::metta::metta_err_str">metta_<wbr>err_<wbr>str</a></dt><dd>@brief Returns the error string associated with the last <code>metta_run</code>, <code>metta_evaluate_atom</code>,
+or <code>metta_load_module</code> call
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the MeTTa handle
+@return A pointer to the C-string containing the error that occurred, or NULL if no
+error occurred
+@warning The returned pointer should NOT be freed.  It must never be accessed after the
+metta_t has been freed, or any subsequent call to <code>metta_run</code>, <code>metta_evaluate_atom</code>, or
+<code>metta_load_module</code> has been made.</dd><dt><a class="fn" href="fn.metta_evaluate_atom.html" title="fn hyperonc::metta::metta_evaluate_atom">metta_<wbr>evaluate_<wbr>atom</a></dt><dd>@brief Runs the MeTTa runner to evaluate an input Atom
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the runner handle
+@param[in]  atom  The <code>atom_t</code> representing the atom to evaluate
+@param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function
+@note If this function encounters an error, the callback will not be called and the error may be accessed with <code>metta_err_str()</code>
+@warning This function takes ownership of the provided <code>atom_t</code>, so it must not be subsequently accessed or freed</dd><dt><a class="fn" href="fn.metta_free.html" title="fn hyperonc::metta::metta_free">metta_<wbr>free</a></dt><dd>@brief Frees a <code>metta_t</code> handle
+@ingroup interpreter_group
+@param[in]  metta  The handle to free
+@note The underlying runner may be deallocated if all handles that refer to it have been freed, otherwise
+the runner itself won’t be freed</dd><dt><a class="fn" href="fn.metta_get_module_space.html" title="fn hyperonc::metta::metta_get_module_space">metta_<wbr>get_<wbr>module_<wbr>space</a></dt><dd>@brief Returns the Space for a loaded module
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the handle specifying the runner into which to load the module
+@param[in]  mod_id  The <code>module_id_t</code> of the loaded module to access
+@return  The <code>space_t</code> for the module’s Space
+@note The returned <code>space_t</code> must be freed with <code>space_free</code></dd><dt><a class="fn" href="fn.metta_load_module_at_path.html" title="fn hyperonc::metta::metta_load_module_at_path">metta_<wbr>load_<wbr>module_<wbr>at_<wbr>path</a></dt><dd>@brief Loads a module into the runner from a module resource at a file system path
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the handle specifying the runner into which to load the module
+@param[in]  path  A C-string specifying the path from which to load the module
+@param[in]  name  A C-string specifying a name for the module, or NULL if you want the module to
+be private and unable to be loaded by name
+@return  The <code>module_id_t</code> for the loaded module, or <code>invalid</code> if there was an error
+@note  This function effectively bypasses the catalog, for situations where you wish to load a
+specific module from disk
+@note If this function encounters an error, the error may be accessed with <code>metta_err_str()</code></dd><dt><a class="fn" href="fn.metta_load_module_direct.html" title="fn hyperonc::metta::metta_load_module_direct">metta_<wbr>load_<wbr>module_<wbr>direct</a></dt><dd>@brief Loads a module directly into the runner, from a module_loader_t
+@ingroup interpreter_group
+@param[in]  metta_ref  A pointer to the handle specifying the runner into which to load the module
+@param[in]  name_ref  A C-string specifying a name for the module
+@param[in]  loader_mov  The <code>module_loader_t</code> instance to load the module
+@return  The <code>module_id_t</code> for the loaded module, or <code>invalid</code> if there was an error
+@note  This function might be useful to provide MeTTa modules that are built-in as part of your
+application
+@note If this function encounters an error, the error may be accessed with <code>metta_err_str()</code></dd><dt><a class="fn" href="fn.metta_new.html" title="fn hyperonc::metta::metta_new">metta_<wbr>new</a></dt><dd>@brief Creates a new top-level MeTTa Runner, with only the Rust stdlib loaded
+@ingroup interpreter_group
+@return A <code>metta_t</code> handle to the newly created runner
+@note The caller must take ownership responsibility for the returned <code>metta_t</code>, and free it with <code>metta_free()</code></dd><dt><a class="fn" href="fn.metta_new_core.html" title="fn hyperonc::metta::metta_new_core">metta_<wbr>new_<wbr>core</a></dt><dd>@brief Creates a new core MeTTa runner, with no loaded stdlib nor initialization
+@ingroup interpreter_group
+@param[in]  space  A pointer to a handle for the Space for use as the space of the top-level module
+@param[in]  environment  An <code>env_builder_t</code> handle to configure the environment to use
+@return A <code>metta_t</code> handle to the newly created runner
+@note The caller must take ownership responsibility for the returned <code>metta_t</code>, and free it with <code>metta_free()</code>
+@note This function does not load any stdlib, nor does it run the <code>init.metta</code> file from the environment</dd><dt><a class="fn" href="fn.metta_new_with_stdlib_loader.html" title="fn hyperonc::metta::metta_new_with_stdlib_loader">metta_<wbr>new_<wbr>with_<wbr>stdlib_<wbr>loader</a></dt><dd>@brief Creates a new top-level MeTTa Runner, with the specified <code>stdlib</code> module loaded
+@ingroup interpreter_group
+@param[in]  space_ref  A pointer to a handle for the Space for use in the Runner’s top-level module
+@param[in]  env_builder_mov  An <code>env_builder_t</code> handle to configure the environment to use
+@param[in]  stdlib_loader_mov  Stdlib loader implemented in C code. Pass NULL to use the default <code>stdlib</code>
+@return A <code>metta_t</code> handle to the newly created Runner
+@note The caller must take ownership responsibility for the returned <code>metta_t</code>, and free it with <code>metta_free()</code>
+@note Most callers can simply call <code>metta_new</code>.  This function is provided to support languages
+with their own stdlib, that needs to be loaded before the init.metta file is run</dd><dt><a class="fn" href="fn.metta_run.html" title="fn hyperonc::metta::metta_run">metta_<wbr>run</a></dt><dd>@brief Runs the MeTTa runner until the input text has been fully parsed and evaluated
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the runner handle
+@param[in]  parser  An S-Expression Parser containing the MeTTa text
+@param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function
+@note If this function encounters an error, the callback will not be called and the error may be accessed with <code>metta_err_str()</code>
+@warning  Ownership of the provided parser will be taken by this function, so it must not be subsequently accessed
+nor freed.</dd><dt><a class="fn" href="fn.metta_space.html" title="fn hyperonc::metta::metta_space">metta_<wbr>space</a></dt><dd>@brief Provides access to the Space of the runner’s top-level module
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the runner handle
+@return A Space handle, to access the Space of the runner’s top-level module
+@note The caller must take ownership responsibility for the returned <code>space_t</code> and free it with <code>space_free()</code></dd><dt><a class="fn" href="fn.metta_tokenizer.html" title="fn hyperonc::metta::metta_tokenizer">metta_<wbr>tokenizer</a></dt><dd>@brief Provides access to the Tokenizer of the runner’s top-level module
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the runner handle
+@return A Tokenizer handle, to access the Tokenizer of the runner’s top-level module
+@note The caller must take ownership responsibility for the returned <code>tokenizer_t</code> and free it with <code>tokenizer_free()</code></dd><dt><a class="fn" href="fn.metta_working_dir.html" title="fn hyperonc::metta::metta_working_dir">metta_<wbr>working_<wbr>dir</a></dt><dd>@brief Renders the working directory of the runner’s environment into a buffer
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the runner handle
+@param[out]  buf  A buffer into which the path will be rendered
+@param[in]  buf_len  The maximum allocated size of <code>buf</code>
+@return The length of the path string, minus the string terminator character.  Returns 0 if the
+runner’s environment has no working directory.
+@note  If <code>return_value &gt; buf_len + 1</code>, then the text was not fully rendered and this function
+should be called again with a larger buffer.</dd><dt><a class="fn" href="fn.run_context_get_metta.html" title="fn hyperonc::metta::run_context_get_metta">run_<wbr>context_<wbr>get_<wbr>metta</a></dt><dd>@brief Returns a pointer to the <code>metta_t</code> runner that a run context is executing within
+@ingroup interpreter_group
+@param[in]  run_context  A pointer to the <code>run_context_t</code> to access the runner API
+@return A <code>metta_t</code> handle to access the runner
+@note  The returned <code>metta_t</code> handle is must be freed using <code>metta_free</code></dd><dt><a class="fn" href="fn.run_context_get_space.html" title="fn hyperonc::metta::run_context_get_space">run_<wbr>context_<wbr>get_<wbr>space</a></dt><dd>@brief Provides access to the Space of the currently running module
+@ingroup interpreter_group
+@param[in]  run_context  A pointer to the <code>run_context_t</code> to access the runner API
+@return A Space handle, to access the Space of the currently running module
+@note The caller must take ownership responsibility for the returned <code>space_t</code> and free it with
+<code>space_free()</code></dd><dt><a class="fn" href="fn.run_context_get_tokenizer.html" title="fn hyperonc::metta::run_context_get_tokenizer">run_<wbr>context_<wbr>get_<wbr>tokenizer</a></dt><dd>@brief Provides access to the Tokenizer of the currently running module
+@ingroup interpreter_group
+@param[in]  run_context  A pointer to the <code>run_context_t</code> to access the runner API
+@return A Tokenizer handle, to access the Tokenizer of the currently running module
+@note The caller must take ownership responsibility for the returned <code>tokenizer_t</code> and free it with
+<code>tokenizer_free()</code></dd><dt><a class="fn" href="fn.run_context_import_dependency.html" title="fn hyperonc::metta::run_context_import_dependency">run_<wbr>context_<wbr>import_<wbr>dependency</a></dt><dd>@brief Imports a dependency module into the currently running module.  This is “import *” behavior
+@ingroup module_group
+@param[in]  run_context  A pointer to the <code>run_context_t</code> to access the runner API
+@param[in]  mod_id  The loaded <code>module_id_t</code> of the module to import</dd><dt><a class="fn" href="fn.run_context_init_self_module.html" title="fn hyperonc::metta::run_context_init_self_module">run_<wbr>context_<wbr>init_<wbr>self_<wbr>module</a></dt><dd>@brief Called within a module <code>loader</code> function to initialize the new module
+@ingroup module_group
+@param[in]  run_context  A pointer to the <code>run_context_t</code> to access the runner API
+@param[in]  space  A pointer to a handle for the new module’s space
+@param[in]  resource_dir_path   A C-style string specifying a file system path to use as
+the module’s resource directory.  Passing <code>NULL</code> means the module does not have a
+resource directory
+@note this function must be called exactly once within a module loader function</dd><dt><a class="fn" href="fn.run_context_load_module.html" title="fn hyperonc::metta::run_context_load_module">run_<wbr>context_<wbr>load_<wbr>module</a></dt><dd>@brief Resolves a module name in the context of a running module, and loads that module
+if it’s not already loaded
+@ingroup module_group
+@param[in]  run_context  A pointer to the <code>run_context_t</code> to access the runner API
+@param[in]  name  A C-style string containing the module name
+@return  The module_id_t for the loaded module, or <code>invalid</code> if there was an error</dd><dt><a class="fn" href="fn.run_context_push_parser.html" title="fn hyperonc::metta::run_context_push_parser">run_<wbr>context_<wbr>push_<wbr>parser</a></dt><dd>@brief Appends the parser to the Run Context’s queue of input to run
+@ingroup interpreter_group
+@param[in]  run_context  A pointer to the <code>run_context_t</code> to access the runner API
+@param[in]  parser  An S-Expression Parser containing the MeTTa source code to execute</dd><dt><a class="fn" href="fn.run_context_raise_error.html" title="fn hyperonc::metta::run_context_raise_error">run_<wbr>context_<wbr>raise_<wbr>error</a></dt><dd>@brief Sets a runtime error
+@ingroup interpreter_group
+@param[in]  run_context  A pointer to the <code>run_context_t</code> to access the runner API
+@param[in]  message  A C-string specifying an error message
+@note Raising an error through this function will cause the MeTTa interpreter to take an error pathway</dd><dt><a class="fn" href="fn.runner_state_current_results.html" title="fn hyperonc::metta::runner_state_current_results">runner_<wbr>state_<wbr>current_<wbr>results</a></dt><dd>@brief Accesses the current in-flight results in the runner_state_t
+@ingroup interpreter_group
+@param[in]  state  The <code>runner_state_t</code> within which to preview results
+@param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function
+@warning The provided results will be overwritten by the next call to <code>metta_run_step</code>, so the caller
+must clone the result atoms if they are needed for an extended period of time</dd><dt><a class="fn" href="fn.runner_state_err_str.html" title="fn hyperonc::metta::runner_state_err_str">runner_<wbr>state_<wbr>err_<wbr>str</a></dt><dd>@brief Returns the error string associated with the last <code>runner_state_step</code>
+@ingroup interpreter_group
+@param[in]  state  A pointer to the runner state
+@return A pointer to the C-string containing the error that occurred, or NULL if no
+error occurred
+@warning The returned pointer should NOT be freed.  It must never be accessed after the
+runner_state_t has been freed, or any subsequent call to <code>runner_state_step</code> has been made.</dd><dt><a class="fn" href="fn.runner_state_free.html" title="fn hyperonc::metta::runner_state_free">runner_<wbr>state_<wbr>free</a></dt><dd>@brief Frees a runner_state_t
+@ingroup interpreter_group
+@param[in]  node  The <code>runner_state_t</code> to free</dd><dt><a class="fn" href="fn.runner_state_is_complete.html" title="fn hyperonc::metta::runner_state_is_complete">runner_<wbr>state_<wbr>is_<wbr>complete</a></dt><dd>@brief Returns whether or not the runner_state_t has completed all outstanding work
+@ingroup interpreter_group
+@param[in]  state  The <code>runner_state_t</code> to inspect
+@return <code>true</code> if the runner has already concluded, or <code>false</code> if there is more work to do</dd><dt><a class="fn" href="fn.runner_state_new_with_atoms.html" title="fn hyperonc::metta::runner_state_new_with_atoms">runner_<wbr>state_<wbr>new_<wbr>with_<wbr>atoms</a></dt><dd>@brief Creates a runner_state_t, to use for step-wise execution of a list of atoms
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the runner handle in which to perform the run
+@param[in]  atoms A pointer to an <code>atom_vec_t</code> containing the atoms to run
+@return The newly created <code>runner_state_t</code>, which can begin evaluating MeTTa code
+@warning  The referenced <code>atoms</code> <code>atom_vec_t</code> must not be modified nor freed while the
+<code>runner_state_t</code> remains active
+@note The returned <code>runner_state_t</code> handle must be freed with <code>runner_state_free()</code></dd><dt><a class="fn" href="fn.runner_state_new_with_parser.html" title="fn hyperonc::metta::runner_state_new_with_parser">runner_<wbr>state_<wbr>new_<wbr>with_<wbr>parser</a></dt><dd>@brief Creates a runner_state_t, to use for step-wise execution of MeTTa text
+@ingroup interpreter_group
+@param[in]  metta  A pointer to the runner handle in which to perform the run
+@param[in]  parser An S-Expression Parser containing the MeTTa text
+@return The newly created <code>runner_state_t</code>, which can begin evaluating MeTTa code
+@warning  Ownership of the provided parser will be taken by this function, so it must not be subsequently accessed
+nor freed.
+@note The returned <code>runner_state_t</code> handle must be freed with <code>runner_state_free()</code></dd><dt><a class="fn" href="fn.runner_state_step.html" title="fn hyperonc::metta::runner_state_step">runner_<wbr>state_<wbr>step</a></dt><dd>@brief Runs one step of the runner
+@ingroup interpreter_group
+@param[in]  state  A pointer to the in-flight runner state
+@note If this function encounters an error, the error may be accessed with <code>runner_state_err_str()</code></dd><dt><a class="fn" href="fn.runner_state_to_str.html" title="fn hyperonc::metta::runner_state_to_str">runner_<wbr>state_<wbr>to_<wbr>str</a></dt><dd>@brief Renders a text description of a <code>runner_state_t</code> into a buffer
+@ingroup interpreter_group
+@param[in]  state  A pointer to a <code>runner_state_t</code> to render
+@param[out]  buf  A buffer into which the text will be rendered
+@param[in]  buf_len  The maximum allocated size of <code>buf</code>
+@return The length of the description string, minus the string terminator character.  If
+<code>return_value &gt; buf_len + 1</code>, then the text was not fully rendered and this function should be
+called again with a larger buffer.</dd><dt><a class="fn" href="fn.sexpr_parser_err_str.html" title="fn hyperonc::metta::sexpr_parser_err_str">sexpr_<wbr>parser_<wbr>err_<wbr>str</a></dt><dd>@brief Returns the error string associated with the last <code>sexpr_parser_parse</code> call
+@ingroup tokenizer_and_parser_group
+@param[in]  parser  A pointer to the Parser, which is associated with the text to parse
+@return A pointer to the C-string containing the parse error that occurred, or NULL if no
+parse error occurred
+@warning The returned pointer should NOT be freed.  It must never be accessed after the
+sexpr_parser_t has been freed, or any subsequent call to <code>sexpr_parser_parse</code> or
+<code>sexpr_parser_parse_to_syntax_tree</code> has been made.</dd><dt><a class="fn" href="fn.sexpr_parser_free.html" title="fn hyperonc::metta::sexpr_parser_free">sexpr_<wbr>parser_<wbr>free</a></dt><dd>@brief Frees an S-Expression Parser
+@ingroup tokenizer_and_parser_group
+@param[in]  parser  The <code>sexpr_parser_t</code> handle to free</dd><dt><a class="fn" href="fn.sexpr_parser_new.html" title="fn hyperonc::metta::sexpr_parser_new">sexpr_<wbr>parser_<wbr>new</a></dt><dd>@brief Creates a new S-Expression Parser
+@ingroup tokenizer_and_parser_group
+@param[in]  text  A C-style string containing the input text to parse
+@return The new <code>sexpr_parser_t</code>, ready to parse the text
+@note The returned <code>sexpr_parser_t</code> must be freed with <code>sexpr_parser_free()</code> or passed to another
+function that takes ownership
+@warning The returned <code>sexpr_parser_t</code> borrows a reference to the <code>text</code>, so the returned
+<code>sexpr_parser_t</code> must be freed before the <code>text</code> is freed or allowed to go out of scope.</dd><dt><a class="fn" href="fn.sexpr_parser_parse.html" title="fn hyperonc::metta::sexpr_parser_parse">sexpr_<wbr>parser_<wbr>parse</a></dt><dd>@brief Parses the text associated with an <code>sexpr_parser_t</code>, and creates the corresponding Atom
+@ingroup tokenizer_and_parser_group
+@param[in]  parser  A pointer to the Parser, which is associated with the text to parse
+@param[in]  tokenizer  A pointer to the Tokenizer, to use to interpret atoms within the expression
+@return The new <code>atom_t</code>, which may be an Expression atom with many child atoms.  Returns a <code>none</code>
+atom if parsing is finished, or an error expression atom if a parse error occurred.
+@note The caller must take ownership responsibility for the returned <code>atom_t</code>, and ultimately free
+it with <code>atom_free()</code> or pass it to another function that takes ownership responsibility
+@note If this function encounters an error, the error may be accessed with <code>sexpr_parser_err_str()</code></dd><dt><a class="fn" href="fn.sexpr_parser_parse_to_syntax_tree.html" title="fn hyperonc::metta::sexpr_parser_parse_to_syntax_tree">sexpr_<wbr>parser_<wbr>parse_<wbr>to_<wbr>syntax_<wbr>tree</a></dt><dd>@brief Parses the text associated with an <code>sexpr_parser_t</code>, and creates a syntax tree
+@ingroup tokenizer_and_parser_group
+@param[in]  parser  A pointer to the Parser, which is associated with the text to parse
+@return The new <code>syntax_node_t</code> representing the root of the parsed tree
+@note The caller must take ownership responsibility for the returned <code>syntax_node_t</code>, and ultimately free
+it with <code>syntax_node_free()</code></dd><dt><a class="fn" href="fn.step_get_result.html" title="fn hyperonc::metta::step_get_result">step_<wbr>get_<wbr>result</a></dt><dd>@brief Consumes a <code>step_result_t</code> and provides the ultimate outcome of a MeTTa interpreter session
+@ingroup interpreter_group
+@param[in]  step  A pointer to a <code>step_result_t</code> to render
+@param[in]  callback  A function that will be called to provide a vector of all atoms resulting from the interpreter session
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function</dd><dt><a class="fn" href="fn.step_has_next.html" title="fn hyperonc::metta::step_has_next">step_<wbr>has_<wbr>next</a></dt><dd>@brief Examines a <code>step_result_t</code> to determine if more work is needed
+@ingroup interpreter_group
+@param[in]  step  A pointer to the <code>step_result_t</code> representing the in-flight interpreter operation
+@return <code>true</code> if the operation plan indicates that more work is needed to finalize results, otherwise <code>false</code></dd><dt><a class="fn" href="fn.step_to_str.html" title="fn hyperonc::metta::step_to_str">step_<wbr>to_<wbr>str</a></dt><dd>@brief Renders a text description of a <code>step_result_t</code> into a buffer
+@ingroup interpreter_group
+@param[in]  step  A pointer to a <code>step_result_t</code> to render
+@param[out]  buf  A buffer into which the text will be rendered
+@param[in]  buf_len  The maximum allocated size of <code>buf</code>
+@return The length of the description string, minus the string terminator character.  If
+<code>return_value &gt; buf_len + 1</code>, then the text was not fully rendered and this function should be
+called again with a larger buffer.</dd><dt><a class="fn" href="fn.syntax_node_clone.html" title="fn hyperonc::metta::syntax_node_clone">syntax_<wbr>node_<wbr>clone</a></dt><dd>@brief Creates a deep copy of a <code>syntax_node_t</code>
+@ingroup tokenizer_and_parser_group
+@param[in]  node  A pointer to the <code>syntax_node_t</code>
+@return The <code>syntax_node_t</code> representing the cloned syntax node
+@note The caller must take ownership responsibility for the returned <code>syntax_node_t</code>, and ultimately free
+it with <code>syntax_node_free()</code></dd><dt><a class="fn" href="fn.syntax_node_free.html" title="fn hyperonc::metta::syntax_node_free">syntax_<wbr>node_<wbr>free</a></dt><dd>@brief Frees a syntax_node_t
+@ingroup tokenizer_and_parser_group
+@param[in]  node  The <code>syntax_node_t</code> to free</dd><dt><a class="fn" href="fn.syntax_node_is_leaf.html" title="fn hyperonc::metta::syntax_node_is_leaf">syntax_<wbr>node_<wbr>is_<wbr>leaf</a></dt><dd>@brief Returns <code>true</code> if a syntax node is a leaf (has no children) and <code>false</code> otherwise
+@ingroup tokenizer_and_parser_group
+@param[in]  node  A pointer to the <code>syntax_node_t</code>
+@return The boolean value indicating if the node is a leaf</dd><dt><a class="fn" href="fn.syntax_node_is_null.html" title="fn hyperonc::metta::syntax_node_is_null">syntax_<wbr>node_<wbr>is_<wbr>null</a></dt><dd>@brief Returns <code>true</code> if a syntax node represents the end of the stream
+@ingroup tokenizer_and_parser_group
+@param[in]  node  A pointer to the <code>syntax_node_t</code>
+@return The boolean value indicating if the node is a a null node</dd><dt><a class="fn" href="fn.syntax_node_iterate.html" title="fn hyperonc::metta::syntax_node_iterate">syntax_<wbr>node_<wbr>iterate</a></dt><dd>@brief Performs a depth-first iteration of all child syntax nodes within a syntax tree
+@ingroup tokenizer_and_parser_group
+@param[in]  node  A pointer to the top-level <code>syntax_node_t</code> representing the syntax tree
+@param[in]  callback  A function that will be called to provide a vector of all type atoms associated with the <code>atom</code> argument atom
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function</dd><dt><a class="fn" href="fn.syntax_node_src_range.html" title="fn hyperonc::metta::syntax_node_src_range">syntax_<wbr>node_<wbr>src_<wbr>range</a></dt><dd>@brief Returns the beginning and end positions in the parsed source of the text represented by the syntax node
+@ingroup tokenizer_and_parser_group
+@param[in]  node  A pointer to the <code>syntax_node_t</code>
+@param[out]  range_start  A pointer to a value, into which the starting offset of the range will be written
+@param[out]  range_end  A pointer to a value, into which the ending offset of the range will be written</dd><dt><a class="fn" href="fn.syntax_node_type.html" title="fn hyperonc::metta::syntax_node_type">syntax_<wbr>node_<wbr>type</a></dt><dd>@brief Returns the type of a <code>syntax_node_t</code>
+@ingroup tokenizer_and_parser_group
+@param[in]  node  A pointer to the <code>syntax_node_t</code>
+@return The <code>syntax_node_type_t</code> representing the type of the syntax node</dd><dt><a class="fn" href="fn.tokenizer_clone.html" title="fn hyperonc::metta::tokenizer_clone">tokenizer_<wbr>clone</a></dt><dd>@brief Performs a “deep copy” of a Tokenizer
+@ingroup tokenizer_and_parser_group
+@param[in]  tokenizer  A pointer to the Tokenizer to clone
+@return The new Tokenizer, containing all registered Tokens belonging to the original Tokenizer
+@note The returned <code>tokenizer_t</code> must be freed with <code>tokenizer_free()</code></dd><dt><a class="fn" href="fn.tokenizer_free.html" title="fn hyperonc::metta::tokenizer_free">tokenizer_<wbr>free</a></dt><dd>@brief Frees a Tokenizer handle
+@ingroup tokenizer_and_parser_group
+@param[in]  tokenizer  The <code>tokenizer_t</code> handle to free
+@note When the last <code>tokenizer_t</code> handle for an underlying Tokenizer has been freed, then the
+Tokenizer will be deallocated</dd><dt><a class="fn" href="fn.tokenizer_new.html" title="fn hyperonc::metta::tokenizer_new">tokenizer_<wbr>new</a></dt><dd>@brief Creates a new Tokenizer, without any registered Tokens
+@ingroup tokenizer_and_parser_group
+@return an <code>tokenizer_t</code> handle to access the newly created Tokenizer
+@note The returned <code>tokenizer_t</code> handle must be freed with <code>tokenizer_free()</code></dd><dt><a class="fn" href="fn.tokenizer_register_token.html" title="fn hyperonc::metta::tokenizer_register_token">tokenizer_<wbr>register_<wbr>token</a></dt><dd>@brief Registers a new custom Token in a Tokenizer
+@ingroup tokenizer_and_parser_group
+@param[in]  tokenizer  A pointer to the Tokenizer in which to register the Token
+@param[in]  regex  A regular expression to match the incoming text, triggering this token to generate a new atom
+@param[in]  api  A table of functions to manage the token
+@param[in]  context  A caller-defined structure to communicate any state necessary to implement the Token parser
+@note Hyperon uses the Rust RegEx engine and syntax, <a href="https://docs.rs/regex/latest/regex/">documented here</a>.</dd><dt><a class="fn" href="fn.validate_atom.html" title="fn hyperonc::metta::validate_atom">validate_<wbr>atom</a></dt><dd>@brief Checks whether <code>atom</code> is correctly typed
+@ingroup metta_language_group
+@param[in]  space  A pointer to the <code>space_t</code> representing the space context in which to perform the check
+@param[in]  atom  A pointer to the <code>atom_t</code> or <code>atom_ref_t</code> representing the atom whose Type the function will check
+@return  <code>true</code> if the Atom is correctly typed, otherwise <code>false</code>
+@note This function can be used to check if function arguments have correct types</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.c_syntax_node_callback_t.html" title="type hyperonc::metta::c_syntax_node_callback_t">c_<wbr>syntax_<wbr>node_<wbr>callback_<wbr>t</a></dt><dd>@brief Function signature for a callback providing access to a <code>syntax_node_t</code>
+@ingroup tokenizer_and_parser_group
+@param[in]  node  The <code>syntax_node_t</code> being provided.  This node should not be modified or freed by the callback.
+@param[in]  context  The context state pointer initially passed to the upstream function initiating the callback.</dd></dl></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["metta_mod_ref_tokenizer","module_descriptor_clone","module_descriptor_free","module_descriptor_new","module_descriptor_new_with_path_and_fmt_id","module_id_is_valid"],"struct":["CModuleLoader","fs_module_format_t","metta_mod_ref_t","module_descriptor_t","module_id_t","module_loader_t"]};

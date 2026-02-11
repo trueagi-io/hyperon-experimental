@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ATOM_TYPE_SPACE","COMMA_SYMBOL"],"enum":["SpaceEvent"],"fn":["complex_query"],"mod":["index"],"struct":["DynSpace","SpaceCommon","SpaceObserverRef"],"trait":["Space","SpaceMut","SpaceObserver","SpaceVisitor"]};

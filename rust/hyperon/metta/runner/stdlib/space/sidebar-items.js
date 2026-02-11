@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AddAtomOp","ChangeStateOp","GetAtomsOp","GetStateOp","NewSpaceOp","RemoveAtomOp","StateAtom"]};

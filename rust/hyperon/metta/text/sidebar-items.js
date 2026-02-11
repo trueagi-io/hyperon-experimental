@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SyntaxNodeType"],"struct":["CharReader","SExprParser","SyntaxNode","Tokenizer"],"trait":["Parser"]};

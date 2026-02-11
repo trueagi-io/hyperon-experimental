@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["apply_bindings_to_atom_move","apply_bindings_to_atom_mut","atoms_are_equivalent","match_atoms"],"struct":["Bindings","BindingsIter","BindingsSet"],"trait":["VariableSet"],"type":["MatchResultIter"]};

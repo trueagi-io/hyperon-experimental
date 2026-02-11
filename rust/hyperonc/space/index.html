@@ -1,0 +1,148 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `space` mod in crate `hyperonc`."><title>hyperonc::space - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="hyperonc" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module space</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../hyperonc/index.html">hyperonc</a><span class="version">0.2.10</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module space</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate hyperonc</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">hyperonc</a></div><h1>Module <span>space</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/hyperonc/space.rs.html#1-808">Source</a> </span></div><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.RustSpaceCommonData.html" title="struct hyperonc::space::RustSpaceCommonData">Rust<wbr>Space<wbr>Common<wbr>Data</a></dt><dt><a class="struct" href="struct.space_api_t.html" title="struct hyperonc::space::space_api_t">space_<wbr>api_<wbr>t</a></dt><dd>@struct space_api_t
+@brief A table of functions to define the behavior of a Space implemented in C
+@ingroup space_impl_group
+@see space_new</dd><dt><a class="struct" href="struct.space_event_t.html" title="struct hyperonc::space::space_event_t">space_<wbr>event_<wbr>t</a></dt><dd>@struct space_event_t
+@brief Represents a Space Event
+@ingroup space_observer_group
+@note Space Events can be read by observers monitoring a space, or created by custom by custom Space
+implementations, to communicate activity within the Space to observers</dd><dt><a class="struct" href="struct.space_observer_api_t.html" title="struct hyperonc::space::space_observer_api_t">space_<wbr>observer_<wbr>api_<wbr>t</a></dt><dd>@struct space_observer_api_t
+@brief A table of callback functions to define the behavior of a SpaceObserver implemented in C
+@ingroup space_observer_group
+@see space_register_observer</dd><dt><a class="struct" href="struct.space_observer_t.html" title="struct hyperonc::space::space_observer_t">space_<wbr>observer_<wbr>t</a></dt><dd>@struct space_observer_t
+@brief Represents a Space Observer, registered with a Space
+@ingroup space_observer_group</dd><dt><a class="struct" href="struct.space_params_t.html" title="struct hyperonc::space::space_params_t">space_<wbr>params_<wbr>t</a></dt><dd>@struct space_params_t
+@brief Data associated with this particular space, including the space’s payload and observers
+@ingroup space_impl_group</dd><dt><a class="struct" href="struct.space_t.html" title="struct hyperonc::space::space_t">space_t</a></dt><dd>@struct space_t
+@brief A Space handle, providing access to a Space in which atoms may exist in relation to other atoms
+@ingroup space_client_group
+@note Multiple <code>space_t</code> handles may refer to the same underlying space.  An underlying space
+will only be deallocated when all <code>space_t</code> handles that refer to it have been freed
+@note <code>space_t</code> must be freed with <code>space_free()</code>, or passed by value
+to a function that takes ownership of the space.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.space_event_field_t.html" title="enum hyperonc::space::space_event_field_t">space_<wbr>event_<wbr>field_<wbr>t</a></dt><dd>@brief Accessor constants, to access the fields of a <code>space_event_t</code>
+@ingroup space_observer_group</dd><dt><a class="enum" href="enum.space_event_type_t.html" title="enum hyperonc::space::space_event_type_t">space_<wbr>event_<wbr>type_<wbr>t</a></dt><dd>@brief Represents different types of Space Events
+@ingroup space_observer_group</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.space_add.html" title="fn hyperonc::space::space_add">space_<wbr>add</a></dt><dd>@brief Adds an atom to the Space
+@ingroup space_client_group
+@param[in]  space  A pointer to the <code>space_t</code> handle to access
+@param[in]  atom  An <code>atom_t</code> representing the Atom to add
+@warning This function takes ownership of the supplied atom, and it should not be freed or accessed after
+it has been provided to this function</dd><dt><a class="fn" href="fn.space_atom_count.html" title="fn hyperonc::space::space_atom_count">space_<wbr>atom_<wbr>count</a></dt><dd>@brief Returns the number of top-level atoms in a Space, if it can be readily determined
+@ingroup space_client_group
+@param[in]  space  A pointer to the <code>space_t</code> handle to access
+@return The number of top-level atoms in the Space, or -1 for spaces in which it is impossible or
+impractical to determine the number of atoms</dd><dt><a class="fn" href="fn.space_clone_handle.html" title="fn hyperonc::space::space_clone_handle">space_<wbr>clone_<wbr>handle</a></dt><dd>@brief Creates a new <code>space_t</code> handle that refers to the same underlying space as another <code>space_t</code>
+@ingroup space_client_group
+@param[in]  space  A pointer to the <code>space_t</code> handle to clone
+@return A newly created <code>space_t</code> handle, providing access to the same underlying Space
+@note Each <code>space_t</code> is an independent object and must be individually freed, but both <code>space_t</code> objects
+reference the same underlying space, which is only deallocated when all references to it have been freed.
+@note The caller must take ownership responsibility for the returned <code>space_t</code>, and free it with <code>space_free()</code></dd><dt><a class="fn" href="fn.space_eq.html" title="fn hyperonc::space::space_eq">space_<wbr>eq</a></dt><dd>@brief Checks if two <code>space_t</code> handles refer to the same underlying Space
+@ingroup space_client_group
+@param[in]  a  A pointer to the first <code>space_t</code>
+@param[in]  b  A pointer to the second <code>space_t</code>
+@return <code>true</code> is the underlying Space is the same for both <code>space_t</code> objects, and <code>false</code> otherwise</dd><dt><a class="fn" href="fn.space_event_free.html" title="fn hyperonc::space::space_event_free">space_<wbr>event_<wbr>free</a></dt><dd>@brief Frees a <code>space_event_t</code>
+@ingroup space_impl_group
+@param[in]  event  The <code>space_event_t</code> to free</dd><dt><a class="fn" href="fn.space_event_get_field_atom.html" title="fn hyperonc::space::space_event_get_field_atom">space_<wbr>event_<wbr>get_<wbr>field_<wbr>atom</a></dt><dd>@brief Accesses the atom associated with a field of a <code>space_event_t</code>
+@ingroup space_observer_group
+@param[in]  event  A pointer to the event to access
+@param[in]  field  A <code>space_event_field_t</code> specifying which field to access
+@return An <code>atom_ref_t</code> referencing the specified atom within the event
+@warning The returned <code>atom_ref_t</code> is borrowed from the <code>space_event_t</code>, and it must not be modified or
+accessed after the event has been freed</dd><dt><a class="fn" href="fn.space_event_get_type.html" title="fn hyperonc::space::space_event_get_type">space_<wbr>event_<wbr>get_<wbr>type</a></dt><dd>@brief Gets the type of a Space Event
+@ingroup space_observer_group
+@param[in]  event  A pointer to the event to inspect
+@return The type of the event</dd><dt><a class="fn" href="fn.space_event_new_add.html" title="fn hyperonc::space::space_event_new_add">space_<wbr>event_<wbr>new_<wbr>add</a></dt><dd>@brief Creates a new <code>space_event_t</code> representing an <code>Add</code> event
+@ingroup space_impl_group
+@param[in]  atom  The atom that is being added to the Space, to embed into the event
+@return The newly created <code>space_event_t</code>
+@note The caller must take ownership responsibility for the returned <code>space_event_t</code> and it must be freed with <code>space_event_free()</code>
+@warning This function takes ownership of the <code>atom</code> parameter, so it must not be subsequently access or freed</dd><dt><a class="fn" href="fn.space_event_new_remove.html" title="fn hyperonc::space::space_event_new_remove">space_<wbr>event_<wbr>new_<wbr>remove</a></dt><dd>@brief Creates a new <code>space_event_t</code> representing a <code>Remove</code> event
+@ingroup space_impl_group
+@param[in]  atom  The atom that is being removed from the Space, to embed into the event
+@return The newly created <code>space_event_t</code>
+@note The caller must take ownership responsibility for the returned <code>space_event_t</code> and it must be freed with <code>space_event_free()</code>
+@warning This function takes ownership of the <code>atom</code> parameter, so it must not be subsequently access or freed</dd><dt><a class="fn" href="fn.space_event_new_replace.html" title="fn hyperonc::space::space_event_new_replace">space_<wbr>event_<wbr>new_<wbr>replace</a></dt><dd>@brief Creates a new <code>space_event_t</code> representing a <code>Replace</code> event
+@ingroup space_impl_group
+@param[in]  pattern  The atom that is being matched in the Space, to embed into the event
+@param[in]  tmpl  The atom that is being used to construct new atoms in the Space, to embed into the event
+@return The newly created <code>space_event_t</code>
+@note The caller must take ownership responsibility for the returned <code>space_event_t</code> and it must be freed with <code>space_event_free()</code>
+@warning This function takes ownership of both the <code>pattern</code> and the <code>tmpl</code> parameter, so neither may be subsequently access nor freed</dd><dt><a class="fn" href="fn.space_free.html" title="fn hyperonc::space::space_free">space_<wbr>free</a></dt><dd>@brief Frees a <code>space_t</code> handle
+@ingroup space_client_group
+@param[in]  space  The handle to free
+@note The underlying Space may be deallocated if all handles that refer to it have been freed, otherwise
+the Space itself won’t be freed</dd><dt><a class="fn" href="fn.space_get_payload.html" title="fn hyperonc::space::space_get_payload">space_<wbr>get_<wbr>payload</a></dt><dd>@brief Access the payload object belonging to a space implemented in C
+@ingroup space_client_group
+@param[in]  space  A pointer to the <code>space_t</code> handle to access
+@return The pointer to the payload object orginally used to create the Space
+@note This function is only valid for Spaces implemented via the HyperonC API
+@note This API is likely to change in the future to implement multi-threading as the space’s payload
+object must not be modified while other operations can access the space
+@warning The returned payload ptr must not be freed, nor may it be accessed after the space
+has been freed or modified</dd><dt><a class="fn" href="fn.space_iterate.html" title="fn hyperonc::space::space_iterate">space_<wbr>iterate</a></dt><dd>@brief Iterates all top-level Atoms in a Space, if that is possible
+@ingroup space_client_group
+@param[in]  space  A pointer to the <code>space_t</code> handle to access
+@param[in]  callback  A function that will be called for each top-level Atom in the Space
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the
+<code>callback</code> function
+@return <code>true</code> if the space was sucessfully iterated, or <code>false</code> if the space does not support iteration</dd><dt><a class="fn" href="fn.space_new.html" title="fn hyperonc::space::space_new">space_<wbr>new</a></dt><dd>@brief Creates a new Space, backed by an implementation in C
+@ingroup space_client_group
+@param[in]  api  A pointer to the table of functions that implement the Space’s behavior
+@param[in]  payload  A pointer to a buffer to back the new Space
+@return A newly created <code>space_t</code> handle, to access the Space
+@warning This function takes ownership of the payload buffer, and it should not be freed or accessed after it
+has been provided to this function
+@note The caller must take ownership responsibility for the returned <code>space_t</code>, and free it with <code>space_free()</code></dd><dt><a class="fn" href="fn.space_new_grounding_space.html" title="fn hyperonc::space::space_new_grounding_space">space_<wbr>new_<wbr>grounding_<wbr>space</a></dt><dd>@brief Creates a new Space, backed by a GroundSpace
+@ingroup space_client_group
+@return a <code>space_t</code> handle to the newly created Grounding Space
+@note The caller takes ownership responsibility for the returned <code>space_t</code>, and it must be
+freed with <code>space_free()</code></dd><dt><a class="fn" href="fn.space_observer_free.html" title="fn hyperonc::space::space_observer_free">space_<wbr>observer_<wbr>free</a></dt><dd>@brief Frees a <code>space_observer_t</code>
+@ingroup space_observer_group
+@param[in]  observer  The <code>space_observer_t</code> to free
+@note Freeing a Space Observer will atomatically de-register it with its associated space</dd><dt><a class="fn" href="fn.space_observer_get_payload.html" title="fn hyperonc::space::space_observer_get_payload">space_<wbr>observer_<wbr>get_<wbr>payload</a></dt><dd>@brief Returns a pointer to the payload associated with the space_observer_t
+@ingroup space_observer_group
+@param[in]  observer  A pointer to the <code>space_observer_t</code> in which to access the payload
+@return A pointer to the payload object associated with the Space Observer
+@warning The returned pointer must not be accessed after the <code>space_observer_t</code> has been freed,
+or after any operations have occurred that may have caused events to occur in the associated
+space
+@warning The returned pointer should never be freed directly.  Call <code>space_observer_free()</code> when
+you are finished with the observer</dd><dt><a class="fn" href="fn.space_params_notify_all_observers.html" title="fn hyperonc::space::space_params_notify_all_observers">space_<wbr>params_<wbr>notify_<wbr>all_<wbr>observers</a></dt><dd>@brief Notifies all associated observers of an event
+@ingroup space_impl_group
+@param[in]  params  A pointer to the space’s params
+@param[in]  event  A pointer to the event, to broadcast to all observers of the Space</dd><dt><a class="fn" href="fn.space_query.html" title="fn hyperonc::space::space_query">space_<wbr>query</a></dt><dd>@brief Queries a Space for atoms matching a pattern
+@ingroup space_client_group
+@param[in]  space  A pointer to the <code>space_t</code> handle to access
+@param[in]  pattern  A pointer to an <code>atom_t</code> or <code>atom_ref_t</code> to specify the pattern to match within the Space
+@return A <code>bindings_set_t</code> representing all possible results of the match
+@note The caller must take ownership responsibility for the returned <code>bindings_set_t</code>, and free it with <code>bindings_set_free()</code></dd><dt><a class="fn" href="fn.space_register_observer.html" title="fn hyperonc::space::space_register_observer">space_<wbr>register_<wbr>observer</a></dt><dd>@brief Registers a new observer, to monitor activity within the Space
+@ingroup space_observer_group
+@param[in]  space  A pointer to the <code>space_t</code> handle of the space to observe
+@param[in]  observer_api  A pointer to the table of functions that implement the observer’s behavior
+@param[in]  observer_payload  A pointer to a caller-defined object usable by the observer’s
+implementation functions
+@return A <code>space_observer_t</code> created to observe the space
+@note The caller must take ownership responsibility for the returned <code>space_observer_t</code>, and it must
+be freed with <code>space_observer_free()</code>
+@warning This function takes ownership of the <code>observer_payload</code>, and it should not be freed after it
+has been provided to this function</dd><dt><a class="fn" href="fn.space_remove.html" title="fn hyperonc::space::space_remove">space_<wbr>remove</a></dt><dd>@brief Removes a specific atom from the Space
+@ingroup space_client_group
+@param[in]  space  A pointer to the <code>space_t</code> handle to access
+@param[in]  atom  A pointer to an <code>atom_t</code> or <code>atom_ref_t</code> to specifying the atom to remove from the Space
+@return <code>true</code> if the atom was found and removed from the Space, <code>false</code> otherwise</dd><dt><a class="fn" href="fn.space_replace.html" title="fn hyperonc::space::space_replace">space_<wbr>replace</a></dt><dd>@brief Replaces an Atom in the Space with another Atom
+@ingroup space_client_group
+@param[in]  space  A pointer to the <code>space_t</code> handle to access
+@param[in]  from  A pointer to an <code>atom_t</code> or <code>atom_ref_t</code> to specify the atom to replace
+@param[in]  to  An <code>atom_t</code> to provide a new Atom, to replace the <code>from</code> atom in the Space
+@return <code>true</code> if an Atom was replaced in the Space, <code>false</code> otherwise
+@note The <code>to</code> atom will only be added to the Space if the <code>from</code> atom is found.  Regardless, this
+functino will take ownership of the <code>to</code> atom.
+@warning This function takes ownership of the <code>to</code> atom, and it should not be freed or accessed
+after it has been provided to this function</dd><dt><a class="fn" href="fn.space_subst.html" title="fn hyperonc::space::space_subst">space_<wbr>subst</a></dt><dd>@brief Substitutes all Atoms matching a pattern with Atoms constructed from a template
+@ingroup space_client_group
+@param[in]  space  A pointer to the <code>space_t</code> handle to access
+@param[in]  pattern  A pointer to an <code>atom_t</code> or <code>atom_ref_t</code> to match Atom(s) in the Space
+@param[in]  templ  A pointer to an <code>atom_t</code> or <code>atom_ref_t</code> to specify a template from which to
+construct the new atoms
+@param[in]  callback  A function that will be called to provide access to a vec of newly created atoms
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the
+<code>callback</code> function</dd></dl></section></div></main></body></html>

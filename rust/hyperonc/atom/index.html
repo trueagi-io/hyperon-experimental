@@ -1,0 +1,330 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `atom` mod in crate `hyperonc`."><title>hyperonc::atom - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="hyperonc" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.0 (254b59607 2026-01-19)" data-channel="1.93.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module atom</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../hyperonc/index.html">hyperonc</a><span class="version">0.2.10</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module atom</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li><li><a href="#types" title="Type Aliases">Type Aliases</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate hyperonc</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">hyperonc</a></div><h1>Module <span>atom</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/hyperonc/atom.rs.html#1-1533">Source</a> </span></div><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.RustOpaqueExecError.html" title="struct hyperonc::atom::RustOpaqueExecError">Rust<wbr>Opaque<wbr>Exec<wbr>Error</a></dt><dt><a class="struct" href="struct.atom_ref_t.html" title="struct hyperonc::atom::atom_ref_t">atom_<wbr>ref_<wbr>t</a></dt><dd>@struct atom_ref_t
+@ingroup atom_group
+@brief Refers to an Atom owned by another object
+@note It is not necessary to free <code>atom_ref_t</code>
+@note A pointer to <code>atom_t</code> can be passed to any function requiring a pointer to <code>atom_ref_t</code>.
+@warning <code>atom_ref_t</code> must not be accessed beyond the lifetime of the object which owns the atom
+it references.</dd><dt><a class="struct" href="struct.atom_t.html" title="struct hyperonc::atom::atom_t">atom_t</a></dt><dd>@struct atom_t
+@brief Represents an Atom of any type
+@ingroup atom_group
+@note <code>atom_t</code> must be freed with <code>atom_free()</code>, or passed by value
+to a function that takes ownership of the atom.</dd><dt><a class="struct" href="struct.atom_vec_t.html" title="struct hyperonc::atom::atom_vec_t">atom_<wbr>vec_<wbr>t</a></dt><dd>@struct atom_vec_t
+@brief Contains a vector (list) of Atoms
+@ingroup atom_vec_group
+@note <code>atom_vec_t</code> must be freed with <code>atom_vec_free()</code>, or passed by value
+to a function that takes ownership of the vec.
+@warning It is unsafe to directly access the fields of this struct, so accessor functions must be used</dd><dt><a class="struct" href="struct.bindings_set_t.html" title="struct hyperonc::atom::bindings_set_t">bindings_<wbr>set_<wbr>t</a></dt><dd>@brief Represents a set of Bindings frames.  Potentially expressing all possible matches produced by a match operarion.
+@ingroup matching_group</dd><dt><a class="struct" href="struct.bindings_t.html" title="struct hyperonc::atom::bindings_t">bindings_<wbr>t</a></dt><dd>@brief Represents a single Bindings frame, which is a group of mutually-compatible variable &lt;-&gt; atom associations, providing a scope in which variable have definde values
+@ingroup matching_group</dd><dt><a class="struct" href="struct.gnd_api_t.html" title="struct hyperonc::atom::gnd_api_t">gnd_<wbr>api_<wbr>t</a></dt><dd>@struct gnd_api_t
+@brief A table of callback functions to implement a Grounded Atom with behavior defined in C
+@ingroup grounded_atom_group
+@see atom_gnd
+@see atom_get_object</dd><dt><a class="struct" href="struct.gnd_t.html" title="struct hyperonc::atom::gnd_t">gnd_t</a></dt><dd>@struct gnd_t
+@brief A struct header that must preface a buffer used as a backing object for a Grounded Atom
+@ingroup grounded_atom_group
+@see atom_gnd
+@see atom_get_object</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.atom_type_t.html" title="enum hyperonc::atom::atom_type_t">atom_<wbr>type_<wbr>t</a></dt><dd>@brief Represents whether an atom is a Symbol, Variable, Expression, or Grounded atom.
+@ingroup atom_group</dd><dt><a class="enum" href="enum.exec_error_t.html" title="enum hyperonc::atom::exec_error_t">exec_<wbr>error_<wbr>t</a></dt><dd>@struct exec_error_t
+@brief Represents a status used to communicate between Grounded Atom execution and the MeTTa interpreter
+@ingroup grounded_atom_group
+@note <code>exec_error_t</code> must be freed with <code>exec_error_free()</code>, or returned from an <code>execute</code> function
+@note The struct members should never be accessed directly, so accessor functions must be used</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.atom_bool.html" title="fn hyperonc::atom::atom_bool">atom_<wbr>bool</a></dt><dd>@ingroup atom_group
+@param[in]  b  boolean value
+@return an <code>atom_t</code> for the Bool Grounded atom
+@note The caller must take ownership responsibility for the returned <code>atom_t</code></dd><dt><a class="fn" href="fn.atom_clone.html" title="fn hyperonc::atom::atom_clone">atom_<wbr>clone</a></dt><dd>@brief Makes a “deep copy” of an atom.  Useful to turn an <code>atom_ref_t</code> into an <code>atom_t</code>
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to clone
+@return A newly created <code>atom_t</code> for the cloned atom
+@note The caller must take ownership responsibility for the returned <code>atom_t</code></dd><dt><a class="fn" href="fn.atom_eq.html" title="fn hyperonc::atom::atom_eq">atom_eq</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Checks if two atom objects represent the same conceptual atom
+@ingroup atom_group
+@param[in]  a  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> representing the first atom
+@param[in]  b  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> representing the second atom
+@return <code>true</code> is the atoms are conceptually identical</dd><dt><a class="fn" href="fn.atom_expr.html" title="fn hyperonc::atom::atom_expr">atom_<wbr>expr</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Create a new Expression atom with the specified children atoms
+@ingroup atom_group
+@param[in]  children  A packed buffer of <code>atom_t *</code>, representing the children atoms
+@param[in]  size  The number of elements in <code>children</code>
+@return An <code>atom_t</code> for the Expression atom, containing all ‘children’ atoms
+@note The caller must take ownership responsibility for the returned <code>atom_t</code>
+@warning This function takes ownership of all <code>children</code> atoms, so they must not be subsequently accessed</dd><dt><a class="fn" href="fn.atom_expr_from_vec.html" title="fn hyperonc::atom::atom_expr_from_vec">atom_<wbr>expr_<wbr>from_<wbr>vec</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Create a new Expression atom with the children contained in an <code>atom_vec_t</code>
+@ingroup atom_group
+@param[in]  children  An <code>atom_vec_t</code> containing all children atoms
+@return An <code>atom_t</code> for the Expression atom, containing all ‘children’ atoms
+@note The caller must take ownership responsibility for the returned <code>atom_t</code>
+@warning This function takes ownership of the <code>children</code> vec, so it must not be subsequently accessed</dd><dt><a class="fn" href="fn.atom_float.html" title="fn hyperonc::atom::atom_float">atom_<wbr>float</a></dt><dd>@ingroup atom_group
+@param[in]  f  float number
+@return an <code>atom_t</code> for the Number Grounded atom
+@note The caller must take ownership responsibility for the returned <code>atom_t</code></dd><dt><a class="fn" href="fn.atom_free.html" title="fn hyperonc::atom::atom_free">atom_<wbr>free</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Frees an atom and all associated resources
+@ingroup atom_group
+@param[in]  atom  The atom to free</dd><dt><a class="fn" href="fn.atom_get_children.html" title="fn hyperonc::atom::atom_get_children">atom_<wbr>get_<wbr>children</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Provides access to all children atoms within an expression atom
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to access
+@param[in]  callback  A function that will be called to return access to each atom
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function
+@note This function should only be called with Expression atoms</dd><dt><a class="fn" href="fn.atom_get_grounded_type.html" title="fn hyperonc::atom::atom_get_grounded_type">atom_<wbr>get_<wbr>grounded_<wbr>type</a></dt><dd>@brief Retrieve the grounded type of a Grounded Atom
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to access
+@return The <code>atom_t</code> expressing the grounded type of <code>atom</code>
+@note Grounded Types are themselves atoms used by the MeTTa type system for customized behavior.
+A grounded type is different from a generic atom type, expressed by <code>atom_type_t</code>.
+Only Grounded atoms have grounded types.  TODO: Where to LINK to learn more??
+@note The caller must take ownership responsibility for the returned <code>atom_t</code></dd><dt><a class="fn" href="fn.atom_get_metatype.html" title="fn hyperonc::atom::atom_get_metatype">atom_<wbr>get_<wbr>metatype</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Returns the metatype of an atom
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to inspect
+@return An <code>atom_type_t</code> indicating the type of <code>atom</code></dd><dt><a class="fn" href="fn.atom_get_name.html" title="fn hyperonc::atom::atom_get_name">atom_<wbr>get_<wbr>name</a></dt><dd>@brief Renders the name of an atom into a text buffer
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to get the name of
+@param[out]  buf  A buffer into which the text will be written
+@param[in]  buf_len  The maximum allocated size of <code>buf</code>
+@return The length of the name string, minus the string terminator character.  If
+<code>return_value &gt; buf_len + 1</code>, then the text was not fully written and this function should be
+called again with a larger buffer.</dd><dt><a class="fn" href="fn.atom_get_object.html" title="fn hyperonc::atom::atom_get_object">atom_<wbr>get_<wbr>object</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Access a pointer to an object backing a Grounded Atom
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to access
+@return The pointer to the <code>gnd_t</code> orginally used to create the Grounded Atom
+@note This function is only valid for Grounded Atoms implemented via the HyperonC API
+@warning The returned pointer must not be accessed after the atom has been freed or modified elsewhere</dd><dt><a class="fn" href="fn.atom_get_space.html" title="fn hyperonc::atom::atom_get_space">atom_<wbr>get_<wbr>space</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Access the space wrapped inside a Grounded atom
+@ingroup atom_group
+@see atom_gnd_for_space
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> that wraps a Space
+@return A Space handle to the space inside a grounded atom
+@note The returned space is borrowed from the atom.  It must not be accessed after the atom has been freed or modified elsewhere</dd><dt><a class="fn" href="fn.atom_gnd.html" title="fn hyperonc::atom::atom_gnd">atom_<wbr>gnd</a></dt><dd>@ingroup atom_group
+@param[in]  gnd  A pointer to a buffer to back the new Grounded Atom.  See the documentation of <code>gnd_t</code> for more info.
+@return an <code>atom_t</code> for the Grounded atom
+@note The caller must take ownership responsibility for the returned <code>atom_t</code></dd><dt><a class="fn" href="fn.atom_gnd_for_space.html" title="fn hyperonc::atom::atom_gnd_for_space">atom_<wbr>gnd_<wbr>for_<wbr>space</a></dt><dd>@brief Creates a Grounded Atom referencing a Space
+@ingroup atom_group
+@param[in]  space  A pointer to an <code>space_t</code> for accessing the space
+@return an <code>atom_t</code> for the Grounded atom
+@note The caller must take ownership responsibility for the returned <code>atom_t</code>
+@note This function does not consume the space and the space still must be freed with <code>space_free()</code></dd><dt><a class="fn" href="fn.atom_gnd_serialize.html" title="fn hyperonc::atom::atom_gnd_serialize">atom_<wbr>gnd_<wbr>serialize</a></dt><dd>@brief Serializes a grounded atom using the given serializer
+@ingroup serializer_group
+@param[in]  atom A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to serialize
+@param[in]  api  A table of functions the <code>serialize</code> implementation may call to encode the atom value
+@param[in]  context A caller-defined object to pass to functions in the <code>api</code>, to receive the encoded value(s)
+@return  A <code>serial_result_t</code> indicating whether the <code>serialize</code> operation was successful</dd><dt><a class="fn" href="fn.atom_int.html" title="fn hyperonc::atom::atom_int">atom_<wbr>int</a></dt><dd>@ingroup atom_group
+@param[in]  n  integer number
+@return an <code>atom_t</code> for the Number Grounded atom
+@note The caller must take ownership responsibility for the returned <code>atom_t</code></dd><dt><a class="fn" href="fn.atom_is_cgrounded.html" title="fn hyperonc::atom::atom_is_cgrounded">atom_<wbr>is_<wbr>cgrounded</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Check if the atom refers to CGrounded object
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to access
+@return True if the atom_get_object can be used on this atom without panic</dd><dt><a class="fn" href="fn.atom_is_null.html" title="fn hyperonc::atom::atom_is_null">atom_<wbr>is_<wbr>null</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Returns <code>true</code> if the referenced atom is invalid, otherwise returns <code>false</code>
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to inspect
+@return <code>true</code> if the referenced atom is invalid, otherwise returns <code>false</code></dd><dt><a class="fn" href="fn.atom_iterate.html" title="fn hyperonc::atom::atom_iterate">atom_<wbr>iterate</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Performs a depth-first exhaustive iteration of an atom and all its children recursively
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to iterate
+@param[in]  callback  A function that will be called to return access to each contained atom
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function
+@note The first result returned will be the atom itself.  Only Expression atoms contain deeper trees to iterate.</dd><dt><a class="fn" href="fn.atom_match_atom.html" title="fn hyperonc::atom::atom_match_atom">atom_<wbr>match_<wbr>atom</a></dt><dd>@brief Matches one atom with another, establishing bindings between them
+@ingroup matching_group
+@param[in]  a  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to match
+@param[in]  b  A pointer to another <code>atom_t</code> or an <code>atom_ref_t</code> to match against
+@return  A <code>bindings_set_t</code> representing all variable &lt;-&gt; atom bindings established by the match
+@note The caller must take ownership responsibility for the returned <code>bindings_set_t</code>, and free it with <code>bindings_set_free()</code></dd><dt><a class="fn" href="fn.atom_ref.html" title="fn hyperonc::atom::atom_ref">atom_<wbr>ref</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Create an <code>atom_ref_t</code> that points to another atom you own
+@ingroup atom_group
+@param[in]  atom  The atom to reference
+@return an <code>atom_ref_t</code> referencing <code>atom</code>
+@warning The returned <code>atom_ref_t</code> must not be accessed after the atom it refers to has been freed,
+or after ownership of the original atom has been transferred to another function</dd><dt><a class="fn" href="fn.atom_ref_null.html" title="fn hyperonc::atom::atom_ref_null">atom_<wbr>ref_<wbr>null</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Create an <code>atom_ref_t</code> that points nothing
+@ingroup atom_group
+@return an <code>atom_ref_t</code> referencing nothing</dd><dt><a class="fn" href="fn.atom_sym.html" title="fn hyperonc::atom::atom_sym">atom_<wbr>sym</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Create a new Symbol atom with the specified name
+@ingroup atom_group
+@param[in]  name  The name of the symbol
+@return A newly created <code>atom_t</code> for the Symbol Atom
+@note The caller must take ownership responsibility for the returned <code>atom_t</code></dd><dt><a class="fn" href="fn.atom_to_str.html" title="fn hyperonc::atom::atom_to_str">atom_<wbr>to_<wbr>str</a></dt><dd>@brief Renders a human-readable text description of an atom
+@ingroup atom_group
+@param[in]  atom  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> to render
+@param[out]  buf  A buffer into which the text will be rendered
+@param[in]  buf_len  The maximum allocated size of <code>buf</code>
+@return The length of the description string, minus the string terminator character.  If
+<code>return_value &gt; buf_len + 1</code>, then the text was not fully rendered and this function should be
+called again with a larger buffer.</dd><dt><a class="fn" href="fn.atom_var.html" title="fn hyperonc::atom::atom_var">atom_<wbr>var</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Create a new Variable atom with the specified name
+@ingroup atom_group
+@param[in]  name  The name for the newly created Variable atom
+@return An <code>atom_t</code> for the Variable atom
+@note The caller must take ownership responsibility for the returned <code>atom_t</code></dd><dt><a class="fn" href="fn.atom_var_parse_name.html" title="fn hyperonc::atom::atom_var_parse_name">atom_<wbr>var_<wbr>parse_<wbr>name</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Create a new Variable atom parsing full formatted name of the variable
+@ingroup atom_group
+@param[in]  name  The name for the newly created Variable atom in a format <code>&lt;name&gt;#id</code>
+@return An <code>atom_t</code> for the Variable atom, returns <code>atom_t::null()</code> when parsing fails
+@note The caller must take ownership responsibility for the returned <code>atom_t</code></dd><dt><a class="fn" href="fn.atom_vec_clone.html" title="fn hyperonc::atom::atom_vec_clone">atom_<wbr>vec_<wbr>clone</a></dt><dd>@brief Creates a new <code>atom_vec_t</code> by cloning an existing <code>atom_vec_t</code>
+@ingroup atom_vec_group
+@param[in]  vec  A pointer to an existing <code>atom_vec_t</code> to clone
+@return A newly created <code>atom_vec_t</code>
+@note The caller must take ownership responsibility for the returned <code>atom_vec_t</code></dd><dt><a class="fn" href="fn.atom_vec_free.html" title="fn hyperonc::atom::atom_vec_free">atom_<wbr>vec_<wbr>free</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Frees a <code>atom_vec_t</code>
+@ingroup atom_vec_group
+@param[in]  vec  The vec to free</dd><dt><a class="fn" href="fn.atom_vec_from_array.html" title="fn hyperonc::atom::atom_vec_from_array">atom_<wbr>vec_<wbr>from_<wbr>array</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Creates a new <code>atom_vec_t</code> from a C-style array
+@ingroup atom_vec_group
+@param[in]  atoms  A packed buffer of <code>atom_t *</code>, representing the atoms to put into the vec.
+@param[in]  size  The number of elements in <code>atoms</code>
+@return The newly created <code>atom_vec_t</code>
+@note The caller must take ownership responsibility for the returned <code>atom_vec_t</code>
+@warning This function takes ownership of all <code>atoms</code>, so they must not be subsequently accessed or freed</dd><dt><a class="fn" href="fn.atom_vec_get.html" title="fn hyperonc::atom::atom_vec_get">atom_<wbr>vec_<wbr>get</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Access an atom at a specified index in a vec
+@ingroup atom_vec_group
+@param[in]  vec  The vec in which to access the atom
+@param[in]  idx  The index of the element to access
+@return A reference to the atom at the specified index
+@note In the event that no atom exists at the specified <code>idx</code>, a <code>null</code> <code>atom_ref_t</code> will be returned
+@warning The atom referenced by the return value from this function remains owned by the <code>atom_vec_t</code>.
+It must not be accessed after the vec has been modified or freed.</dd><dt><a class="fn" href="fn.atom_vec_len.html" title="fn hyperonc::atom::atom_vec_len">atom_<wbr>vec_<wbr>len</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Returns the number of elements in a vec
+@ingroup atom_vec_group
+@param[in]  vec  The vec to be inspected
+@return The count of the number of elements contained within the vec</dd><dt><a class="fn" href="fn.atom_vec_new.html" title="fn hyperonc::atom::atom_vec_new">atom_<wbr>vec_<wbr>new</a></dt><dd>@brief Creates a new empty <code>atom_vec_t</code>
+@ingroup atom_vec_group
+@return The newly created <code>atom_vec_t</code>
+@note The caller must take ownership responsibility for the returned <code>atom_vec_t</code></dd><dt><a class="fn" href="fn.atom_vec_pop.html" title="fn hyperonc::atom::atom_vec_pop">atom_<wbr>vec_<wbr>pop</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Removes the last element from a vec, and returns it
+@ingroup atom_vec_group
+@param[in]  vec  The vec from which to pop the atom
+@return The last <code>atom_t</code> contained in the vec
+@note The caller must take ownership responsibility for the returned <code>atom_t</code>
+@note In the event that the vec is empty, a <code>null</code> <code>atom_t</code> will be returned</dd><dt><a class="fn" href="fn.atom_vec_push.html" title="fn hyperonc::atom::atom_vec_push">atom_<wbr>vec_<wbr>push</a><sup title="unsafe function">⚠</sup></dt><dd>@brief Push the atom onto the end of the vec
+@ingroup atom_vec_group
+@param[in]  vec  a pointer to an <code>atom_vec_t</code> to push the atom onto
+@param[in]  atom  the atom to push onto the vec
+@warning This function takes ownership of the supplied <code>atom_t</code>, and it must not be subsequently accessed of freed.</dd><dt><a class="fn" href="fn.atoms_are_equivalent.html" title="fn hyperonc::atom::atoms_are_equivalent">atoms_<wbr>are_<wbr>equivalent</a></dt><dd>@brief Checks if two atoms are alpha equivalent.
+@ingroup atom_group
+@param[in]  a  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> representing the first atom
+@param[in]  b  A pointer to an <code>atom_t</code> or an <code>atom_ref_t</code> representing the second atom
+@return <code>true</code> if the atoms can be converted to each other by renaming variables, otherwise <code>false</code></dd><dt><a class="fn" href="fn.bindings_add_var_binding.html" title="fn hyperonc::atom::bindings_add_var_binding">bindings_<wbr>add_<wbr>var_<wbr>binding</a></dt><dd>@brief Adds a new variable &lt;-&gt; atom association within a <code>bindings_t</code>
+@ingroup matching_group
+@param[in]  bindings  A pointer to the <code>bindings_t</code> to add the association to
+@param[in]  var  The Variable atom (L-value) for the variable &lt;-&gt; atom association
+@param[in]  atom  The other atom (R-value) for the variable &lt;-&gt; atom association
+@return <code>true</code> if the <code>bindings_t</code> has been sucessfully updated, and <code>false</code> if the new association would conflict with existing associations in the Bindings frame
+@warning This function takes ownership of both the <code>var</code> and <code>atom</code> atoms, so they must not be subsequently accessed or freed</dd><dt><a class="fn" href="fn.bindings_clone.html" title="fn hyperonc::atom::bindings_clone">bindings_<wbr>clone</a></dt><dd>@brief Makes a “deep copy” of a <code>bindings_t</code>
+@ingroup matching_group
+@param[in]  bindings  A pointer to the <code>bindings_t</code> to clone
+@return A newly created <code>bindings_t</code>
+@note The caller must take ownership responsibility for the returned <code>bindings_t</code></dd><dt><a class="fn" href="fn.bindings_eq.html" title="fn hyperonc::atom::bindings_eq">bindings_<wbr>eq</a></dt><dd>@brief Checks if two <code>bindings_t</code> objects contain identical associations
+@ingroup matching_group
+@param[in]  a  A pointer to a <code>bindings_t</code> representing the first Bindings frame
+@param[in]  b  A pointer to a <code>bindings_t</code> representing the second Bindings frame
+@return <code>true</code> is the Bindings frames are identical, and <code>false</code> otherwise</dd><dt><a class="fn" href="fn.bindings_free.html" title="fn hyperonc::atom::bindings_free">bindings_<wbr>free</a></dt><dd>@brief Frees a <code>bindings_t</code>
+@ingroup matching_group
+@param[in]  bindings  The <code>bindings_t</code> to free</dd><dt><a class="fn" href="fn.bindings_is_empty.html" title="fn hyperonc::atom::bindings_is_empty">bindings_<wbr>is_<wbr>empty</a></dt><dd>@brief Checks if a <code>bindings_t</code> contains no associations
+@ingroup matching_group
+@param[in]  bindings  A pointer to the <code>bindings_t</code> to inspect
+@return <code>true</code> is the Bindings frame contains no associations, and <code>false</code> otherwise</dd><dt><a class="fn" href="fn.bindings_merge.html" title="fn hyperonc::atom::bindings_merge">bindings_<wbr>merge</a></dt><dd>@brief Merges two <code>bindings_t</code> Bindings frames together into a Bindings Set
+@ingroup matching_group
+@param[in]  _self  The first <code>bindings_t</code> to merge.  Ownership of this argument is taken by this function
+@param[in]  other  A pointer to the second <code>bindings_t</code> to merge.  This argument is not modified
+@return The <code>bindings_set_t</code> that results from the merge
+@warning This function takes ownership of the <code>_self</code> argument.  After calling this function, the bindings_t passed as _self must not be accessed or freed
+@note The <code>bindings_set_t</code> returned from this function must be freed with <code>bindings_set_free()</code></dd><dt><a class="fn" href="fn.bindings_narrow_vars.html" title="fn hyperonc::atom::bindings_narrow_vars">bindings_<wbr>narrow_<wbr>vars</a></dt><dd>@brief Removes all variable associations from a <code>bindings_t</code> except those in the supplied list
+@ingroup matching_group
+@param[in]  bindings  A pointer to the <code>bindings_t</code> to modify
+@param[in]  vars  A pointer to a vec of Variable atoms, to specify which variables should remain in the Bindings</dd><dt><a class="fn" href="fn.bindings_new.html" title="fn hyperonc::atom::bindings_new">bindings_<wbr>new</a></dt><dd>@brief Creates a new <code>bindings_t</code> containing no variable &lt;-&gt; atom associations, leaving all variables free to match any atom.
+@ingroup matching_group
+@return  The new <code>bindings_t</code>
+@note The caller must take ownership responsibility for the returned <code>bindings_t</code>, and free it with <code>bindings_free()</code></dd><dt><a class="fn" href="fn.bindings_resolve.html" title="fn hyperonc::atom::bindings_resolve">bindings_<wbr>resolve</a></dt><dd>@brief Returns the atom bound to the supplied variable name in the <code>bindings_t</code>
+@ingroup matching_group
+@param[in]  bindings  A pointer to the <code>bindings_t</code> to inspect
+@param[in]  var  The Variable atom (L-value) for the variable &lt;-&gt; atom association
+@return The <code>atom_t</code> representing the atom that corresponds to the specified variable, or a NULL <code>atom_ref_t</code> if the variable is not present.
+@note The caller must take ownership responsibility for the returned <code>atom_t</code>, if it is not NULL</dd><dt><a class="fn" href="fn.bindings_set_add_var_binding.html" title="fn hyperonc::atom::bindings_set_add_var_binding">bindings_<wbr>set_<wbr>add_<wbr>var_<wbr>binding</a></dt><dd>@brief Adds a new variable &lt;-&gt; atom association to every Bindings frame in a Bindings set
+@ingroup matching_group
+@param[in]  set  A pointer to the <code>bindings_set_t</code> to modify
+@param[in]  var  A pointer to the Variable atom
+@param[in]  value  A pointer to the other atom to associate the variable with
+@note This function is equivalent to calling <code>bindings_add_var_binding</code> for each Bindings frame in the
+Bindings set, but new Bindings frames may be generated if the new association conflicts with existing
+associations in existing frames</dd><dt><a class="fn" href="fn.bindings_set_add_var_equality.html" title="fn hyperonc::atom::bindings_set_add_var_equality">bindings_<wbr>set_<wbr>add_<wbr>var_<wbr>equality</a></dt><dd>@brief Asserts equality between two Variable atoms in a Bindings set
+@ingroup matching_group
+@param[in]  set  A pointer to the <code>bindings_set_t</code> to modify
+@param[in]  a  A pointer to the first Variable atom for the variable &lt;-&gt; variable association
+@param[in]  b  A pointer to the second Variable atom for the variable &lt;-&gt; variable association
+@note Both <code>a</code> and <code>b</code> must be Variable atoms</dd><dt><a class="fn" href="fn.bindings_set_clone.html" title="fn hyperonc::atom::bindings_set_clone">bindings_<wbr>set_<wbr>clone</a></dt><dd>@brief Makes a “deep copy” of a <code>bindings_set_t</code>
+@ingroup matching_group
+@param[in]  set  A pointer to the <code>bindings_set_t</code> to use as the source for the clone
+@return The new cloned <code>bindings_set_t</code>
+@note The <code>bindings_set_t</code> returned from this function must be freed with <code>bindings_set_free()</code></dd><dt><a class="fn" href="fn.bindings_set_empty.html" title="fn hyperonc::atom::bindings_set_empty">bindings_<wbr>set_<wbr>empty</a></dt><dd>@brief Creates a new <code>bindings_set_t</code> without any Bindings frames.  Conceptually this means no valid matches exist
+@ingroup matching_group
+@return The empty <code>bindings_set_t</code>
+@note The <code>bindings_set_t</code> returned from this function must be freed with <code>bindings_set_free()</code></dd><dt><a class="fn" href="fn.bindings_set_eq.html" title="fn hyperonc::atom::bindings_set_eq">bindings_<wbr>set_<wbr>eq</a></dt><dd>@brief Checks if two <code>bindings_set_t</code> objects contain identical associations
+@ingroup matching_group
+@param[in]  a  A pointer to a <code>bindings_set_t</code> representing the first Bindings Set
+@param[in]  b  A pointer to a <code>bindings_set_t</code> representing the second Bindings Set
+@return <code>true</code> is the Bindings Sets are identical, and <code>false</code> otherwise</dd><dt><a class="fn" href="fn.bindings_set_free.html" title="fn hyperonc::atom::bindings_set_free">bindings_<wbr>set_<wbr>free</a></dt><dd>@brief Frees a <code>bindings_set_t</code>
+@ingroup matching_group
+@param[in]  set  The <code>bindings_set_t</code> to free</dd><dt><a class="fn" href="fn.bindings_set_from_bindings.html" title="fn hyperonc::atom::bindings_set_from_bindings">bindings_<wbr>set_<wbr>from_<wbr>bindings</a></dt><dd>@brief Creates a new <code>bindings_set_t</code> with the specified Bindings frame
+@ingroup matching_group
+@param[in]  bindings  The <code>bindings_t</code> to incorporate into the new Bindings Set.  Ownership of this argument is taken by this function
+@return The new <code>bindings_set_t</code>
+@warning This function takes ownership of the <code>bindings</code> argument, and it must not be subsequently accessed or freed after calling this function
+@note The <code>bindings_set_t</code> returned from this function must be freed with <code>bindings_set_free()</code></dd><dt><a class="fn" href="fn.bindings_set_is_empty.html" title="fn hyperonc::atom::bindings_set_is_empty">bindings_<wbr>set_<wbr>is_<wbr>empty</a></dt><dd>@brief Checks if a <code>bindings_set_t</code> contains no Bindings frames, and thus indicates no match
+@ingroup matching_group
+@param[in]  set  A pointer to the <code>bindings_set_t</code> to inspect
+@return <code>true</code> is the Bindings set is empty, and <code>false</code> otherwise</dd><dt><a class="fn" href="fn.bindings_set_is_single.html" title="fn hyperonc::atom::bindings_set_is_single">bindings_<wbr>set_<wbr>is_<wbr>single</a></dt><dd>@brief Checks if a <code>bindings_set_t</code> contains a frame with no associations, and is thus allows variables to take on any value
+@ingroup matching_group
+@param[in]  set  A pointer to the <code>bindings_set_t</code> to inspect
+@return <code>true</code> is the Bindings set is “single”, and <code>false</code> otherwise
+@note Perhaps the word “single” is not a good description of its meaning.  See https://github.com/trueagi-io/hyperon-experimental/issues/281</dd><dt><a class="fn" href="fn.bindings_set_iterate.html" title="fn hyperonc::atom::bindings_set_iterate">bindings_<wbr>set_<wbr>iterate</a></dt><dd>@brief Provides sequential access to each Bindings frame within a Bindings set.
+@ingroup matching_group
+@param[in]  set  A pointer to the <code>bindings_set_t</code> to iterate
+@param[in]  callback  A function that will be called to provide access to each Bindings frame
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function
+@note The current implementation of this function allows Bindings frames to be modified by the callback function, however this may not be possible in future versions of Hyperon</dd><dt><a class="fn" href="fn.bindings_set_merge_into.html" title="fn hyperonc::atom::bindings_set_merge_into">bindings_<wbr>set_<wbr>merge_<wbr>into</a></dt><dd>@brief Merges the contents of one Bindings set into another Bindings set
+@ingroup matching_group
+@param[in]  _self  A pointer to the <code>bindings_set_t</code> to modify
+@param[in]  other  A pointer to another <code>bindings_set_t</code>
+@note This function merges each Bindings frame in the <code>_self</code> set with each frame in the <code>other</code> set, using the
+same logic as <code>bindings_merge</code>.  New frames will potentially be created when associations are found to conflict</dd><dt><a class="fn" href="fn.bindings_set_push.html" title="fn hyperonc::atom::bindings_set_push">bindings_<wbr>set_<wbr>push</a></dt><dd>@brief Adds a Bindings frame to an existing <code>bindings_set_t</code>
+@ingroup matching_group
+@param[in]  set  The <code>bindings_set_t</code> to add <code>bindings</code> into
+@param[in]  bindings  The <code>bindings_t</code> to incorporate into <code>set</code>.  Ownership of this argument is taken by this function
+@warning This function takes ownership of the <code>bindings</code> argument, and it must not be subsequently accessed or freed after calling this function</dd><dt><a class="fn" href="fn.bindings_set_single.html" title="fn hyperonc::atom::bindings_set_single">bindings_<wbr>set_<wbr>single</a></dt><dd>@brief Creates a new <code>bindings_set_t</code> with one new Bindings frame.  Conceptually this means all variables are able to take on any value
+@ingroup matching_group
+@return The new <code>bindings_set_t</code>
+@note The <code>bindings_set_t</code> returned from this function must be freed with <code>bindings_set_free()</code></dd><dt><a class="fn" href="fn.bindings_set_to_str.html" title="fn hyperonc::atom::bindings_set_to_str">bindings_<wbr>set_<wbr>to_<wbr>str</a></dt><dd>@brief Renders a text description of a <code>bindings_set_t</code>
+@ingroup matching_group
+@param[in]  set  A pointer to the <code>bindings_set_t</code> to render
+@param[out]  buf  A buffer into which the text will be rendered
+@param[in]  buf_len  The maximum allocated size of <code>buf</code>
+@return The length of the description string, minus the string terminator character.  If
+<code>return_value &gt; buf_len + 1</code>, then the text was not fully rendered and this function should be
+called again with a larger buffer.</dd><dt><a class="fn" href="fn.bindings_to_str.html" title="fn hyperonc::atom::bindings_to_str">bindings_<wbr>to_<wbr>str</a></dt><dd>@brief Renders a text description of a <code>bindings_t</code>
+@ingroup matching_group
+@param[in]  bindings  A pointer to the <code>bindings_t</code> to render
+@param[out]  buf  A buffer into which the text will be rendered
+@param[in]  buf_len  The maximum allocated size of <code>buf</code>
+@return The length of the description string, minus the string terminator character.  If
+<code>return_value &gt; buf_len + 1</code>, then the text was not fully rendered and this function should be
+called again with a larger buffer.</dd><dt><a class="fn" href="fn.bindings_traverse.html" title="fn hyperonc::atom::bindings_traverse">bindings_<wbr>traverse</a></dt><dd>@brief Iterates each variable &lt;-&gt; Atom association within a <code>bindings_t</code>
+@ingroup matching_group
+@param[in]  bindings  A pointer to the <code>bindings_t</code> to iterate
+@param[in]  callback  A function that will be called for each variable &lt;-&gt; atom pair within the Bindings frame
+@param[in]  context  A pointer to a caller-defined structure to facilitate communication with the <code>callback</code> function</dd><dt><a class="fn" href="fn.exec_error_free.html" title="fn hyperonc::atom::exec_error_free">exec_<wbr>error_<wbr>free</a></dt><dd>@brief Frees an <code>exec_error_t</code>
+@ingroup grounded_atom_group
+@param[in]  error  The <code>exec_error_t</code> to free</dd><dt><a class="fn" href="fn.exec_error_incorrect_argument.html" title="fn hyperonc::atom::exec_error_incorrect_argument">exec_<wbr>error_<wbr>incorrect_<wbr>argument</a></dt><dd>@brief Creates a new <code>exec_error_t</code> representing a “Incorrect Argument” status, telling the
+MeTTa interpreter that argument was not recognized by the function implementation.
+@ingroup grounded_atom_group
+@return The newly created <code>exec_error_t</code>
+@note The caller must take ownership responsibility for the returned <code>exec_error_t</code>, and ultimately free
+it with <code>exec_error_free()</code> or return it from an <code>execute</code> function</dd><dt><a class="fn" href="fn.exec_error_no_err.html" title="fn hyperonc::atom::exec_error_no_err">exec_<wbr>error_<wbr>no_<wbr>err</a></dt><dd>@brief Creates a new <code>exec_error_t</code> representing a “No Error” status.  This is the default interpreter status
+@ingroup grounded_atom_group
+@return The newly created <code>exec_error_t</code>
+@note The caller must take ownership responsibility for the returned <code>exec_error_t</code>, and ultimately free
+it with <code>exec_error_free()</code> or return it from an <code>execute</code> function</dd><dt><a class="fn" href="fn.exec_error_no_reduce.html" title="fn hyperonc::atom::exec_error_no_reduce">exec_<wbr>error_<wbr>no_<wbr>reduce</a></dt><dd>@brief Creates a new <code>exec_error_t</code> representing a “Don’t Reduce” status, telling the MeTTa interpreter to process the atoms as they are
+@ingroup grounded_atom_group
+@return The newly created <code>exec_error_t</code>
+@note The caller must take ownership responsibility for the returned <code>exec_error_t</code>, and ultimately free
+it with <code>exec_error_free()</code> or return it from an <code>execute</code> function</dd><dt><a class="fn" href="fn.exec_error_runtime.html" title="fn hyperonc::atom::exec_error_runtime">exec_<wbr>error_<wbr>runtime</a></dt><dd>@brief Creates a new <code>exec_error_t</code> representing a runtime error that will halt the MeTTa interpreter
+@ingroup grounded_atom_group
+@param[in]  message  A human-readable error message, for the interpreter to propagate to the user
+@return The newly created <code>exec_error_t</code>
+@note The caller must take ownership responsibility for the returned <code>exec_error_t</code>, and ultimately free
+it with <code>exec_error_free()</code> or return it from an <code>execute</code> function</dd><dt><a class="fn" href="fn.throw_panic_with_message.html" title="fn hyperonc::atom::throw_panic_with_message">throw_<wbr>panic_<wbr>with_<wbr>message</a></dt><dd>@brief Used to throw panic from C Api with message to prevent panics without any info
+@ingroup grounded_atom_group
+@param[in]  message  A human-readable error message which will be used to throw a panic
+@return ()</dd></dl><h2 id="types" class="section-header">Type Aliases<a href="#types" class="anchor">§</a></h2><dl class="item-table"><dt><a class="type" href="type.bindings_mut_callback_t.html" title="type hyperonc::atom::bindings_mut_callback_t">bindings_<wbr>mut_<wbr>callback_<wbr>t</a></dt><dd>@brief Function signature for a callback providing mutable access to individual Bindings frames within a Bindings Set
+@ingroup matching_group
+@param[in]  bindings  A pointer to the <code>bindings_t</code>.  It is ok to call functions that modify the <code>bindings_t</code> within the callback
+@param[in]  context  The context state pointer initially passed to the upstream function initiating the callback</dd><dt><a class="type" href="type.c_atom_callback_t.html" title="type hyperonc::atom::c_atom_callback_t">c_<wbr>atom_<wbr>callback_<wbr>t</a></dt><dd>@brief Function signature for a callback providing access to an atom
+@ingroup atom_group
+@param[in]  atom  A reference to the atom.  This atom should not be modified or freed by the callback.
+@param[in]  context  The context state pointer initially passed to the upstream function initiating the callback.</dd><dt><a class="type" href="type.c_atom_vec_callback_t.html" title="type hyperonc::atom::c_atom_vec_callback_t">c_<wbr>atom_<wbr>vec_<wbr>callback_<wbr>t</a></dt><dd>@brief Function signature for a callback providing access to an <code>atom_vec_t</code>
+@ingroup atom_vec_group
+@param[in]  vec  The <code>atom_vec_t</code> being provided.  This vec should not be modified or freed by the callback.
+@param[in]  context  The context state pointer initially passed to the upstream function initiating the callback.</dd><dt><a class="type" href="type.c_var_binding_callback_t.html" title="type hyperonc::atom::c_var_binding_callback_t">c_<wbr>var_<wbr>binding_<wbr>callback_<wbr>t</a></dt><dd>@brief Function signature for a callback providing access to a variable &lt;-&gt; atom pair, associated with a binding
+@ingroup matching_group
+@param[in]  var  A reference to the Variable atom.  This atom should not be modified or freed by the callback
+@param[in]  value  A reference to the other atom associated with the variable.  This atom should not be modified or freed by the callback
+@param[in]  context  The context state pointer initially passed to the upstream function initiating the callback</dd></dl></section></div></main></body></html>

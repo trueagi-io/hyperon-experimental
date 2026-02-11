@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["check_bracket","find_matching_bracket","is_close_bracket","is_open_bracket","matching_bracket"],"struct":["ReplHelper","StyleSettings"]};
