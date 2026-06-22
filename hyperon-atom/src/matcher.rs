@@ -330,9 +330,7 @@ impl Bindings {
         match (&a_binding.atom, &b_binding.atom) {
             (Some(a_atom), Some(b_atom)) => {
                 if a_atom == b_atom {
-                    let a_binding = a_binding.id;
-                    let b_binding = self.bindings.remove(b_binding.id);
-                    self.add_var_to_binding(a_binding, b_binding.var);
+                    self.move_binding_to_binding(b_binding_id, a_binding_id);
                     BindingsSet::from(self)
                 } else {
                     self.match_values(&a_atom, &b_atom)
@@ -1663,6 +1661,85 @@ mod test {
         let bindings = bindings.add_var_binding(b.clone(), Atom::expr([Atom::sym("S"), Atom::Variable(a.clone())]))?;
         let bindings = bindings.add_var_equality(&a, &b);
         assert_eq!(bindings, Ok(bind!{ b: expr!("S" a),  a: expr!(b) }));
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_add_var_equality_keeps_all_vars_when_equal_value_classes_merge(
+    ) -> Result<(), &'static str> {
+        let x = VariableAtom::new("x");
+        let y = VariableAtom::new("y");
+        let a = VariableAtom::new("a");
+        let b = VariableAtom::new("b");
+        let bindings = Bindings::new()
+            .add_var_equality(&x, &y)?
+            .add_var_equality(&a, &b)?
+            .add_var_binding(&x, expr!("Z"))?
+            .add_var_binding(&a, expr!("Z"))?
+            .add_var_equality(&x, &a)?;
+
+        assert_eq!(bindings.resolve(&x), Some(expr!("Z")));
+        assert_eq!(bindings.resolve(&y), Some(expr!("Z")));
+        assert_eq!(bindings.resolve(&a), Some(expr!("Z")));
+        assert_eq!(bindings.resolve(&b), Some(expr!("Z")));
+        assert_eq!(
+            Bindings::new().merge(&bindings),
+            BindingsSet::from(bind! { x: expr!("Z"), y: expr!("Z"), a: expr!("Z"), b: expr!("Z") })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_equal_value_class_merge_preserves_aliases_across_orders(
+    ) -> Result<(), &'static str> {
+        for left_size in 1..=3 {
+            for right_size in 1..=3 {
+                for bind_first in 0..4 {
+                    for reverse in [false, true] {
+                        for use_last in [false, true] {
+                            let vars: Vec<_> = (0..left_size + right_size)
+                                .map(|i| VariableAtom::new(format!("v{i}"))).collect();
+                            let groups = [&vars[..left_size], &vars[left_size..]];
+                            let mut bindings = Bindings::new();
+                            for (i, group) in groups.iter().enumerate() {
+                                if bind_first & (1 << i) != 0 {
+                                    bindings = bindings.add_var_binding(&group[0], expr!("Box" "Z"))?;
+                                }
+                                for var in &group[1..] {
+                                    bindings = bindings.add_var_equality(&group[0], var)?;
+                                }
+                                if bind_first & (1 << i) == 0 {
+                                    bindings = bindings.add_var_binding(&group[0], expr!("Box" "Z"))?;
+                                }
+                            }
+                            let endpoints = groups.map(|group|
+                                if use_last { group.last().unwrap() } else { &group[0] });
+                            let [a, b] = if reverse { [endpoints[1], endpoints[0]] } else { endpoints };
+                            bindings = bindings.add_var_equality(a, b)?;
+                            bindings = bindings.add_var_equality(a, a)?;
+                            bindings = bindings.add_var_equality(b, a)?;
+                            // Reusing the removed class's slot must not retarget an old alias.
+                            bindings = bindings.add_var_binding(VariableAtom::new("fresh"), expr!("Other"))?;
+                            assert_eq!(bindings.len(), vars.len() + 1);
+                            for var in &vars {
+                                assert_eq!(bindings.resolve(var), Some(expr!("Box" "Z")));
+                            }
+                            for merged in [Bindings::new().merge(&bindings), bindings.clone().merge(&Bindings::new())] {
+                                assert_eq!(merged.len(), 1);
+                                let copied = Bindings::try_from(merged).unwrap();
+                                for var in &vars {
+                                    assert_eq!(copied.resolve(var), Some(expr!("Box" "Z")));
+                                }
+                            }
+                            let last = vars.last().unwrap();
+                            let narrowed = bindings.narrow_vars(&HashSet::from([last]));
+                            assert_eq!(narrowed.len(), 1);
+                            assert_eq!(narrowed.resolve(last), Some(expr!("Box" "Z")));
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
