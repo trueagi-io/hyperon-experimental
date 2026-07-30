@@ -251,6 +251,55 @@ mod test {
     use hyperon_common::assert_eq_no_order;
     use hyperon_space::SpaceObserver;
 
+    fn issue_1079_make_atom(n: usize) -> Atom {
+        // Verbatim atom shape from trueagi-io/hyperon-experimental#1079.
+        Atom::expr([
+            Atom::sym("item-shape-signal"),
+            Atom::sym(format!("pattern-{}", n)),
+            Atom::sym(format!("target-shape-{}", n)),
+            Atom::sym(format!("{}", n)),
+        ])
+    }
+
+    #[test]
+    fn grounding_space_visit_enumerates_all_atoms_above_key_id_threshold() {
+        // Regression for issue #1079, using the issue's own reproducer:
+        // 1500 atoms of its exact shape are all individually queryable,
+        // but Space::visit enumeration fails once storage key ids pass
+        // TK_MAX_EXPRESSION_SIZE (1024) — the TrieKey::value() decode
+        // defect (see also #1076). Ground queries never decode stored key
+        // ids, which is why per-atom lookup keeps working while
+        // enumeration fails.
+        use std::cell::Cell;
+        struct Counter(Cell<usize>);
+        impl SpaceVisitor for Counter {
+            fn accept(&mut self, _: Cow<'_, Atom>) {
+                self.0.set(self.0.get() + 1);
+            }
+        }
+
+        let target = 1500usize;
+        let mut space = GroundingSpace::new();
+        for n in 0..target {
+            space.add(issue_1079_make_atom(n));
+        }
+
+        let mut counter = Counter(Cell::new(0));
+        let _ = Space::visit(&space, &mut counter);
+        let visit_count = counter.0.get();
+
+        let mut query_found = 0usize;
+        for n in 0..target {
+            if !space.query(&issue_1079_make_atom(n)).is_empty() {
+                query_found += 1;
+            }
+        }
+
+        assert_eq!(query_found, target, "not all atoms individually queryable");
+        assert_eq!(visit_count, target,
+            "visit enumerated {} of {} atoms", visit_count, target);
+    }
+
     struct SpaceEventCollector {
         events: Vec<SpaceEvent>,
     }
