@@ -542,7 +542,7 @@ impl TrieKey {
 
     #[inline]
     fn value(&self) -> usize {
-        self.0 & TK_VALUE_MASK - TK_MAX_EXPRESSION_SIZE
+        (self.0 & TK_VALUE_MASK) - TK_MAX_EXPRESSION_SIZE
     }
 
     #[inline]
@@ -926,5 +926,22 @@ mod test {
     #[test]
     fn atom_trie_trie_key_size() {
         assert_eq!(std::mem::size_of::<TrieKey>(), std::mem::size_of::<usize>());
+    }
+
+    #[test]
+    fn trie_key_value_roundtrip_above_max_expression_size() {
+        // Regression: TrieKey::value() must invert TrieKey::new() for every
+        // storable id. Before the precedence fix it returned wrong values for
+        // ids >= TK_MAX_EXPRESSION_SIZE, corrupting every lookup once the key
+        // storage grew past 1024 entries (panic at get_atom().unwrap() or UB
+        // via HoleyVec::get_unchecked).
+        for v in [0usize, 1, TK_MAX_EXPRESSION_SIZE - 1, TK_MAX_EXPRESSION_SIZE,
+                  TK_MAX_EXPRESSION_SIZE + 1, 2 * TK_MAX_EXPRESSION_SIZE,
+                  3 * TK_MAX_EXPRESSION_SIZE + 5] {
+            let k = TrieKey::new(TrieKeyStore::Hash, AtomMatchMode::Equality, v);
+            assert_eq!(k.value(), v, "roundtrip failed for value {}", v);
+            let k = TrieKey::new(TrieKeyStore::Index, AtomMatchMode::Unification, v);
+            assert_eq!(k.value(), v, "roundtrip failed for value {}", v);
+        }
     }
 }

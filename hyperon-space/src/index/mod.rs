@@ -257,6 +257,43 @@ mod test {
 
 
     #[test]
+    fn atom_index_iter_enumerates_all_atoms_above_key_id_threshold() {
+        // Regression for the enumeration surface of the TrieKey::value()
+        // precedence defect (issue #1079): with more than
+        // TK_MAX_EXPRESSION_SIZE distinct stored keys, enumeration used to
+        // fail on the first key with storage id >= 1024. The local
+        // unpatched build panics here; a tolerant path producing a silent
+        // undercount has not been identified. Insert 1500 same-head atoms
+        // and require complete enumeration.
+        let mut index: AtomIndex = Default::default();
+        let n = 1500usize;
+        for i in 0..n {
+            index.insert(Atom::expr([Atom::sym("F"),
+                Atom::sym(format!("a{}", i))]));
+        }
+        assert_eq!(index.iter().count(), n);
+    }
+
+    #[test]
+    fn atom_index_survives_key_ids_above_max_expression_size() {
+        // Regression for the TrieKey::value() precedence defect: with more
+        // than TK_MAX_EXPRESSION_SIZE (1024) distinct keys in storage, the
+        // first unification query used to decode key ids incorrectly and
+        // panic (or read out of bounds). Insert well past the boundary and
+        // query everything back.
+        let mut index: AtomIndex = Default::default();
+        let n = 3000usize;
+        for i in 0..n {
+            index.insert(Atom::expr([Atom::sym("Flat"),
+                Atom::sym(format!("a{}", i)), Atom::sym(format!("b{}", i))]));
+        }
+        let results: Vec<_> = index
+            .query(&Atom::expr([Atom::sym("Flat"), Atom::var("x"), Atom::var("y")]))
+            .collect();
+        assert_eq!(results.len(), n);
+    }
+
+    #[test]
     fn atom_token_iter_symbol() {
         let atom = Atom::sym("sym");
         let it = AtomIter::from_ref(&atom);
