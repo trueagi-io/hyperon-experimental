@@ -569,12 +569,28 @@ pub fn module_name_make_legal(name: &str) -> Option<String> {
     let new_name: String = name.chars().filter(|&the_char| {
         the_char.is_ascii_alphanumeric() ||
         the_char == '-' ||
-        the_char != '_'
+        the_char == '_'
     }).collect();
     if new_name.len() > 0 {
         Some(new_name)
     } else {
         None
+    }
+}
+
+/// This test is narrowly focussed on [module_name_make_legal]: the composed name keeps
+/// every legal character (underscore included), drops every illegal one, agrees with
+/// [module_name_is_legal] on everything it returns, and returns None when nothing legal
+/// remains
+#[test]
+fn module_name_make_legal_test() {
+    assert_eq!(module_name_make_legal("legal-name_1").as_deref(), Some("legal-name_1"));
+    assert_eq!(module_name_make_legal("my_module").as_deref(), Some("my_module"));
+    assert_eq!(module_name_make_legal("bad!name_x").as_deref(), Some("badname_x"));
+    assert_eq!(module_name_make_legal("hello world").as_deref(), Some("helloworld"));
+    assert_eq!(module_name_make_legal("!!!"), None);
+    for made in ["bad!name_x", "a b-c_d.e"].map(module_name_make_legal) {
+        assert!(module_name_is_legal(&made.unwrap()));
     }
 }
 
