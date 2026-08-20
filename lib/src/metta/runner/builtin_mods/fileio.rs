@@ -89,9 +89,13 @@ impl Grounded for FileHandle {
     }
 }
 
+impl FileHandle {
+}
+
 impl Display for FileHandle {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "FileHandle-{:?}", self.0.as_ptr())
+        // no address: Display reaches hashed output
+        write!(f, "FileHandle")
     }
 }
 

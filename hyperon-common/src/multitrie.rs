@@ -305,7 +305,16 @@ struct MultiTrieNode<K, V> {
     children: HashMap<TrieToken<K>, Shared<Self>>,
     /// The shortcuts to the ends of expressions which are used
     /// when expressions are matched by [TrieToken::Wildcard].
-    end_of_expr: HashMap<*mut Self, Shared<Self>>,
+    ///
+    /// Insertion-ordered. This was a `HashMap<*mut Self, Shared<Self>>`, whose
+    /// iteration order followed heap addresses and therefore varied between
+    /// processes. Because `next()` feeds this iteration straight into the
+    /// result list consumed by `intersection-atom`/`subtraction-atom`, that
+    /// made those operations return different results — and different
+    /// cardinality — on identical input. The map only ever provided
+    /// deduplication, which a linear scan gives just as well: these lists hold
+    /// the open expressions at one trie node and are small.
+    end_of_expr: Vec<Shared<Self>>,
     /// Values which keys are ended on this node.
     values: HashSet<V>,
 }
@@ -319,7 +328,7 @@ where
     fn new() -> Self {
         Self{
             children: HashMap::new(),
-            end_of_expr: HashMap::new(),
+            end_of_expr: Vec::new(),
             values: HashSet::new(),
         }
     }
@@ -360,7 +369,7 @@ where
                     self.children.iter()
                         .filter(|(token, _child)| !token.is_parenthesis())
                         .for_each(|(token, child)| result.push((Some(token), child, key.clone())));
-                    self.end_of_expr.values()
+                    self.end_of_expr.iter()
                         .for_each(|child| result.push((None, child, key.clone())));
                 },
             },
@@ -385,7 +394,7 @@ where
                 if removed && child_node.borrow().is_empty(){
                     match token {
                         Some(token) => { self.children.remove(&token); },
-                        None => { self.end_of_expr.remove(&child_node.as_ptr()); },
+                        None => { self.end_of_expr.retain(|n| n.as_ptr() != child_node.as_ptr()); },
                     }
                 }
                 removed
@@ -410,7 +419,9 @@ where
                 let left_par = self.get_or_insert_child(token);
                 left_par.borrow_mut().insert_internal(key, value, right_par_nodes);
                 let right_par = right_par_nodes.pop().expect("Unbalanced key");
-                self.end_of_expr.insert(right_par.as_ptr(), right_par);
+                if !self.end_of_expr.iter().any(|n| n.as_ptr() == right_par.as_ptr()) {
+                    self.end_of_expr.push(right_par);
+                }
             },
             Some(token @ TrieToken::RightPar) => {
                 let right_par = self.get_or_insert_child(token);

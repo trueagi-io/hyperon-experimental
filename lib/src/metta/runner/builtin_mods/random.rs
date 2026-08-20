@@ -59,9 +59,13 @@ impl Grounded for RandomGenerator {
     }
 }
 
+impl RandomGenerator {
+}
+
 impl Display for RandomGenerator {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "RandomGenerator-{:?}", self.0.as_ptr())
+        // no address: Display reaches hashed output (incl. error atoms)
+        write!(f, "RandomGenerator")
     }
 }
 
