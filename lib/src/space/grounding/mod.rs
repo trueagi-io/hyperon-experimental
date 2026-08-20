@@ -220,11 +220,15 @@ impl<D: DuplicationStrategy> Debug for GroundingSpace<D> {
     }
 }
 
+
 impl<D: DuplicationStrategy> Display for GroundingSpace<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.name {
             Some(name) => write!(f, "GroundingSpace-{name}"),
-            None => write!(f, "GroundingSpace-{self:p}")
+            // Display reaches hashed output; an address is not reproducible across
+            // processes, so an unnamed space carries no identity here. Debug
+            // still prints the pointer for interactive use.
+            None => write!(f, "GroundingSpace")
         }
     }
 }

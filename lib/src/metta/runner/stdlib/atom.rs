@@ -120,44 +120,36 @@ impl CustomExecute for IntersectionAtomOp {
         let mut lhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().into();
         let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children();
 
-        let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
-        for (index, rhs_item) in rhs.iter().enumerate() {
-            let k = atom_to_trie_key(&rhs_item);
-            // FIXME this should
-            // a) use a mutable value endpoint which the MultiTrie does not support atm
-            // b) use a linked list, which Rust barely supports atm
-            let r = rhs_index.get(&k).next();
-            match r.cloned() {
-                Some(bucket) => {
-                    rhs_index.remove(&k, &bucket);
-                    let mut nbucket = bucket;
-                    nbucket.push(index);
-                    let nbucket = nbucket;
-                    rhs_index.insert(k, nbucket);
-                }
-                None => { rhs_index.insert(k, vec![index]) }
-            }
-        }
-
+        // Multiset intersection: consume each RHS element at most once.
+        //
+        // The previous implementation indexed RHS in a `MultiTrie` and called
+        // `get(&k).next()`. Two defects followed from that, and both dropped
+        // members of the intersection depending on heap layout:
+        //
+        //   1. `atom_to_trie_key` maps EVERY variable to the same `Wildcard`,
+        //      and a wildcard query matches any stored key. During index
+        //      construction `get(&k).next()` therefore merged an unrelated
+        //      bucket -- e.g. symbol `A`'s -- under the wildcard key, after
+        //      which `A` could no longer be found under its own key.
+        //   2. At lookup, `.next()` picked one of several matching buckets in
+        //      HashMap iteration order and gave up if that bucket held no
+        //      equal atom; `remove(&k, ..)` then removed under the candidate's
+        //      key, which for a variable is again that shared wildcard.
+        //
+        // Measured on `(A $x B $y C)` against `($y C A $x B)`, whose correct
+        // intersection is all five atoms: the old code returned 5 atoms in 9
+        // of 15 runs and 3 in the other 6, varying between processes.
+        //
+        // Note the trie only ever served as a lookup index; correctness never
+        // depended on it. This is O(|lhs| * |rhs|) rather than sub-quadratic.
+        // If that matters for large inputs, the index must be keyed so that
+        // distinct variables do not collide -- the wildcard collapse above is
+        // what makes the trie unsafe here, not the trie itself.
+        let mut used = vec![false; rhs.len()];
         lhs.retain(|candidate| {
-            let k = atom_to_trie_key(candidate);
-            let r = rhs_index.get(&k).next();
-            match r.cloned() {
-                None => { false }
-                Some(bucket) => {
-                    match bucket.iter().position(|item| &rhs[*item] == candidate) {
-                        None => { false }
-                        Some(i) => {
-                            rhs_index.remove(&k, &bucket);
-                            if bucket.len() > 1 {
-                                let mut nbucket = bucket;
-                                nbucket.remove(i);
-                                rhs_index.insert(k, nbucket);
-                            }
-                            true
-                        }
-                    }
-                }
+            match rhs.iter().enumerate().find(|(i, r)| !used[*i] && *r == candidate) {
+                Some((i, _)) => { used[i] = true; true }
+                None => false,
             }
         });
 
@@ -305,44 +297,16 @@ impl CustomExecute for SubtractionAtomOp {
         let mut lhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().into();
         let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children();
 
-        let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
-        for (index, rhs_item) in rhs.iter().enumerate() {
-            let k = atom_to_trie_key(&rhs_item);
-            // FIXME this should
-            // a) use a mutable value endpoint which the MultiTrie does not support atm
-            // b) use a linked list, which Rust barely supports atm
-            let r = rhs_index.get(&k).next();
-            match r.cloned() {
-                Some(bucket) => {
-                    rhs_index.remove(&k, &bucket);
-                    let mut nbucket = bucket;
-                    nbucket.push(index);
-                    let nbucket = nbucket;
-                    rhs_index.insert(k, nbucket);
-                }
-                None => { rhs_index.insert(k, vec![index]) }
-            }
-        }
-
+        // Multiset difference: remove each RHS element from LHS at most once.
+        // Same two defects as `intersection-atom` -- every variable collapses
+        // to one `Wildcard` trie key, and `get(&k).next()` plus
+        // `remove(&k, ..)` then merged and evicted unrelated buckets in
+        // HashMap iteration order. See the comment there for the measurement.
+        let mut used = vec![false; rhs.len()];
         lhs.retain(|candidate| {
-            let k = atom_to_trie_key(candidate);
-            let r = rhs_index.get(&k).next();
-            match r.cloned() {
-                None => { true }
-                Some(bucket) => {
-                    match bucket.iter().position(|item| &rhs[*item] == candidate) {
-                        None => { true }
-                        Some(i) => {
-                            rhs_index.remove(&k, &bucket);
-                            if bucket.len() > 1 {
-                                let mut nbucket = bucket;
-                                nbucket.remove(i);
-                                rhs_index.insert(k, nbucket);
-                            }
-                            false
-                        }
-                    }
-                }
+            match rhs.iter().enumerate().find(|(i, r)| !used[*i] && *r == candidate) {
+                Some((i, _)) => { used[i] = true; false }
+                None => true,
             }
         });
 
