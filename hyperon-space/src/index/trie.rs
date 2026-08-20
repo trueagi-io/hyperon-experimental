@@ -542,7 +542,7 @@ impl TrieKey {
 
     #[inline]
     fn value(&self) -> usize {
-        self.0 & TK_VALUE_MASK - TK_MAX_EXPRESSION_SIZE
+        (self.0 & TK_VALUE_MASK) - TK_MAX_EXPRESSION_SIZE
     }
 
     #[inline]
