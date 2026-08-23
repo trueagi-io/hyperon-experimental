@@ -50,7 +50,6 @@ macro_rules! def_binary_number_op {
 def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, Number);
-def_binary_number_op!(ModOp, %, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(LessOp, <, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(GreaterOp, >, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(LessEqOp, <=, ATOM_TYPE_BOOL, Bool);
@@ -159,6 +158,41 @@ impl CustomExecute for DivOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct ModOp{}
+
+impl Display for ModOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "%")
+    }
+}
+
+impl Grounded for ModOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for ModOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::IncorrectArgument;
+        let a = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        let b = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?;
+
+        let (a, b) = Number::promote(a, b);
+        match (a, b) {
+            (Number::Integer(_), Number::Integer(0)) => Err(ExecError::from("DivisionByZero")),
+            (Number::Integer(a), Number::Integer(b)) => Ok(vec![Atom::gnd(Number::Integer(a % b))]),
+            (Number::Float(a), Number::Float(b)) => Ok(vec![Atom::gnd(Number::Float(a % b))]),
+            _ => panic!("Unexpected state"),
+        }
+    }
+}
+
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_fallible_token(regex(r"[\-\+]?\d+"),
         |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
@@ -219,6 +253,11 @@ mod tests {
     fn div_errors() {
         assert_eq!(run_program(&format!("!(assertEqual (/ 5 0) (Error (/ 5 0) DivisionByZero))")), Ok(vec![vec![UNIT_ATOM]]));
         assert_eq!(run_program(&format!("!(assertEqual (let $div (/ 5.0 0.0) (isinf-math $div)) True)")), Ok(vec![vec![UNIT_ATOM]]));
+    }
+
+    #[test]
+    fn mod_errors() {
+        assert_eq!(run_program(&format!("!(assertEqual (% 7 0) (Error (% 7 0) DivisionByZero))")), Ok(vec![vec![UNIT_ATOM]]));
     }
 
     #[test]
