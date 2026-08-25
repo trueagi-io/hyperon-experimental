@@ -61,8 +61,12 @@ class GroundingSpace(AbstractSpace):
     def __init__(self):
         """Initialize GroundingSpace and its underlying native implementation."""
         super().__init__()
-        # self.cspace = hp.space_new_grounding()
         self.gspace = GroundingSpaceRef()
+
+    @property
+    def cspace(self):
+        """Return the native handle expected by MeTTa."""
+        return self.gspace.cspace
 
     def query(self, query_atom):
         """
