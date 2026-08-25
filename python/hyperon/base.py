@@ -183,7 +183,8 @@ class SpaceRef:
 
     def __del__(self):
         """Free the underlying CSpace object """
-        hp.space_free(self.cspace)
+        if hasattr(self, "cspace"):
+            hp.space_free(self.cspace)
 
     def __eq__(self, other):
         """Compare two SpaceRef objects for equality, based on their underlying spaces."""
