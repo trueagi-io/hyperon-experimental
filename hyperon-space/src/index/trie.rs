@@ -542,7 +542,7 @@ impl TrieKey {
 
     #[inline]
     fn value(&self) -> usize {
-        self.0 & TK_VALUE_MASK - TK_MAX_EXPRESSION_SIZE
+        (self.0 & TK_VALUE_MASK) - TK_MAX_EXPRESSION_SIZE
     }
 
     #[inline]
@@ -917,6 +917,21 @@ impl<'a, D: DuplicationStrategy> Iterator for TrieNodeAtomIter<'a, D> {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn trie_key_large_value_roundtrip() {
+        let values = [0, 1, 1023, 1024, 65_535, 100_000, 1_000_000];
+        let stores = [TrieKeyStore::Hash, TrieKeyStore::Index];
+        let modes = [AtomMatchMode::Equality, AtomMatchMode::Unification];
+
+        for value in values {
+            for store in stores {
+                for mode in modes {
+                    assert_eq!(TrieKey::new(store, mode, value).value(), value);
+                }
+            }
+        }
+    }
 
     #[test]
     fn atom_trie_node_size() {
