@@ -4,6 +4,11 @@ from hyperon import *
 
 class MettaTest(unittest.TestCase):
 
+    def test_delete_uninitialized_runner(self):
+        runner = MeTTa.__new__(MeTTa)
+
+        runner.__del__()
+
     def test_adding_tokens_while_parsing(self):
         metta = MeTTa(env_builder=Environment.test_env())
 

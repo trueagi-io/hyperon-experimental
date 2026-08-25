@@ -132,7 +132,8 @@ class MeTTa:
             self.cmetta = hp.metta_new_with_stdlib_loader(_priv_load_module_stdlib, space.cspace, env_builder)
 
     def __del__(self):
-        hp.metta_free(self.cmetta)
+        if hasattr(self, "cmetta"):
+            hp.metta_free(self.cmetta)
 
     def __eq__(self, other):
         """Checks if two MeTTa runner handles point to the same runner."""

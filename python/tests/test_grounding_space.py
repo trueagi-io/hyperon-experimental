@@ -5,6 +5,11 @@ from test_common import HyperonTestCase
 
 class GroundingSpaceTest(HyperonTestCase):
 
+    def test_delete_uninitialized_space_ref(self):
+        space = SpaceRef.__new__(SpaceRef)
+
+        space.__del__()
+
     def test_add(self):
         kb = GroundingSpaceRef()
         kb.add_atom(S("a"))
