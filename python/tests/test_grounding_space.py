@@ -5,6 +5,18 @@ from test_common import HyperonTestCase
 
 class GroundingSpaceTest(HyperonTestCase):
 
+    def test_metta_accepts_python_grounding_space(self):
+        space = GroundingSpace()
+        space.add(E(S("fact"), S("value")))
+
+        runner = MeTTa(space=space, env_builder=Environment.test_env())
+
+        self.assertEqual(space.atom_count(), 1)
+        self.assertEqualNoOrder(
+            runner.space().query(E(S("fact"), V("value"))),
+            [{"value": S("value")}],
+        )
+
     def test_add(self):
         kb = GroundingSpaceRef()
         kb.add_atom(S("a"))
