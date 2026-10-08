@@ -28,6 +28,46 @@ START_TEST (test_check_type)
 }
 END_TEST
 
+static void save_type_error(const atom_vec_t* atoms, void* context) {
+    atom_t* error = context;
+    ck_assert(atom_is_null(error));
+    ck_assert_uint_eq(atom_vec_len(atoms), 1);
+    atom_ref_t borrowed = atom_vec_get(atoms, 0);
+    *error = atom_clone(&borrowed);
+}
+
+START_TEST (test_nearby_type_is_found_in_unbounded_family)
+{
+    space_t space = space_new_grounding_space();
+    space_add(&space, expr(atom_sym(":"), atom_sym("a"),
+        expr(atom_sym("F"), atom_sym("x"), atom_ref_null()), atom_ref_null()));
+    space_add(&space, expr(atom_sym(":<"),
+        expr(atom_sym("F"), atom_var("x"), atom_ref_null()),
+        expr(atom_sym("F"), expr(atom_sym("F"), atom_var("x"), atom_ref_null()), atom_ref_null()), atom_ref_null()));
+    // The subtype rule gives `a` infinitely many types. The search is not limited unless
+    // the max-type-depth pragma is set, and a check stops when it finds the expected type.
+    atom_t a = atom_sym("a");
+    atom_t nearby = expr(atom_sym("F"), expr(atom_sym("F"), atom_sym("x"), atom_ref_null()), atom_ref_null());
+    atom_t error = atom_ref_null();
+    ck_assert(check_type_with_error(&space, &a, &nearby, save_type_error, &error));
+    ck_assert(atom_is_null(&error));
+
+    space_add(&space, expr(atom_sym(":"), atom_sym("g"),
+        expr(atom_sym("F"), atom_sym("x"), atom_ref_null()), atom_ref_null()));
+    atom_t g_expr = expr(atom_sym("g"), atom_ref_null());
+    atom_t tuple_nearby = expr(expr(atom_sym("F"),
+        expr(atom_sym("F"), atom_sym("x"), atom_ref_null()), atom_ref_null()), atom_ref_null());
+    ck_assert(check_type_with_error(&space, &g_expr, &tuple_nearby, save_type_error, &error));
+    ck_assert(atom_is_null(&error));
+
+    atom_free(tuple_nearby);
+    atom_free(g_expr);
+    atom_free(nearby);
+    atom_free(a);
+    space_free(space);
+}
+END_TEST
+
 START_TEST (test_validate_atom)
 {
     space_t space = space_new_grounding_space();
@@ -102,9 +142,9 @@ void init_test(TCase* test_case) {
     tcase_set_timeout(test_case, 300); //300s = 5min.  To test for memory leaks
     tcase_add_checked_fixture(test_case, setup, teardown);
     tcase_add_test(test_case, test_check_type);
+    tcase_add_test(test_case, test_nearby_type_is_found_in_unbounded_family);
     tcase_add_test(test_case, test_validate_atom);
     tcase_add_test(test_case, test_get_atom_types);
 }
 
 TEST_MAIN(init_test);
-

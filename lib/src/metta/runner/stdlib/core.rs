@@ -42,7 +42,7 @@ impl CustomExecute for PragmaOp {
         let key = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "pragma! expects symbol atom as a key")?.name();
         let value = args.get(1).ok_or_else(arg_error)?;
         match key {
-            "max-stack-depth" => {
+            "max-stack-depth" | "max-type-depth" => {
                 value.to_string().parse::<usize>().map_err(|_| "UnsignedIntegerIsExpected")?;
             },
             _ => {},

@@ -1243,7 +1243,8 @@
 Possible pragmas:
   (pragma! type-check auto) - check type of the atom before evaluation
   (pragma! interpreter bare-minimal) - use minimal MeTTa semantics when evaluating atom
-  (pragma! max-stack-depth <number>) - limit depth of the interpreter's stack, 0 - no limit (default behavior)")
+  (pragma! max-stack-depth <number>) - limit depth of the interpreter's stack, 0 - no limit (default behavior)
+  (pragma! max-type-depth <number>) - limit depth of the subtype derivations, 0 - no limit (default behavior). Declared types have depth 0. Type enumeration left unfinished at the limit returns TypeSearchLimit; a positive type check may finish before enumeration does.")
   (@params (
     (@param "Key's name")
     (@param "New value")))

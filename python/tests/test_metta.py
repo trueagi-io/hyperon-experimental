@@ -50,6 +50,16 @@ class MettaTest(unittest.TestCase):
 
         self.assertEqual([S('T')], result)
 
+    def test_type_depth_limit_and_positive_goal_search(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+        metta.run('(: a (F x)) (:< (F $x) (F (F $x))) (: f (-> (F (F x)) Ok)) (= (f $x) accepted) !(pragma! max-type-depth 2)')
+        self.assertEqual(metta.run('!(f a)'), [[S('accepted')]])
+        error = E(S('Error'), S('a'), E(S('TypeSearchLimit'), ValueAtom(2)))
+        self.assertEqual(metta.run('!(get-type a)'), [[error]])
+        self.assertEqual(metta.run('!(get-type-space &self a)'), [[error]])
+        self.assertEqual(metta.run('(: g (-> Missing Ok)) !(g a)'), [[error]])
+        self.assertEqual(metta.run('!(+ 2 3)'), [[ValueAtom(5)]])
+
     def test_incremental_runner(self):
         program = '''
             !(+ 1 (+ 2 (+ 3 4)))
