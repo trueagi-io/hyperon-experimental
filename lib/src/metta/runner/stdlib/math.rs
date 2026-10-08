@@ -79,7 +79,9 @@ impl CustomExecute for AbsMathOp {
         let arg_error = || ExecError::from("abs-math expects one argument: number");
         let input = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
         match input {
-            Number::Integer(n) => Ok(vec![Atom::gnd(Number::Integer(n.abs()))]),
+            Number::Integer(n) => n.checked_abs()
+                .map(|res| vec![Atom::gnd(Number::Integer(res))])
+                .ok_or_else(|| ExecError::from("IntegerOverflow")),
             Number::Float(f) => Ok(vec![Atom::gnd(Number::Float(f.abs()))])
         }
     }
@@ -472,6 +474,12 @@ mod tests {
     }
 
     #[test]
+    fn integer_abs_overflow() {
+        assert_eq!(AbsMathOp{}.execute(&[Atom::gnd(Number::Integer(i64::MIN))]),
+            Err(ExecError::from("IntegerOverflow")));
+    }
+
+    #[test]
     fn metta_log_math() {
         assert_eq!(run_program(&format!("!(log-math 2 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
         assert_eq!(run_program(&format!("!(let $log (log-math 0 0) (isnan-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
@@ -586,6 +594,22 @@ mod tests {
 
     #[test]
     fn abs_math_op() {
+        for n in [i64::MIN + 1, -1, 0, 1, i64::MAX] {
+            let expected = (n as i128).abs() as i64;
+            let result = AbsMathOp{}.execute(&[Atom::gnd(Number::Integer(n))]).unwrap();
+            assert_eq!(result.len(), 1);
+            match Number::from_atom(&result[0]) {
+                Some(Number::Integer(value)) => assert_eq!(value, expected),
+                other => panic!("expected an integer, got {other:?}"),
+            }
+        }
+        for f in [-9223372036854775808.0, f64::NEG_INFINITY, -0.0] {
+            let result = AbsMathOp{}.execute(&[Atom::gnd(Number::Float(f))]).unwrap();
+            match Number::from_atom(&result[0]) {
+                Some(Number::Float(value)) => assert_eq!(value.to_bits(), f.abs().to_bits()),
+                other => panic!("expected a float, got {other:?}"),
+            }
+        }
         let res = AbsMathOp {}.execute(&mut vec![expr!({Number::Integer(4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(4)})]);
         let res = AbsMathOp {}.execute(&mut vec![expr!({Number::Integer(-4)})]).expect("No result returned");
