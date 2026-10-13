@@ -542,7 +542,7 @@ impl TrieKey {
 
     #[inline]
     fn value(&self) -> usize {
-        self.0 & TK_VALUE_MASK - TK_MAX_EXPRESSION_SIZE
+        (self.0 & TK_VALUE_MASK) - TK_MAX_EXPRESSION_SIZE
     }
 
     #[inline]
@@ -926,5 +926,21 @@ mod test {
     #[test]
     fn atom_trie_trie_key_size() {
         assert_eq!(std::mem::size_of::<TrieKey>(), std::mem::size_of::<usize>());
+    }
+
+    #[test]
+    fn atom_trie_trie_key_value_round_trips_past_expression_size() {
+        // TrieKey stores `id + TK_MAX_EXPRESSION_SIZE` (1024); value() must
+        // subtract it again. Ids below 1024 must not be the only ones that work.
+        for id in [0usize, 1, 1023, 1024, 1025, 2047, 2048, 3071, 3072, 4095, 5000, 1 << 20] {
+            for store in [TrieKeyStore::Hash, TrieKeyStore::Index] {
+                for mode in [AtomMatchMode::Equality, AtomMatchMode::Unification] {
+                    let key = TrieKey::new(store, mode, id);
+                    assert_eq!(key.value(), id, "{:?} {:?} id {}", store, mode, id);
+                    assert_eq!(key.store(), store);
+                    assert_eq!(key.match_mode(), mode);
+                }
+            }
+        }
     }
 }
