@@ -309,6 +309,28 @@ mod test {
     }
 
     #[test]
+    fn atom_index_more_than_1024_hashable_atoms() {
+        // 3072 distinct symbols: ids 1024..2047 used to decode as 2048..3071,
+        // so the index returned other symbols instead of panicking.
+        const N: usize = 3072;
+        let mut index = AtomIndex::new();
+        for i in 0..N {
+            index.insert(Atom::sym(format!("s{}", i)));
+        }
+        let mut got: Vec<String> = index.query(&Atom::var("x"))
+            .map(|b| b.resolve(&VariableAtom::new("x")).expect("x bound").to_string())
+            .collect();
+        got.sort();
+        let mut want: Vec<String> = (0..N).map(|i| format!("s{}", i)).collect();
+        want.sort();
+        assert_eq!(got.len(), N);
+        assert!(got == want, "the index returned a different set of symbols");
+        for i in [0usize, 1023, 1024, 2047, 2048, N - 1] {
+            assert_eq!(index.query(&Atom::sym(format!("s{}", i))).count(), 1, "s{}", i);
+        }
+    }
+
+    #[test]
     fn atom_index_query_single_simple() {
         let mut index = AtomIndex::new();
         index.insert(Atom::sym("A"));
