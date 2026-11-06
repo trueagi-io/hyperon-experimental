@@ -1058,7 +1058,7 @@ fn match_types(type1: &Atom, type2: &Atom, bindings: Bindings) -> Result<MatchRe
         Ok(once(bindings))
     } else {
         let bindings_copy = bindings.clone();
-        let mut result = match_atoms(type1, type2)
+        let mut result = match_reducted_types(type1, type2)
             .flat_map(move |b| b.merge(&bindings).into_iter())
             .peekable();
         if result.peek().is_none() {
