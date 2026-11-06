@@ -7,6 +7,18 @@ use hyperon_atom::gnd::bool::*;
 
 use std::fmt::Display;
 
+// Comparisons keep the integer exact; arithmetic still uses numeric promotion.
+macro_rules! binary_number_result {
+    ($a:ident, $b:ident, $op:tt, Bool) => { Bool($a $op $b) };
+    ($a:ident, $b:ident, $op:tt, Number) => {{
+        match Number::promote($a, $b) {
+            (Number::Integer(a), Number::Integer(b)) => (a $op b).into(),
+            (Number::Float(a), Number::Float(b)) => (a $op b).into(),
+            _ => unreachable!(),
+        }
+    }};
+}
+
 macro_rules! def_binary_number_op {
     ($name:ident, $op:tt, $r:ident, $ret_type:ident) => {
         #[derive(Clone, PartialEq, Debug)]
@@ -34,12 +46,7 @@ macro_rules! def_binary_number_op {
                 let a = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
                 let b = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?;
 
-                let (a, b) = Number::promote(a, b);
-                let res: $ret_type = match (a, b) {
-                    (Number::Integer(a), Number::Integer(b)) => (a $op b).into(),
-                    (Number::Float(a), Number::Float(b)) => (a $op b).into(),
-                    _ => panic!("Unexpected state"),
-                };
+                let res: $ret_type = binary_number_result!(a, b, $op, $ret_type);
 
                 Ok(vec![Atom::gnd(res)])
             }
@@ -213,6 +220,20 @@ mod tests {
         ($name:ident, $a: expr, $r: expr) => {
             assert_eq!($name{}.execute(&mut vec![Atom::gnd($a)]), Ok(vec![Atom::gnd($r)]));
         }
+    }
+
+    #[test]
+    fn comparisons_keep_large_integer_precision() {
+        assert_eq!(run_program("
+            !(== 9007199254740993 9007199254740992.0)
+            !(> 9007199254740993 9007199254740992.0)
+            !(< 9007199254740992.0 9007199254740993)
+            !(<= 9007199254740993 9007199254740992.0)
+            !(>= 9007199254740992.0 9007199254740993)
+            !(< 9223372036854775807 9223372036854775808.0)
+            !(== -9223372036854775808 -9223372036854775808.0)
+        "), Ok([false, true, true, false, false, true, true].into_iter()
+            .map(|v| vec![Atom::gnd(Bool(v))]).collect()));
     }
 
     #[test]
