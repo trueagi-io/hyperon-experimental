@@ -23,6 +23,7 @@ use hyperon_atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom_move};
 use hyperon_space::DynSpace;
 
 use std::fmt::{Display, Debug};
+use std::collections::HashSet;
 use itertools::Itertools;
 use hyperon_atom::gnd::number::Number;
 
@@ -522,31 +523,6 @@ fn get_application_types(atom: &Atom, expr: &ExpressionAtom, type_info: ExprType
     types
 }
 
-#[derive(Clone, PartialEq, Debug)]
-struct UndefinedTypeMatch { }
-
-impl Display for UndefinedTypeMatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", ATOM_TYPE_UNDEFINED)
-    }
-}
-
-impl Grounded for UndefinedTypeMatch {
-    fn type_(&self) -> Atom {
-        ATOM_TYPE_TYPE
-    }
-
-    fn as_match(&self) -> Option<&dyn CustomMatch> {
-        Some(self)
-    }
-}
-
-impl CustomMatch for UndefinedTypeMatch {
-    fn match_(&self, _other: &Atom) -> matcher::MatchResultIter {
-        Box::new(std::iter::once(hyperon_atom::matcher::Bindings::new()))
-    }
-}
-
 /// Matches two types and returns an iterator over resulting bindings.
 ///
 /// # Examples
@@ -561,15 +537,33 @@ impl CustomMatch for UndefinedTypeMatch {
 /// assert_eq!(bindings, vec![ bind!{ t: expr!("A") } ]);
 /// ```
 pub fn match_reducted_types(left: &Atom, right: &Atom) -> matcher::MatchResultIter {
+    if !has_undefined_type(left) && !has_undefined_type(right) {
+        return matcher::match_atoms(left, right);
+    }
+    // Each %Undefined% inside a type is an unknown type: it becomes a fresh
+    // variable which matches any type without binding the other side to a
+    // wildcard. Keep bindings of the types' own variables and the dependencies
+    // needed to preserve their sharing; omit unrelated fresh variables.
+    let vars: HashSet<VariableAtom> = left.iter().filter_type::<&VariableAtom>()
+        .chain(right.iter().filter_type::<&VariableAtom>()).cloned().collect();
     let left = replace_undefined_types(left);
     let right = replace_undefined_types(right);
-    matcher::match_atoms(&left, &right)
+    Box::new(matcher::match_atoms(&left, &right)
+        .map(move |bindings| bindings.narrow_vars(&vars)))
+}
+
+fn has_undefined_type(atom: &Atom) -> bool {
+    atom.iter().any(|atom| *atom == ATOM_TYPE_UNDEFINED)
 }
 
 fn replace_undefined_types(atom: &Atom) -> Atom {
+    // Unresolved variables remain ordinary variables in inferred types and
+    // diagnostics. Replacing them by independent %Undefined% occurrences
+    // would erase equalities, and recognizing them by name could alter a
+    // caller's own variables. Fresh identity, not spelling, ensures hygiene.
     let mut atom = atom.clone();
     atom.iter_mut().filter(|atom| **atom == ATOM_TYPE_UNDEFINED)
-        .for_each(|atom| *atom = Atom::gnd(UndefinedTypeMatch{}));
+        .for_each(|atom| *atom = Atom::Variable(VariableAtom::new("unknown-type").make_unique()));
     atom
 }
 
@@ -1305,6 +1299,79 @@ mod tests {
         assert!(!validate_atom(&space, &atom("(symF (atomR a))")));
         assert!(validate_atom(&space, &atom("(varF (varR a))")));
         assert!(!validate_atom(&space, &atom("(varF (atomR a))")));
+    }
+
+    #[test]
+    fn match_reducted_types_undefined_inside_type() {
+        let matched: Vec<Bindings> = match_reducted_types(&atom("(List %Undefined%)"), &atom("(List A)")).collect();
+        assert_eq!(matched, vec![Bindings::new()]);
+        let matched: Vec<Bindings> = match_reducted_types(&atom("(-> %Undefined% %Undefined%)"), &atom("(-> A B)")).collect();
+        assert_eq!(matched, vec![Bindings::new()]);
+        let matched: Vec<Bindings> = match_reducted_types(&atom("(-> Atom Atom)"), &atom("(-> A A)")).collect();
+        assert_eq!(matched, vec![]);
+        let matched: Vec<Bindings> = match_reducted_types(&atom("(Pair %Undefined% %Undefined%)"), &atom("(Pair A B)")).collect();
+        assert_eq!(matched, vec![Bindings::new()]);
+    }
+
+    #[test]
+    fn match_reducted_types_undefined_does_not_bind_variable() {
+        let matched: Vec<Bindings> = match_reducted_types(&atom("(Pair %Undefined% A)"), &atom("(Pair $a $a)")).collect();
+        assert_eq!(matched, vec![bind!{ a: expr!("A") }]);
+        let matched: Vec<Bindings> = match_reducted_types(&atom("(Pair A %Undefined%)"), &atom("(Pair $a $a)")).collect();
+        assert_eq!(matched, vec![bind!{ a: expr!("A") }]);
+    }
+
+    #[test]
+    fn undefined_inside_argument_type_is_independent_of_order() {
+        let space = metta_space("
+            (: Pair (-> Type Type Type))
+            (: pu (Pair %Undefined% N))
+            (: up (Pair N %Undefined%))
+            (: n N)
+            (: s S)
+            (: same (-> (Pair $a $a) $a R))
+            (: first (-> (Pair $a $a) $a))
+        ");
+        assert!(validate_atom(&space, &atom("(same pu n)")));
+        assert!(validate_atom(&space, &atom("(same up n)")));
+        assert!(!validate_atom(&space, &atom("(same pu s)")));
+        assert!(!validate_atom(&space, &atom("(same up s)")));
+        assert_eq!(get_atom_types(&space, &atom("(first pu)")), vec![AtomType::application(atom("N"))]);
+        assert_eq!(get_atom_types(&space, &atom("(first up)")), vec![AtomType::application(atom("N"))]);
+    }
+
+    #[test]
+    fn unresolved_undefined_inside_type_is_a_type_variable() {
+        let space = metta_space("
+            (: List (-> Type Type))
+            (: x (List %Undefined%))
+            (: id (-> $a $a))
+        ");
+        let types = get_atom_types(&space, &atom("(id x)"));
+        assert_eq!(types.len(), 1);
+        assert!(atoms_are_equivalent(types[0].as_atom(), &atom("(List $element)")));
+    }
+
+    #[test]
+    fn unresolved_unknown_keeps_sharing_in_result_types() {
+        let space = metta_space("
+            (: x (List %Undefined%))
+            (: dup (-> $a (Pair $a $a)))
+        ");
+        let types = get_atom_types(&space, &atom("(dup x)"));
+        assert_eq!(types.len(), 1);
+        assert!(match_reducted_types(types[0].as_atom(),
+            &atom("(Pair (List Number) (List String))")).next().is_none());
+        assert!(match_reducted_types(types[0].as_atom(),
+            &atom("(Pair (List Number) (List Number))")).next().is_some());
+    }
+
+    #[test]
+    fn user_undefined_named_variable_is_not_rewritten() {
+        let space = metta_space("(: named (-> Number (List $%Undefined%)))");
+        let types = get_atom_types(&space, &atom("(named 1)"));
+        let expected = atom("(List $user)");
+        assert!(atoms_are_equivalent(types[0].as_atom(), &expected));
     }
 
     #[test]

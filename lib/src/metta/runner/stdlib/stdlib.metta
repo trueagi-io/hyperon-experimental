@@ -419,7 +419,23 @@
         (return $then)
         (eval (if-equal $type2 Atom
           (return $then)
-          (unify $type1 $type2 (return $then) (return $else)) ))))))))))
+          (chain (eval (undefined-to-variables $type1)) $known1
+            (chain (eval (undefined-to-variables $type2)) $known2
+              (unify $known1 $known2 (return $then) (return $else)) ))))))))))))
+
+(@doc undefined-to-variables
+  (@desc "Replaces each %Undefined% inside a type by a fresh variable, so that an unknown part of a type matches any type")
+  (@params (
+    (@param "Type")))
+  (@return "Type with each %Undefined% replaced by a fresh variable"))
+(= (undefined-to-variables $type)
+  (function (eval (if-equal $type %Undefined%
+    (return $unknown)
+    (chain (eval (get-metatype $type)) $meta
+      (eval (if-equal $meta Expression
+        (chain (eval (map-atom $type $part (eval (undefined-to-variables $part)))) $mapped
+          (return $mapped))
+        (return $type) )))))))
 
 (@doc first-from-pair
   (@desc "Gets a pair as a first argument and returns first atom from pair")

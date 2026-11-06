@@ -171,6 +171,77 @@ mod tests {
     }
 
     #[test]
+    fn metta_undefined_inside_argument_type() {
+        let program = "
+            (: app (-> (-> Number Number) Number Number))
+            (= (app $f $x) ($f $x))
+            (: idu (-> %Undefined% %Undefined%))
+            (= (idu $x) $x)
+            (: nameless (-> Atom Atom))
+            (= (nameless $x) $x)
+            (: List (-> Type Type))
+            (: x (List %Undefined%))
+            (: g (-> (List String) Number))
+            (= (g $l) 1)
+            !(app idu 1)
+            !(g x)
+            !(app nameless 1)
+        ";
+        assert_eq!(run_program(program), Ok(vec![
+            vec![expr!({Number::Integer(1)})],
+            vec![expr!({Number::Integer(1)})],
+            vec![expr!("Error" ("app" "nameless" {Number::Integer(1)}) ("BadArgType" {Number::Integer(1)} ("->" "Number" "Number") ("->" "Atom" "Atom")))],
+        ]));
+    }
+
+    #[test]
+    fn metta_match_types_undefined_inside_type() {
+        let program = "
+            (: List (-> Type Type))
+            (: Pair (-> Type Type Type))
+            !(match-types (List %Undefined%) (List String) yes no)
+            !(match-types (List String) (List %Undefined%) yes no)
+            !(match-types (-> %Undefined% %Undefined%) (-> Number Number) yes no)
+            !(match-types (-> Atom Atom) (-> Number Number) yes no)
+            !(match-types (Pair %Undefined% Number) (Pair $a $a) (yes $a) no)
+            !(match-types (Pair $a $a) (Pair Number %Undefined%) (yes $a) no)
+            !(match-types (Pair $a $a) (Pair Number String) (yes $a) no)
+        ";
+        assert_eq!(run_program(program), Ok(vec![
+            vec![expr!("yes")],
+            vec![expr!("yes")],
+            vec![expr!("yes")],
+            vec![expr!("no")],
+            vec![expr!("yes" "Number")],
+            vec![expr!("yes" "Number")],
+            vec![expr!("no")],
+        ]));
+    }
+
+    #[test]
+    fn metta_undefined_errors_preserve_unresolved_type_variables() {
+        let result = run_program("
+            (: x (List %Undefined%))
+            (: same2 (-> $a $a Number)) (= (same2 $u $v) 1)
+            (: bad-id (-> $a $a)) (= (bad-id $v) 42)
+            !(collapse (same2 x 42))
+            !(collapse (bad-id x))
+        ").unwrap();
+        let expected = vec![
+            expr!(("Error" ("same2" "x" {Integer(42)})
+                ("BadArgType" {Integer(2)} ("List" element) "Number"))),
+            expr!(("Error" {Integer(42)} ("BadType" ("List" element) "Number"))),
+        ];
+        assert_eq!(result.len(), expected.len());
+        for (answers, expected) in result.iter().zip(expected) {
+            assert_eq!(answers.len(), 1);
+            let expected = Atom::expr([expected]);
+            assert!(hyperon_atom::matcher::atoms_are_equivalent(&answers[0], &expected),
+                "unexpected error: {}", answers[0]);
+        }
+    }
+
+    #[test]
     fn metta_type_cast() {
         assert_eq!(run_program("(: a A) !(type-cast a A &self)"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("(: a A) !(type-cast a B &self)"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));

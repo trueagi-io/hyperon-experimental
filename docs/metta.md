@@ -310,8 +310,28 @@ if $type1 == %Undefined% or $type1 == Atom
     or $type2 == %Undefined% or $type2 == Atom:
         return [$bindings]
 
-return match_atoms($type1, $type2)
+$type1 = <$type1 with each %Undefined% replaced by a fresh variable>
+$type2 = <$type2 with each %Undefined% replaced by a fresh variable>
+return [$b for $m in match_atoms($type1, $type2) for $b in merge($m, $bindings)]
 ```
+
+`%Undefined%` is the unknown type at any depth: `(List %Undefined%)` matches
+`(List String)`, and `(-> %Undefined% %Undefined%)` matches `(-> Number Number)`.
+Each occurrence uses a fresh variable rather than an always-matching grounded
+atom, so a type variable
+matched against it stays free and can still be bound by the other parts of the
+types: `(Pair %Undefined% Number)` matches `(Pair $a $a)` with `$a` bound to
+`Number`. `Atom` inside a type is not unknown: `(-> Atom Atom)` does not match
+`(-> Number Number)`.
+
+Unresolved parts introduced by matching remain fresh type variables in inferred
+types and diagnostics. Their generated names are incidental; repeated occurrences
+preserve the same unknown. For example, when `dup : (-> $a (Pair $a $a))` is
+applied to `x : (List %Undefined%)`, its inferred type is
+`(Pair (List $u) (List $u))` for a fresh `$u`, not
+`(Pair (List %Undefined%) (List %Undefined%))`. The latter would wrongly allow
+the two positions to be refined independently. User-written variables are not
+rewritten based on their names.
 
 #### Interpret expression (interpret_expression)
 
