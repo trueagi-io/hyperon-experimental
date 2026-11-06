@@ -59,6 +59,11 @@ impl ModuleSpace {
     pub fn deps(&self) -> &Vec<DynSpace> {
         &self.deps
     }
+
+    /// Roll back links appended by a failed token import, retaining prior order.
+    pub(crate) fn truncate_deps(&mut self, len: usize) {
+        self.deps.truncate(len);
+    }
 }
 
 impl Space for ModuleSpace {
