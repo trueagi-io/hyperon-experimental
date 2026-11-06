@@ -81,7 +81,7 @@ fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expect
                 || *expected == ATOM_TYPE_UNDEFINED
                 || meta.contains(expected);
             let matches: &mut dyn Iterator<Item=Bindings> = if undefined_or_meta {
-                &mut std::iter::once(bindings)
+                &mut std::iter::once(bindings.clone())
             } else {
                 &mut actual.into_iter()
                     .flat_map(|typ| match_reducted_types(typ.as_atom(), expected))
@@ -91,7 +91,8 @@ fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expect
             if matches.peek().is_none() {
                 let idx = (start_len - actual_tail.len()) as i64;
                 for typ in actual {
-                    let error = Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_ARG_TYPE_SYMBOL, Atom::gnd(Number::Integer(idx)), expected.clone(), typ.as_atom().clone()])]);
+                    let expected = apply_bindings_to_atom_move(expected.clone(), &bindings);
+                    let error = Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_ARG_TYPE_SYMBOL, Atom::gnd(Number::Integer(idx)), expected, typ.as_atom().clone()])]);
                     types.push(AtomType::error(fn_type_atom.clone(), error));
                 }
             } else {
@@ -1089,6 +1090,24 @@ mod tests {
             (: b B)
         ");
         assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![typ_err!((-> C D), (Error (a b) (BadArgType 1 C B)))]);
+    }
+
+    #[test]
+    fn bad_argument_type_applies_previous_parameter_bindings() {
+        let space = metta_space("
+            (: same (-> $t $t Bool))
+            (: Cons (-> $a (List $a) (List $a)))
+            (: SL (List String))
+        ");
+        for (call, expected_error) in [
+            ("(same 1 True)", "(Error (same 1 True) (BadArgType 2 Number Bool))"),
+            ("(Cons 2 SL)", "(Error (Cons 2 SL) (BadArgType 2 (List Number) (List String)))"),
+        ] {
+            let errors: Vec<_> = get_atom_types(&space, &atom(call)).into_iter()
+                .map(AtomType::into_atom_or_error).collect();
+            assert_eq!(errors, vec![Err(atom(expected_error))]);
+        }
+        assert_eq!(get_atom_types(&space, &atom("(same 1 2)")), vec![typ_app!(Bool)]);
     }
 
     #[test]
