@@ -29,6 +29,31 @@ fn test_types_in_metta() {
     assert_eq!(result, Ok(vec![vec![UNIT_ATOM], vec![UNIT_ATOM], vec![UNIT_ATOM], vec![UNIT_ATOM], vec![UNIT_ATOM], vec![UNIT_ATOM]]));
 }
 
+#[test]
+fn test_get_type_rejects_badly_typed_argument() {
+    let program = r#"
+        (: typed-outer (-> $t Number))
+        (: raw-expr (-> Expression Number))
+        (: unchecked (-> %Undefined% Number))
+
+        !(assertEqualToResult (get-type (typed-outer (+ 5 "S"))) ())
+        !(assertEqualToResult (get-type (raw-expr (+ 5 "S"))) (Number))
+        !(assertEqualToResult (get-type (unchecked (+ 5 "S"))) (Number))
+        !(assertEqualToResult (get-type (typed-outer untyped)) (Number))
+        !(assertEqualToResult (typed-outer (+ 5 "S"))
+            ((Error (+ 5 "S") (BadArgType 2 Number String))))
+
+        !(pragma! type-check auto)
+        !(assertEqualToResult (get-type (typed-outer (+ 5 "S"))) ())
+        !(assertEqualToResult (typed-outer (+ 5 "S"))
+            ((Error (+ 5 "S") (BadArgType 2 Number String))))
+    "#;
+
+    let metta = Metta::new(Some(EnvBuilder::test_env()));
+    let result = metta.run(SExprParser::new(program));
+    assert_eq!(result, Ok(vec![vec![UNIT_ATOM]; 8]));
+}
+
 #[derive(Clone, Debug)]
 struct IsInt{}
 

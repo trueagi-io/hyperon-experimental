@@ -80,17 +80,25 @@ fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expect
             let undefined_or_meta = actual.is_empty()
                 || *expected == ATOM_TYPE_UNDEFINED
                 || meta.contains(expected);
+            // Error records carry the failing function's type, not a type of
+            // the argument. Preserve errors when no valid type remains, while
+            // leaving unchecked and matching meta-type parameters unchanged.
+            if !undefined_or_meta && actual.iter().all(AtomType::is_error) {
+                types.extend(actual.iter().cloned());
+                return;
+            }
             let matches: &mut dyn Iterator<Item=Bindings> = if undefined_or_meta {
                 &mut std::iter::once(bindings)
             } else {
                 &mut actual.into_iter()
+                    .filter(|typ| typ.is_valid())
                     .flat_map(|typ| match_reducted_types(typ.as_atom(), expected))
                     .flat_map(|b| b.merge(&bindings))
             };
             let mut matches = matches.peekable();
             if matches.peek().is_none() {
                 let idx = (start_len - actual_tail.len()) as i64;
-                for typ in actual {
+                for typ in actual.iter().filter(|typ| typ.is_valid()) {
                     let error = Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::expr([BAD_ARG_TYPE_SYMBOL, Atom::gnd(Number::Integer(idx)), expected.clone(), typ.as_atom().clone()])]);
                     types.push(AtomType::error(fn_type_atom.clone(), error));
                 }
@@ -1089,6 +1097,73 @@ mod tests {
             (: b B)
         ");
         assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![typ_err!((-> C D), (Error (a b) (BadArgType 1 C B)))]);
+    }
+
+    #[test]
+    fn get_atom_types_badly_typed_argument_does_not_match_type_variable() {
+        let space = metta_space("
+            (: a (-> C D))
+            (: b B)
+            (: f (-> $t E))
+            (: g (-> %Undefined% E))
+            (: h (-> Atom E))
+            (: expr (-> Expression E))
+            (: sym (-> Symbol E))
+            (: higher (-> (-> C D) E))
+            (: u U)
+        ");
+        let inner_error = typ_err!((-> C D), (Error (a b) (BadArgType 1 C B)));
+        // a badly typed argument is not an argument of unknown type
+        assert_eq!(get_atom_types(&space, &atom("(f (a b))")), vec![inner_error.clone()]);
+        assert_eq!(get_atom_types(&space, &atom("(f (f (a b)))")), vec![inner_error.clone()]);
+        assert!(!validate_atom(&space, &atom("(f (a b))")));
+        assert!(!check_type(&space, &atom("(f (a b))"), &atom("E")));
+        // a concrete arrow must not match the failing function's type either
+        assert_eq!(get_atom_types(&space, &atom("(higher (a b))")), vec![inner_error.clone()]);
+        assert_eq!(get_atom_types(&space, &atom("(higher a)")), vec![typ_app!(E)]);
+        // a parameter of type %Undefined% is not checked
+        assert_eq!(get_atom_types(&space, &atom("(g (a b))")), vec![typ_app!(E)]);
+        // matching meta-types take the argument without evaluating it
+        assert_eq!(get_atom_types(&space, &atom("(h (a b))")), vec![typ_app!(E)]);
+        assert_eq!(get_atom_types(&space, &atom("(expr (a b))")), vec![typ_app!(E)]);
+        assert_eq!(get_atom_types(&space, &atom("(sym (a b))")), vec![inner_error]);
+        // arguments without type information still match
+        assert_eq!(get_atom_types(&space, &atom("(f c)")), vec![typ_app!(E)]);
+        assert_eq!(get_atom_types(&space, &atom("(f $x)")), vec![typ_app!(E)]);
+        assert_eq!(get_atom_types(&space, &atom("(f u)")), vec![typ_app!(E)]);
+    }
+
+    #[test]
+    fn get_atom_types_mixed_argument_types_use_only_valid_alternatives() {
+        let space = metta_space("
+            (: a (-> B C))
+            (: a (-> D E))
+            (: a (-> B F))
+            (: b B)
+            (: id (-> $t $t))
+            (: f (-> $t R))
+            (: higher (-> (-> D E) R))
+            (: same (-> $t $t $t))
+            (: c C)
+        ");
+        assert_eq_no_order!(get_atom_types(&space, &atom("(a b)")), vec![
+            typ_app!(C), typ_app!(F),
+            typ_err!((-> D E), (Error (a b) (BadArgType 1 D B))),
+        ]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("(id (a b))")),
+            vec![typ_app!(C), typ_app!(F)]);
+        // distinct valid alternatives retain their multiplicity
+        assert_eq!(get_atom_types(&space, &atom("(f (a b))")),
+            vec![typ_app!(R), typ_app!(R)]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("(higher (a b))")), vec![
+            typ_err!((-> (-> D E) R), (Error (higher (a b)) (BadArgType 1 (-> D E) C))),
+            typ_err!((-> (-> D E) R), (Error (higher (a b)) (BadArgType 1 (-> D E) F))),
+        ]);
+        // bindings from earlier or later arguments still constrain the choice
+        assert_eq!(get_atom_types(&space, &atom("(same c (a b))")), vec![typ_app!(C)]);
+        let types = get_atom_types(&space, &atom("(same (a b) c)"));
+        assert_eq!(types.into_iter().filter(AtomType::is_valid).collect::<Vec<_>>(),
+            vec![typ_app!(C)]);
     }
 
     #[test]
