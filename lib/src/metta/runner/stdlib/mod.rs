@@ -345,6 +345,21 @@ mod tests {
     }
 
     #[test]
+    fn metta_let_evaluates_value_changed_by_later_binding() {
+        let result = run_program(r#"
+            !(assertEqual (let $a (+ $b 1) (let $b 1 $a)) 2)
+            !(assertEqual (let* (($a (+ $b 1)) ($b 1)) $a) 2)
+            !(assertEqual (let $a (+ $b 1) (let $b 1 (+ $a 10))) 12)
+            !(assertEqual (let $a (+ $b 1) (let $b 1 (if (== $a 2) yes no))) yes)
+            !(assertEqual (let $a (+ $b 1) (let $b 1 (pair $a))) (pair 2))
+            !(assertEqualToResult (let $a (+ $b 1) (let $b (superpose (1 1 2)) (pair $a))) ((pair 2) (pair 2) (pair 3)))
+            !(assertEqual (let $a (quote (+ $b 1)) (let $b 1 $a)) (quote (+ 1 1)))
+            !(assertEqual (let* (($a (+ $b 1)) ($b "s")) $a) (Error (+ "s" 1) (BadArgType 1 Number String)))
+        "#);
+        assert_eq!(result, Ok(vec![vec![UNIT_ATOM]; 8]));
+    }
+
+    #[test]
     fn metta_quote_unquote() {
         let header = "
             (= (foo) A)

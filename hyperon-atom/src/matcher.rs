@@ -260,22 +260,23 @@ impl Bindings {
     }
 
     fn resolve_vars_in_atom<'a>(&'a self, mut atom: Atom, used_vars: HashSet<&'a VariableAtom>) -> VarResolutionResult<Atom> {
-        for i in atom.iter_mut() {
-            match i {
-                Atom::Variable(var) if used_vars.contains(var) => return VarResolutionResult::Loop,
-                Atom::Variable(var) => {
-                    let mut used_vars = used_vars.clone();
-                    used_vars.insert(var);
-                    match self.resolve_internal(var, used_vars) {
-                        VarResolutionResult::Some(atom) => { *i = atom },
-                        VarResolutionResult::Loop => return VarResolutionResult::Loop,
-                        VarResolutionResult::None => {},
-                    }
-                },
-                _ => {},
+        let result = substitute_vars_in_atom(&mut atom, |var| {
+            if used_vars.contains(var) {
+                Err(())
+            } else {
+                let mut used_vars = used_vars.clone();
+                used_vars.insert(var);
+                match self.resolve_internal(var, used_vars) {
+                    VarResolutionResult::Some(value) => Ok(Some(value)),
+                    VarResolutionResult::Loop => Err(()),
+                    VarResolutionResult::None => Ok(None),
+                }
             }
+        });
+        match result {
+            Ok(_) => VarResolutionResult::Some(atom),
+            Err(()) => VarResolutionResult::Loop,
         }
-        VarResolutionResult::Some(atom)
     }
 
     /// Asserts equality between two [VariableAtom]s.  If the existing bindings for `a` and `b` are
@@ -1163,19 +1164,14 @@ pub fn apply_bindings_to_atom_mut(atom: &mut Atom, bindings: &Bindings) {
         true => Some(atom.clone()),
         false => None,
     };
-    let mut updated = false;
-    if !bindings.is_empty() {
-        atom.iter_mut().for_each(|atom| match atom {
-            Atom::Variable(var) => {
-                bindings.resolve(var).map(|value| {
-                    *atom = value;
-                    updated = true;
-                });
-            },
-            _ => {},
-        });
-    }
+    let updated = !bindings.is_empty() && match substitute_vars_in_atom::<std::convert::Infallible>(
+        atom, |var| Ok(bindings.resolve(var))) {
+        Ok(updated) => updated,
+        Err(never) => match never {},
+    };
     if updated {
+        // Preserve the existing behavior when the root variable itself is
+        // replaced by an evaluated expression.
         match atom {
             Atom::Expression(e) => e.evaluated = false,
             _ => {},
@@ -1183,6 +1179,55 @@ pub fn apply_bindings_to_atom_mut(atom: &mut Atom, bindings: &Bindings) {
     }
     if let Some(atom_copy) = trace_atom {
         log::trace!("apply_bindings_to_atom: {} | {} -> {}", atom_copy, bindings, atom);
+    }
+}
+
+/// Substitutes resolved variables and invalidates their enclosing expressions.
+/// Unchanged children and inserted values retain their own evaluated marks;
+/// the resolver is responsible for substitutions within an inserted value.
+/// The explicit stack keeps expression depth off the native call stack.
+fn substitute_vars_in_atom<E>(atom: &mut Atom,
+    mut resolve: impl FnMut(&VariableAtom) -> Result<Option<Atom>, E>) -> Result<bool, E> {
+    struct Frame<'a> {
+        children: std::slice::IterMut<'a, Atom>,
+        evaluated: &'a mut bool,
+        previous_updated: bool,
+    }
+
+    let mut frames: Vec<Frame<'_>> = Vec::new();
+    let mut current = atom;
+    let mut updated = false;
+    loop {
+        match current {
+            Atom::Variable(var) => {
+                if let Some(value) = resolve(var)? {
+                    *current = value;
+                    updated = true;
+                }
+            },
+            Atom::Expression(ExpressionAtom { children, evaluated }) => {
+                let mut children = children.as_vec_mut().iter_mut();
+                if let Some(child) = children.next() {
+                    frames.push(Frame { children, evaluated, previous_updated: updated });
+                    updated = false;
+                    current = child;
+                    continue;
+                }
+            },
+            _ => {},
+        }
+        loop {
+            let Some(frame) = frames.last_mut() else { return Ok(updated) };
+            if let Some(child) = frame.children.next() {
+                current = child;
+                break;
+            }
+            let frame = frames.pop().unwrap();
+            if updated {
+                *frame.evaluated = false;
+            }
+            updated |= frame.previous_updated;
+        }
     }
 }
 
@@ -1837,5 +1882,110 @@ mod test {
             .add_var_binding(VariableAtom::new("b"), Atom::expr([Atom::sym("B"), Atom::var("z")]))?;
         assert_eq!(renamed, expected);
         Ok(())
+    }
+
+    fn evaluated(mut atom: Atom) -> Atom {
+        if let Atom::Expression(expr) = &mut atom {
+            expr.set_evaluated();
+        }
+        atom
+    }
+
+    fn child_is_evaluated(atom: &Atom, index: usize) -> bool {
+        match atom {
+            Atom::Expression(expr) => matches!(&expr.children()[index],
+                Atom::Expression(child) if child.is_evaluated()),
+            _ => panic!("expression expected: {}", atom),
+        }
+    }
+
+    #[test]
+    fn apply_bindings_unmarks_changed_subexpressions() {
+        let nested = evaluated(Atom::expr([Atom::sym("h"), evaluated(expr!("f" b))]));
+        let mut atom = evaluated(Atom::expr([Atom::sym("w"), nested,
+            evaluated(expr!("g" "C")), evaluated(expr!("f" c))]));
+        apply_bindings_to_atom_mut(&mut atom, &bind!{ b: expr!("B"), c: expr!("D") });
+        assert_eq!(atom, expr!("w" ("h" ("f" "B")) ("g" "C") ("f" "D")));
+        assert!(matches!(&atom, Atom::Expression(expr) if !expr.is_evaluated()));
+        assert!(!child_is_evaluated(&atom, 1));
+        if let Atom::Expression(expr) = &atom {
+            assert!(!child_is_evaluated(&expr.children()[1], 1));
+        }
+        assert!(child_is_evaluated(&atom, 2));
+        assert!(!child_is_evaluated(&atom, 3));
+    }
+
+    #[test]
+    fn apply_bindings_unmarks_changed_bound_value() -> Result<(), &'static str> {
+        let bindings = Bindings::new()
+            .add_var_binding(VariableAtom::new("a"), evaluated(expr!("f" b)))?
+            .add_var_binding(VariableAtom::new("b"), expr!("B"))?;
+        let mut atom = expr!("w" a);
+        apply_bindings_to_atom_mut(&mut atom, &bindings);
+        assert_eq!(atom, expr!("w" ("f" "B")));
+        assert!(!child_is_evaluated(&atom, 1));
+
+        let bindings = Bindings::new()
+            .add_var_binding(VariableAtom::new("a"), evaluated(expr!("g" "C")))?;
+        let mut atom = expr!("w" a);
+        apply_bindings_to_atom_mut(&mut atom, &bindings);
+        assert_eq!(atom, expr!("w" ("g" "C")));
+        assert!(child_is_evaluated(&atom, 1));
+        Ok(())
+    }
+
+    #[test]
+    fn apply_bindings_preserves_unresolved_expressions() {
+        for bindings in [Bindings::new(), bind!{ unrelated: expr!("B") }] {
+            let mut atom = evaluated(Atom::expr([Atom::sym("w"), evaluated(expr!("f" b))]));
+            apply_bindings_to_atom_mut(&mut atom, &bindings);
+            assert_eq!(atom, expr!("w" ("f" b)));
+            assert!(matches!(&atom, Atom::Expression(expr) if expr.is_evaluated()));
+            assert!(child_is_evaluated(&atom, 1));
+        }
+    }
+
+    #[test]
+    fn apply_bindings_unmarks_replaced_root() -> Result<(), &'static str> {
+        let bindings = Bindings::new()
+            .add_var_binding(VariableAtom::new("a"), evaluated(expr!("g" "C")))?;
+        let mut atom = expr!(a);
+        apply_bindings_to_atom_mut(&mut atom, &bindings);
+        assert_eq!(atom, expr!("g" "C"));
+        assert!(matches!(atom, Atom::Expression(expr) if !expr.is_evaluated()));
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_invalidates_substituted_ancestors() -> Result<(), &'static str> {
+        let value = evaluated(Atom::expr([Atom::sym("w"), evaluated(expr!("f" b)),
+            evaluated(expr!("g" "C"))]));
+        let bindings = Bindings::new()
+            .add_var_binding(VariableAtom::new("a"), value)?
+            .add_var_equality(&VariableAtom::new("b"), &VariableAtom::new("c"))?
+            .add_var_binding(VariableAtom::new("c"), expr!("B"))?;
+        let atom = bindings.resolve(&VariableAtom::new("a")).unwrap();
+        assert_eq!(atom, expr!("w" ("f" "B") ("g" "C")));
+        assert!(matches!(&atom, Atom::Expression(expr) if !expr.is_evaluated()));
+        assert!(!child_is_evaluated(&atom, 1));
+        assert!(child_is_evaluated(&atom, 2));
+        Ok(())
+    }
+
+    #[test]
+    fn apply_bindings_handles_deep_expressions() {
+        let depth = 20_000;
+        let mut atom = expr!(a);
+        for _ in 0..depth {
+            atom = evaluated(Atom::expr([atom]));
+        }
+        apply_bindings_to_atom_mut(&mut atom, &bind!{ a: expr!("A") });
+        // Consume the chain iteratively so recursive drop is outside this test.
+        for _ in 0..depth {
+            let Atom::Expression(expr) = atom else { panic!("expression expected") };
+            assert!(!expr.is_evaluated());
+            atom = expr.into_children().pop().unwrap();
+        }
+        assert_eq!(atom, expr!("A"));
     }
 }
