@@ -179,6 +179,8 @@ pub struct InterpreterState {
     context: InterpreterContext,
     /// Maximum stack depth
     max_stack_depth: usize,
+    /// Maximum subtype derivation depth, 0 means unlimited
+    max_type_depth: usize,
 }
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
@@ -202,6 +204,7 @@ impl InterpreterState {
             finished: results,
             context: InterpreterContext::new(space),
             max_stack_depth: 0,
+            max_type_depth: type_search_depth(),
         }
     }
 
@@ -237,6 +240,11 @@ impl InterpreterState {
     pub fn set_max_stack_depth(&mut self, depth: usize) {
         self.max_stack_depth = depth;
     }
+
+    /// Bound subtype search independently of interpreter stack depth.
+    pub fn set_max_type_depth(&mut self, depth: usize) {
+        self.max_type_depth = depth;
+    }
 }
 
 impl std::fmt::Display for InterpreterState {
@@ -258,6 +266,7 @@ pub fn interpret_init(space: DynSpace, expr: &Atom) -> InterpreterState {
         finished: vec![],
         context,
         max_stack_depth: 0,
+        max_type_depth: type_search_depth(),
     }
 }
 
@@ -267,6 +276,7 @@ pub fn interpret_init(space: DynSpace, expr: &Atom) -> InterpreterState {
 /// # Arguments
 /// * `state` - interpreter state from the previous step.
 pub fn interpret_step(mut state: InterpreterState) -> InterpreterState {
+    let _type_search_scope = scoped_type_search_depth(state.max_type_depth);
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step:\n{}", interpreted_atom);
     let InterpretedAtom(stack, bindings) = interpreted_atom;
@@ -1033,10 +1043,17 @@ fn get_meta_type(atom: &Atom) -> Atom {
 
 fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -> MettaResult {
     let space = space.as_gnd::<DynSpace>().unwrap();
-    let types = get_atom_types(space, &atom);
+    let types = iter_atom_types(space, &atom);
 
-    let mut errors = Vec::with_capacity(types.len());
-    for actual_type in types.into_iter().filter(AtomType::is_valid).map(AtomType::into_atom) {
+    let mut errors = Vec::new();
+    for actual_type in types {
+        if actual_type.is_search_limit() {
+            return once((return_atom(actual_type.into_error_unchecked()), bindings));
+        }
+        if !actual_type.is_valid() {
+            continue;
+        }
+        let actual_type = actual_type.into_atom();
         let res = match_types(&expected_type, &actual_type, bindings.clone());
         match res {
             Ok(it) => return Box::new(it.map(move |b| (return_atom(atom.clone()), b))),
@@ -1161,6 +1178,9 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
                         },
                         (Err(err), bindings) => errors.push((err, bindings)),
                     }
+                }
+                if errors.iter().any(|(error, _)| is_type_search_limit_error(error)) {
+                    errors.retain(|(error, _)| is_type_search_limit_error(error));
                 }
                 Box::new(errors.into_iter()
                     .map(move |(err, bindings)| (return_atom(err), bindings)))
@@ -1319,8 +1339,7 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: &'a Atom,
             if is_meta_type(formal_arg_type) && match_meta_types(&get_meta_type(actual_arg), formal_arg_type) {
                 check_if_function_type_is_applicable_(expr, op_type, actual_args, arg_types, expected_type, space, bindings)
             } else {
-                let actual_arg_types = get_atom_types(space, actual_arg)
-                    .into_iter()
+                let actual_arg_types = iter_atom_types(space, actual_arg)
                     .inspect(move |typ| log::trace!("check_if_function_type_is_applicable_: function type check: expr: {}, actual_arg: {}, actual_type: {}", expr, actual_arg, typ));
                 let iter = actual_arg_types.flat_map(move |actual_arg_type| -> Box<dyn Iterator<Item=(Result<(Atom, Atom), Atom>, Bindings)> + '_> {
                     match actual_arg_type.into_atom_or_error() {

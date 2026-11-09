@@ -449,6 +449,8 @@ def check_type(gnd_space, atom, type):
     """
     Checks whether the given Atom has the specified type in the given space context.
 
+    Raises RuntimeError on unfinished type search rather than reporting False.
+
     Parameters
     ----------
     gnd_space:
@@ -467,6 +469,8 @@ def validate_atom(gnd_space, atom):
     """
     Checks whether the given Atom is correctly typed.
 
+    Raises RuntimeError on unfinished type search rather than reporting False.
+
     Parameters
     ----------
     gnd_space:
@@ -483,7 +487,7 @@ def validate_atom(gnd_space, atom):
     return hp.validate_atom(gnd_space.cspace, atom.catom)
 
 def get_atom_types(gnd_space, atom):
-    """Provides all types for the given Atom in the context of the given Space."""
+    """Provides all types, or a TypeSearchLimit error if enumeration is unfinished."""
     result = hp.get_atom_types(gnd_space.cspace, atom.catom)
     return [Atom._from_catom(catom) for catom in result]
 

@@ -95,6 +95,12 @@ static void copy_atoms(const atom_vec_t* atoms, void* context) {
     }
 }
 
+static void copy_type_error(const atom_vec_t* atoms, void* context) {
+    auto& message = *static_cast<std::string*>(context);
+    atom_ref_t error = atom_vec_get(atoms, 0);
+    message = func_to_string((write_to_buf_func_t)&atom_to_str, &error);
+}
+
 static void copy_atom_to_dict(atom_ref_t var, atom_ref_t atom, void* context) {
     py::dict& pybindings = *static_cast<py::dict*>(context);
     std::string var_name = func_to_string((write_to_buf_func_t)&atom_get_name, &var);
@@ -1045,10 +1051,16 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(BOOL, "Bool")
         ADD_TYPE(STRING, "String");
     m.def("check_type", [](CSpace space, CAtom& atom, CAtom& type) {
-            return check_type(space.ptr(), atom.ptr(), type.ptr());
+            std::string error;
+            bool result = check_type_with_error(space.ptr(), atom.ptr(), type.ptr(), copy_type_error, &error);
+            if (!error.empty()) { throw std::runtime_error(error); }
+            return result;
         }, "Check if atom is an instance of the passed type");
     m.def("validate_atom", [](CSpace space, CAtom& atom) {
-            return validate_atom(space.ptr(), atom.ptr());
+            std::string error;
+            bool result = validate_atom_with_error(space.ptr(), atom.ptr(), copy_type_error, &error);
+            if (!error.empty()) { throw std::runtime_error(error); }
+            return result;
         }, "Validate expression arguments correspond to the operation type");
     m.def("get_atom_types", [](CSpace space, CAtom& atom) {
             py::list atoms;

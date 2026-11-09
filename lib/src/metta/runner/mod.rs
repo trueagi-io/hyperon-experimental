@@ -129,6 +129,14 @@ impl PragmaSettings {
     pub fn get_string(&self, key: &str) -> Option<String> {
         self.0.borrow().get(key).map(|a| a.to_string())
     }
+
+    pub(crate) fn type_search_depth(&self) -> Result<usize, String> {
+        match self.get_string("max-type-depth") {
+            None => Ok(super::types::DEFAULT_TYPE_SEARCH_DEPTH),
+            Some(value) => value.parse::<usize>()
+                .map_err(|_| format!("max-type-depth expects a non-negative integer, got {value}")),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -465,6 +473,7 @@ impl Metta {
     }
 
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
+        let _type_search_scope = super::types::scoped_type_search_depth(self.settings().type_search_depth()?);
         let atom = if is_bare_minimal_interpreter(self) {
             atom
         } else {
@@ -1027,6 +1036,7 @@ impl<'input> RunContext<'_, 'input> {
 
     /// Private method to advance the context forward one step
     fn step(&mut self) -> Result<(), String> {
+        let _type_search_scope = super::types::scoped_type_search_depth(self.metta.settings().type_search_depth()?);
 
         // If we're in the middle of interpreting an atom...
         if let Some(interpreter_state) = core::mem::take(&mut self.i_wrapper.interpreter_state) {

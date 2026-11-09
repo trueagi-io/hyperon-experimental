@@ -383,7 +383,9 @@ impl CustomExecute for GetTypeOp {
             None => Ok(&self.space),
         }?;
         let types = get_atom_types(space, atom);
-        if types.iter().all(AtomType::is_error) {
+        if types.iter().any(AtomType::is_search_limit) {
+            Ok(types.into_iter().filter(AtomType::is_search_limit).map(AtomType::into_error_unchecked).collect())
+        } else if types.iter().all(AtomType::is_error) {
             Ok(vec![EMPTY_SYMBOL])
         } else {
             Ok(types.into_iter().filter(AtomType::is_valid).map(AtomType::into_atom).collect())
@@ -438,7 +440,9 @@ impl CustomExecute for GetTypeSpaceOp {
         let atom = args.get(1).ok_or_else(arg_error)?;
         log::debug!("GetTypeSpaceOp::execute: space: {}, atom: {}", space, atom);
         let types = get_atom_types(space, atom);
-        if types.iter().all(AtomType::is_error) {
+        if types.iter().any(AtomType::is_search_limit) {
+            Ok(types.into_iter().filter(AtomType::is_search_limit).map(AtomType::into_error_unchecked).collect())
+        } else if types.iter().all(AtomType::is_error) {
             Ok(vec![EMPTY_SYMBOL])
         } else {
             Ok(types.into_iter().filter(AtomType::is_valid).map(AtomType::into_atom).collect())

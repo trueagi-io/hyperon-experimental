@@ -47,6 +47,7 @@ pub(crate) fn regex(regex: &str) -> Regex {
 }
 
 pub fn interpret(space: DynSpace, expr: &Atom, settings: PragmaSettings) -> Result<Vec<Atom>, String> {
+    let _type_search_scope = crate::metta::types::scoped_type_search_depth(settings.type_search_depth()?);
     let expr = Atom::expr([METTA_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]);
     let mut state = crate::metta::interpreter::interpret_init(space, &expr);
     
@@ -149,6 +150,43 @@ mod tests {
 
     use std::fmt::Display;
     use hyperon_atom::gnd::number::Number::Integer;
+
+    #[test]
+    fn type_search_limit_reaches_public_operations_and_goal_checks() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        runner.run(SExprParser::new("(: a (F x)) (:< (F $x) (F (F $x))) (: f (-> (F (F x)) Ok)) (= (f $x) accepted) (: nested (F x)) (: tuple-head A) (: tuple-f (-> (A (F (F x))) Ok)) (= (tuple-f $x) tuple-accepted) !(pragma! max-type-depth 2)")).unwrap();
+        assert_eq!(runner.run(SExprParser::new("!(f a)")), Ok(vec![vec![sym!("accepted")]]));
+        assert_eq!(runner.run(SExprParser::new("!(tuple-f (tuple-head a))")), Ok(vec![vec![sym!("tuple-accepted")]]));
+        let expected = expr!("Error" "a" ("TypeSearchLimit" {Number::Integer(2)}));
+        assert_eq!(runner.run(SExprParser::new("!(get-type a)")), Ok(vec![vec![expected.clone()]]));
+        assert_eq!(runner.run(SExprParser::new("!(get-type-space &self a)")), Ok(vec![vec![expected.clone()]]));
+        let nested_expected = expr!("Error" "nested" ("TypeSearchLimit" {Number::Integer(2)}));
+        assert_eq!(runner.run(SExprParser::new("!(get-type (nested))")), Ok(vec![vec![nested_expected]]));
+        assert_eq!(runner.run(SExprParser::new("(: g (-> Missing Ok)) !(g a)")), Ok(vec![vec![expected]]));
+        assert_eq!(runner.run(SExprParser::new("!(+ 2 3)")), Ok(vec![vec![Atom::gnd(Number::Integer(5))]]));
+    }
+
+    #[test]
+    fn finite_type_query_limit_is_configurable_and_session_local() {
+        let first = Metta::new(Some(EnvBuilder::test_env()));
+        let second = Metta::new(Some(EnvBuilder::test_env()));
+        let declarations = "(: a A) (:< A B) (:< B C) (:< C A)";
+        first.run(SExprParser::new(declarations)).unwrap();
+        second.run(SExprParser::new(declarations)).unwrap();
+        first.run(SExprParser::new("!(pragma! max-type-depth 1)")).unwrap();
+        assert_eq!(first.run(SExprParser::new("!(get-type a)")),
+            Ok(vec![vec![expr!("Error" "a" ("TypeSearchLimit" {Number::Integer(1)}))]]));
+        for runner in [&first, &second] {
+            if std::ptr::eq(runner, &first) {
+                runner.run(SExprParser::new("!(pragma! max-type-depth 2)")).unwrap();
+            }
+            let rows = runner.run(SExprParser::new("!(get-type a)")).unwrap();
+            hyperon_common::assert_eq_no_order!(rows[0], vec![sym!("A"), sym!("B"), sym!("C")]);
+        }
+        let rows = first.run(SExprParser::new("!(pragma! max-type-depth invalid)")).unwrap();
+        assert_eq!(rows[0][0].to_string(), "(Error (pragma! max-type-depth invalid) UnsignedIntegerIsExpected)");
+        assert_eq!(first.settings().get_string("max-type-depth"), Some("2".into()));
+    }
 
     #[test]
     fn metta_switch() {

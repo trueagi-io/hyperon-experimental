@@ -7,7 +7,6 @@ use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunContext, RunnerState, Environment, EnvBuilder};
 use hyperon::metta::runner::modules::{ModuleLoader, ModId};
-use hyperon::metta::types::AtomType;
 
 use crate::util::*;
 use crate::atom::*;
@@ -629,8 +628,9 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
 /// @param[in]  space  A pointer to the `space_t` representing the space context in which to perform the check
 /// @param[in]  atom  A pointer to the `atom_t` or `atom_ref_t` representing the atom whose Type the function will check
 /// @param[in]  typ  A pointer to the `atom_t` or `atom_ref_t` representing the type to check against
-/// @return  `true` if the Atom's Type is a match, otherwise `false`
+/// @return  `true` if a match was established, otherwise `false`
 /// @note This function can be used for a simple type check when there is no need to know type parameters
+/// @note Use `check_type_with_error()` to distinguish a negative result from unfinished search.
 ///
 #[no_mangle]
 pub extern "C" fn check_type(space: *const space_t, atom: *const atom_ref_t, typ: *const atom_ref_t) -> bool {
@@ -640,18 +640,67 @@ pub extern "C" fn check_type(space: *const space_t, atom: *const atom_ref_t, typ
     hyperon::metta::types::check_type(dyn_space, atom, typ)
 }
 
+/// @brief Checks a Type, reporting unfinished search through the error callback
+/// @ingroup metta_language_group
+/// @param[in]  space  A pointer to the `space_t` representing the space context in which to perform the check
+/// @param[in]  atom  A pointer to the atom whose Type the function will check
+/// @param[in]  typ  A pointer to the atom representing the type to check against
+/// @param[in]  on_error  A callback which receives the unfinished-search error
+/// @param[in]  context  A pointer to caller-defined callback context
+/// @return `true` on an established match, `false` otherwise
+/// @note On unfinished search, `on_error` receives one error atom before this function returns.
+///    On a completed positive or negative check, the callback is not called.
+/// @note The callback borrows the atom vector; clone atoms that must outlive the callback.
+#[no_mangle]
+pub extern "C" fn check_type_with_error(space: *const space_t, atom: *const atom_ref_t,
+        typ: *const atom_ref_t, on_error: c_atom_vec_callback_t, context: *mut c_void) -> bool {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let atom = unsafe{ &*atom }.borrow();
+    let typ = unsafe{ &*typ }.borrow();
+    match hyperon::metta::types::try_check_type(dyn_space, atom, typ) {
+        Ok(result) => result,
+        Err(error) => {
+            return_atoms(&[error], on_error, context);
+            false
+        }
+    }
+}
+
 /// @brief Checks whether `atom` is correctly typed
 /// @ingroup metta_language_group
 /// @param[in]  space  A pointer to the `space_t` representing the space context in which to perform the check
 /// @param[in]  atom  A pointer to the `atom_t` or `atom_ref_t` representing the atom whose Type the function will check
 /// @return  `true` if the Atom is correctly typed, otherwise `false`
 /// @note This function can be used to check if function arguments have correct types
+/// @note Use `validate_atom_with_error()` to distinguish rejection from unfinished search.
 ///
 #[no_mangle]
 pub extern "C" fn validate_atom(space: *const space_t, atom: *const atom_ref_t) -> bool {
     let dyn_space = unsafe{ &*space }.borrow();
     let atom = unsafe{ &*atom }.borrow();
     hyperon::metta::types::validate_atom(dyn_space, atom)
+}
+
+/// @brief Validates an Atom, reporting unfinished search through the error callback
+/// @ingroup metta_language_group
+/// @param[in]  space  A pointer to the `space_t` representing the space context in which to perform the validation
+/// @param[in]  atom  A pointer to the atom to validate
+/// @param[in]  on_error  A callback which receives the unfinished-search error
+/// @param[in]  context  A pointer to caller-defined callback context
+/// @return `true` if validation succeeds, `false` otherwise
+/// @note The same error-callback and borrowing contract as `check_type_with_error()` applies.
+#[no_mangle]
+pub extern "C" fn validate_atom_with_error(space: *const space_t, atom: *const atom_ref_t,
+        on_error: c_atom_vec_callback_t, context: *mut c_void) -> bool {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let atom = unsafe{ &*atom }.borrow();
+    match hyperon::metta::types::try_validate_atom(dyn_space, atom) {
+        Ok(result) => result,
+        Err(error) => {
+            return_atoms(&[error], on_error, context);
+            false
+        }
+    }
 }
 
 /// @brief Provides all types for `atom` in the context of `space`
@@ -662,6 +711,7 @@ pub extern "C" fn validate_atom(space: *const space_t, atom: *const atom_ref_t) 
 /// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
 /// @note `%Undefined%` will be provided if `atom` has no type assigned. An empty vector will be provided if `atom`
 ///    is a function call but expected types of arguments are not compatible with passed values
+/// @note An unfinished subtype search provides one `TypeSearchLimit` error instead of a partial list.
 ///
 #[no_mangle]
 pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
@@ -673,7 +723,11 @@ pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
     // from the Python and Rust interface as it can be replaced by
     // `get_atom_types().iter().all(AtomType::is_valid)`
     let types: Vec<Atom> = hyperon::metta::types::get_atom_types(dyn_space, atom)
-        .into_iter().filter(AtomType::is_valid).map(AtomType::into_atom).collect();
+        .into_iter().filter_map(|typ| {
+            if typ.is_valid() { Some(typ.into_atom()) }
+            else if typ.is_search_limit() { Some(typ.into_error_unchecked()) }
+            else { None }
+        }).collect();
     return_atoms(&types, callback, context);
 }
 
