@@ -869,6 +869,14 @@ fn cons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     finished_result(Atom::expr(children), bindings, prev)
 }
 
+fn is_atom_bindings_pair(pair: &Atom) -> bool {
+    match pair {
+        Atom::Expression(expr) => expr.children().len() == 2
+            && expr.children()[1].as_gnd::<Bindings>().is_some(),
+        _ => false,
+    }
+}
+
 fn atom_into_atom_bindings(pair: Atom) -> (Atom, Bindings) {
     match_atom!{
         pair ~ [atom, bindings] => (atom, atom_into_bindings(bindings)),
@@ -893,9 +901,9 @@ fn atom_into_bindings(bindings: Atom) -> Bindings {
 fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: superpose, .. } = stack;
     let collapsed = match_atom!{
-        superpose ~ [_op, Atom::Expression(collapsed)] => collapsed,
+        superpose ~ [_op, Atom::Expression(collapsed)] if collapsed.children().iter().all(is_atom_bindings_pair) => collapsed,
         _ => {
-            let error: String = format!("expected: ({} (: <collapsed> Expression)), found: {}", SUPERPOSE_BIND_SYMBOL, superpose);
+            let error: String = format!("expected: ({} (: <collapsed> Expression)), where <collapsed> is a list of (<atom> <bindings>) pairs, found: {}", SUPERPOSE_BIND_SYMBOL, superpose);
             return finished_result(error_msg(superpose, error), bindings, prev);
         }
     };
@@ -1793,19 +1801,104 @@ mod tests {
     }
 
 
+    fn call_superpose_bind(pairs: Vec<Atom>, bindings: Bindings) -> Vec<InterpretedAtom> {
+        let vars: Variables = [ "a", "b", "c", "d", "e" ].into_iter().map(VariableAtom::new).collect();
+        let atom = Atom::expr([Atom::sym("superpose-bind"), Atom::expr(pairs)]);
+        let stack = Stack{ prev: None, atom, ret: no_handler, finished: false, vars, depth: 1 };
+        superpose_bind(stack, bindings)
+    }
+
+    fn finished_superpose_bind(atom: Atom, bindings: Bindings) -> InterpretedAtom {
+        InterpretedAtom(
+            Stack{ prev: None, atom, ret: no_handler, finished: true, vars: Variables::new(), depth: 1 },
+            bindings
+        )
+    }
+
     #[test]
     fn test_superpose_bind() {
-        let vars: Variables = [ "a", "b", "c" ].into_iter().map(VariableAtom::new).collect();
-        let atom = Atom::expr([Atom::sym("superpose-bind"),
-            Atom::expr([atom_bindings_into_atom(expr!("foo" a b), bind!{ a: expr!("A"), c: expr!("C") })])]);
-        let stack = Stack{ prev: None, atom, ret: no_handler, finished: false, vars: vars.clone(), depth: 1 };
+        let result = call_superpose_bind(
+            vec![atom_bindings_into_atom(expr!("foo" a b), bind!{ a: expr!("A"), c: expr!("C") })],
+            bind!{ b: expr!("B"), d: expr!("D") }
+        );
 
-        let result = superpose_bind(stack, bind!{ b: expr!("B"), d: expr!("D") });
-
-        assert_eq!(result, vec![InterpretedAtom(
-                Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: Variables::new(), depth: 1 },
-                bind!{ a: expr!("A"), b: expr!("B"), c: expr!("C"), d: expr!("D") }
+        assert_eq!(result, vec![finished_superpose_bind(
+            expr!("foo" a b),
+            bind!{ a: expr!("A"), b: expr!("B"), c: expr!("C"), d: expr!("D") }
         )]);
+    }
+
+    #[test]
+    fn interpret_superpose_bind_incorrect_pairs() {
+        for program in [
+            "(superpose-bind (foo))",
+            "(superpose-bind ((foo bar)))",
+            "(superpose-bind ((foo)))",
+            "(superpose-bind ((foo bar baz)))",
+        ] {
+            let result = call_interpret(space(""), &metta_atom(program));
+            assert_eq!(result.len(), 1, "{}", program);
+            assert!(atom_is_error(&result[0]), "{}", program);
+        }
+
+        let wrong_grounded = Atom::expr([
+            SUPERPOSE_BIND_SYMBOL,
+            Atom::expr([Atom::expr([sym!("foo"), Atom::gnd(Number::Integer(1))])]),
+        ]);
+        let result = call_interpret(space(""), &wrong_grounded);
+        assert_eq!(result.len(), 1);
+        assert!(atom_is_error(&result[0]));
+
+        let valid = atom_bindings_into_atom(sym!("ok"), bind!{});
+        let mixed = Atom::expr([
+            SUPERPOSE_BIND_SYMBOL,
+            Atom::expr([valid, metta_atom("(seed junk)")]),
+        ]);
+        let result = call_interpret(space(""), &mixed);
+        assert_eq!(result.len(), 1);
+        assert!(atom_is_error(&result[0]));
+
+        let result = call_interpret(space(""), &metta_atom("(superpose-bind ())"));
+        assert_eq!(result, vec![]);
+    }
+
+    #[test]
+    fn interpret_superpose_bind_malformed_pair_inside_chain() {
+        let result = call_interpret(space(""),
+            &metta_atom("(chain (superpose-bind ((seed junk))) $_ result)"));
+        assert_eq!(result, vec![sym!("result")]);
+    }
+
+    #[test]
+    fn superpose_bind_preserves_order_duplicates_and_shared_bindings() {
+        let first = atom_bindings_into_atom(
+            expr!("foo" a b a), bind!{ a: expr!("A"), c: expr!("C") });
+        let second = atom_bindings_into_atom(
+            expr!("bar" b), bind!{ b: expr!("B"), e: expr!("E") });
+
+        let result = call_superpose_bind(
+            vec![first.clone(), second, first],
+            bind!{ b: expr!("B"), d: expr!("D") }
+        );
+
+        assert_eq!(result, vec![
+            finished_superpose_bind(
+                expr!("foo" a b a),
+                bind!{ a: expr!("A"), b: expr!("B"), c: expr!("C"), d: expr!("D") }),
+            finished_superpose_bind(
+                expr!("bar" b),
+                bind!{ b: expr!("B"), d: expr!("D"), e: expr!("E") }),
+            finished_superpose_bind(
+                expr!("foo" a b a),
+                bind!{ a: expr!("A"), b: expr!("B"), c: expr!("C"), d: expr!("D") }),
+        ]);
+    }
+
+    #[test]
+    fn superpose_bind_discards_incompatible_bindings() {
+        let pair = atom_bindings_into_atom(expr!("foo" a), bind!{ a: expr!("A") });
+        let result = call_superpose_bind(vec![pair], bind!{ a: expr!("B") });
+        assert!(result.is_empty());
     }
 
     #[test]
