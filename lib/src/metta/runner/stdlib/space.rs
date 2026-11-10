@@ -7,7 +7,8 @@ use hyperon_atom::gnd::GroundedFunctionAtom;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::fmt::Display;
+use std::fmt::{Display, Debug};
+use std::collections::HashSet;
 
 #[derive(Clone, Debug)]
 pub struct NewSpaceOp {}
@@ -35,9 +36,33 @@ impl CustomExecute for NewSpaceOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq)]
 pub struct StateAtom {
     state: Rc<RefCell<(Atom, Atom)>>
+}
+
+type StateIdentity = *const RefCell<(Atom, Atom)>;
+thread_local! {
+    // Only cells on the current formatting stack, not every cell ever seen.
+    static DISPLAY_STATES: RefCell<HashSet<StateIdentity>> = RefCell::new(HashSet::new());
+}
+
+struct StateDisplayGuard(StateIdentity);
+impl Drop for StateDisplayGuard {
+    fn drop(&mut self) {
+        DISPLAY_STATES.with(|states| { states.borrow_mut().remove(&self.0); });
+    }
+}
+
+impl Debug for StateAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let identity = Rc::as_ptr(&self.state);
+        if !DISPLAY_STATES.with(|states| states.borrow_mut().insert(identity)) {
+            return write!(f, "(State <cycle>)");
+        }
+        let _guard = StateDisplayGuard(identity);
+        f.debug_struct("StateAtom").field("state", &self.state).finish()
+    }
 }
 
 impl StateAtom {
@@ -48,6 +73,11 @@ impl StateAtom {
 
 impl Display for StateAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let identity = Rc::as_ptr(&self.state);
+        if !DISPLAY_STATES.with(|states| states.borrow_mut().insert(identity)) {
+            return write!(f, "(State <cycle>)");
+        }
+        let _guard = StateDisplayGuard(identity);
         write!(f, "(State {})", self.state.borrow().0)
     }
 }
@@ -320,5 +350,120 @@ mod tests {
             vec![metta!((F aa))],
             vec![metta!((Error ({ChangeStateOp{}} {faa} (F b)) (BadArgType 2 A B)))],
         ]));
+    }
+
+    #[test]
+    fn state_display_and_debug_preserve_acyclic_formatting() {
+        let state = StateAtom::new(expr!("pair" "leaf"), sym!("Type"));
+        assert_eq!(state.to_string(), "(State (pair leaf))");
+        assert_eq!(format!("{state:?}"), format!("StateAtom {{ state: {:?} }}", state.state));
+        assert_eq!(state.to_string(), "(State (pair leaf))");
+    }
+
+    #[test]
+    fn state_display_and_debug_detect_self_cycle() {
+        let state = StateAtom::new(sym!("leaf"), sym!("Type"));
+        state.state.borrow_mut().0 = Atom::expr([sym!("wrap"), Atom::gnd(state.clone())]);
+
+        assert_eq!(state.to_string(), "(State (wrap (State <cycle>)))");
+        let debug = format!("{state:?}");
+        assert!(debug.contains("(State <cycle>)"), "{}", debug);
+        assert_eq!(state.to_string(), "(State (wrap (State <cycle>)))");
+
+        state.state.borrow_mut().0 = sym!("leaf");
+        assert_eq!(state.to_string(), "(State leaf)");
+    }
+
+    #[test]
+    fn state_display_and_debug_detect_mutual_cycle() {
+        let first = StateAtom::new(sym!("leaf"), sym!("Type"));
+        let second = StateAtom::new(sym!("leaf"), sym!("Type"));
+        first.state.borrow_mut().0 = Atom::expr([sym!("first"), Atom::gnd(second.clone())]);
+        second.state.borrow_mut().0 = Atom::expr([sym!("second"), Atom::gnd(first.clone())]);
+
+        assert_eq!(first.to_string(), "(State (first (State (second (State <cycle>)))))");
+        let debug = format!("{first:?}");
+        assert!(debug.contains("(State <cycle>)"), "{}", debug);
+
+        first.state.borrow_mut().0 = sym!("leaf");
+        second.state.borrow_mut().0 = sym!("leaf");
+    }
+
+    #[test]
+    fn state_display_allows_repeated_shared_children() {
+        let child = StateAtom::new(sym!("leaf"), sym!("Type"));
+        let parent = StateAtom::new(
+            Atom::expr([Atom::gnd(child.clone()), Atom::gnd(child)]),
+            sym!("Type")
+        );
+
+        assert_eq!(parent.to_string(), "(State ((State leaf) (State leaf)))");
+        assert_eq!(parent.to_string(), "(State ((State leaf) (State leaf)))");
+    }
+
+    #[test]
+    fn state_display_guard_survives_nested_formatter_failure() {
+        struct FailingNestedWriter {
+            written: String,
+            failed_in_nested: bool,
+        }
+
+        impl std::fmt::Write for FailingNestedWriter {
+            fn write_str(&mut self, text: &str) -> std::fmt::Result {
+                if self.written == "(State " && text == "(State " {
+                    self.failed_in_nested = true;
+                    return Err(std::fmt::Error);
+                }
+                self.written.push_str(text);
+                Ok(())
+            }
+        }
+
+        let inner = StateAtom::new(sym!("leaf"), sym!("Type"));
+        let outer = StateAtom::new(Atom::gnd(inner), sym!("Type"));
+        let mut writer = FailingNestedWriter{ written: String::new(), failed_in_nested: false };
+        assert!(std::fmt::write(&mut writer, format_args!("{outer}")).is_err());
+        assert!(writer.failed_in_nested);
+        assert_eq!(outer.to_string(), "(State (State leaf))");
+    }
+
+    #[test]
+    fn state_display_guard_survives_unwinding() {
+        #[derive(Clone, PartialEq, Debug)]
+        struct PanicOnDisplay;
+
+        impl Display for PanicOnDisplay {
+            fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                panic!("intentional formatter panic")
+            }
+        }
+
+        impl Grounded for PanicOnDisplay {
+            fn type_(&self) -> Atom {
+                ATOM_TYPE_UNDEFINED
+            }
+        }
+
+        let state = StateAtom::new(Atom::gnd(PanicOnDisplay), sym!("Type"));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| state.to_string()));
+        assert!(result.is_err());
+        state.state.borrow_mut().0 = sym!("leaf");
+        assert_eq!(state.to_string(), "(State leaf)");
+    }
+
+    #[test]
+    fn cyclic_state_ops_can_observe_and_break_cycle() {
+        let state = StateAtom::new(sym!("leaf"), sym!("Type"));
+        state.state.borrow_mut().0 = Atom::expr([sym!("wrap"), Atom::gnd(state.clone())]);
+        let handle = Atom::gnd(state.clone());
+
+        let observed = GetStateOp{}.execute(&[handle.clone()]).unwrap();
+        assert!(observed.len() == 1);
+        let changed = ChangeStateOp{}.execute(&[handle.clone(), sym!("leaf")]).unwrap();
+        assert!(changed.len() == 1);
+        assert_eq!(state.to_string(), "(State leaf)");
+
+        let observed = GetStateOp{}.execute(&[handle]).unwrap();
+        assert_eq!(observed[0], sym!("leaf"));
     }
 }
