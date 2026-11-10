@@ -5,7 +5,57 @@ use super::regex;
 use hyperon_atom::gnd::number::*;
 use hyperon_atom::gnd::bool::*;
 
+use std::borrow::Cow;
 use std::fmt::Display;
+use std::sync::OnceLock;
+
+/// The value of a decimal digit of any script, for the digits that `\d` in the
+/// number tokens accepts.
+///
+/// Unicode encodes every set of decimal digits as ten consecutive code points in
+/// ascending order with zero first, and guarantees this for future versions. The
+/// value is therefore the distance from the start of the run of digits, modulo ten.
+fn decimal_value(c: char) -> Option<u8> {
+    if c.is_ascii_digit() {
+        return Some(c as u8 - b'0');
+    }
+    static DECIMAL: OnceLock<::regex::Regex> = OnceLock::new();
+    let decimal = DECIMAL.get_or_init(|| regex(r"\A\d\z"));
+    let is_decimal = |code: u32| char::from_u32(code)
+        .map_or(false, |c| decimal.is_match(c.encode_utf8(&mut [0; 4])));
+    let code = c as u32;
+    if !is_decimal(code) {
+        return None;
+    }
+    let mut start = code;
+    while start > 0 && is_decimal(start - 1) {
+        start -= 1;
+    }
+    Some(((code - start) % 10) as u8)
+}
+
+/// Spell the decimal digits of a number token in ASCII. Signs, separators and
+/// every other character stay as written.
+fn ascii_decimal_digits(text: &str) -> Cow<'_, str> {
+    if text.is_ascii() {
+        Cow::Borrowed(text)
+    } else {
+        Cow::Owned(text.chars().map(|c| decimal_value(c)
+            .map_or(c, |value| (b'0' + value) as char)).collect())
+    }
+}
+
+fn integer_token(token: &str) -> Result<Atom, String> {
+    let n = ascii_decimal_digits(token).parse::<i64>()
+        .map_err(|e| format!("Could not parse integer: '{token}', {e}"))?;
+    Ok(Atom::gnd(Number::Integer(n)))
+}
+
+fn float_token(token: &str) -> Result<Atom, String> {
+    let n = ascii_decimal_digits(token).parse::<f64>()
+        .map_err(|e| format!("Could not parse float: '{token}', {e}"))?;
+    Ok(Atom::gnd(Number::Float(n)))
+}
 
 macro_rules! def_binary_number_op {
     ($name:ident, $op:tt, $r:ident, $ret_type:ident) => {
@@ -160,12 +210,9 @@ impl CustomExecute for DivOp {
 }
 
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
-    tref.register_fallible_token(regex(r"[\-\+]?\d+"),
-        |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
-    tref.register_fallible_token(regex(r"[\-\+]?\d+\.\d+"),
-        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
-    tref.register_fallible_token(regex(r"[\-\+]?\d+(\.\d+)?[eE][\-\+]?\d+"),
-        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
+    tref.register_fallible_token(regex(r"[\-\+]?\d+"), integer_token);
+    tref.register_fallible_token(regex(r"[\-\+]?\d+\.\d+"), float_token);
+    tref.register_fallible_token(regex(r"[\-\+]?\d+(\.\d+)?[eE][\-\+]?\d+"), float_token);
     tref.register_token(regex(r"True|False"),
         |token| { Atom::gnd(Bool::from_str(token)) });
 
@@ -212,6 +259,58 @@ mod tests {
     macro_rules! assert_unary_op {
         ($name:ident, $a: expr, $r: expr) => {
             assert_eq!($name{}.execute(&mut vec![Atom::gnd($a)]), Ok(vec![Atom::gnd($r)]));
+        }
+    }
+
+    #[test]
+    fn decimal_digits_come_in_whole_runs_of_ten() {
+        // The rule in `decimal_value` is well defined for the engine's digit
+        // class when every run of consecutive digits is a whole number of tens.
+        let decimal = regex(r"\A\d\z");
+        let mut buffer = [0; 4];
+        let (mut run, mut digits) = (0u32, 0u32);
+        for code in 0..=0x110000 {
+            let c = char::from_u32(code);
+            if c.map_or(false, |c| decimal.is_match(c.encode_utf8(&mut buffer))) {
+                assert_eq!(decimal_value(c.unwrap()), Some((run % 10) as u8), "U+{code:04X}");
+                run += 1;
+                digits += 1;
+            } else {
+                assert_eq!(run % 10, 0, "digits ending before U+{code:04X}");
+                run = 0;
+                if let Some(c) = c {
+                    assert_eq!(decimal_value(c), None, "U+{code:04X}");
+                }
+            }
+        }
+        assert!(digits >= 10);
+    }
+
+    #[test]
+    fn number_tokens_read_decimal_digits_of_any_script() {
+        for (text, value) in [("٣", 3), ("１２", 12), ("1٣", 13), ("𝟠", 8), ("-۹", -9),
+            ("+١۲۳４", 1234), ("९२२३३७२०३६८५४७७५८०७", i64::MAX),
+            ("-९२२३३७२०३६८५४७७५८०८", i64::MIN)] {
+            assert_eq!(integer_token(text), Ok(Atom::gnd(Number::Integer(value))));
+        }
+        for text in ["²", "½", "−۳", "1٬٢", "९२२३३७२०३६८५४७७५८०८"] {
+            assert!(integer_token(text).is_err(), "{text}");
+        }
+        assert_eq!(float_token("١2.۵e-۱"), Ok(Atom::gnd(Number::Float(1.25))));
+        assert_eq!(float_token("١.٢e+۳"), Ok(Atom::gnd(Number::Float(1200.0))));
+        assert_eq!(float_token("١e٣٠٩"), float_token("1e309"));
+        assert_eq!(ascii_decimal_digits("-١2𝟛.４e+۵"), "-123.4e+5");
+        assert_eq!(ascii_decimal_digits("−²½"), "−²½");
+        assert!(matches!(ascii_decimal_digits("-123"), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn unicode_numbers_reach_the_interpreter() {
+        for (program, value) in [("!(+ ٣ １２)", Atom::gnd(Number::Integer(15))),
+            ("! 1٣", Atom::gnd(Number::Integer(13))),
+            ("! ١2.۵e-۱", Atom::gnd(Number::Float(1.25))),
+            ("! ²", sym!("²"))] {
+            assert_eq!(run_program(program), Ok(vec![vec![value]]));
         }
     }
 
