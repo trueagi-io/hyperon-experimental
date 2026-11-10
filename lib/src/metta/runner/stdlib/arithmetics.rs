@@ -7,8 +7,17 @@ use hyperon_atom::gnd::bool::*;
 
 use std::fmt::Display;
 
+// Arithmetic operators supply a checked integer method; other operators keep
+// their usual integer behavior. Floating-point operations do not use this helper.
+macro_rules! binary_integer_result {
+    ($a:ident, $b:ident, $op:tt, $checked_op:ident) => {
+        $a.$checked_op($b).ok_or_else(|| ExecError::from("IntegerOverflow"))?
+    };
+    ($a:ident, $b:ident, $op:tt) => { $a $op $b };
+}
+
 macro_rules! def_binary_number_op {
-    ($name:ident, $op:tt, $r:ident, $ret_type:ident) => {
+    ($name:ident, $op:tt, $r:ident, $ret_type:ident $(, $checked_op:ident)?) => {
         #[derive(Clone, PartialEq, Debug)]
         pub struct $name{}
 
@@ -36,7 +45,8 @@ macro_rules! def_binary_number_op {
 
                 let (a, b) = Number::promote(a, b);
                 let res: $ret_type = match (a, b) {
-                    (Number::Integer(a), Number::Integer(b)) => (a $op b).into(),
+                    (Number::Integer(a), Number::Integer(b)) =>
+                        binary_integer_result!(a, b, $op $(, $checked_op)?).into(),
                     (Number::Float(a), Number::Float(b)) => (a $op b).into(),
                     _ => panic!("Unexpected state"),
                 };
@@ -47,9 +57,9 @@ macro_rules! def_binary_number_op {
     }
 }
 
-def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, Number);
-def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, Number);
-def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, Number);
+def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, Number, checked_add);
+def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, Number, checked_sub);
+def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, Number, checked_mul);
 def_binary_number_op!(ModOp, %, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(LessOp, <, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(GreaterOp, >, ATOM_TYPE_BOOL, Bool);
@@ -152,7 +162,9 @@ impl CustomExecute for DivOp {
         let (dividend, divisor) = Number::promote(dividend, divisor);
         match (dividend, divisor) {
             (Number::Integer(_), Number::Integer(0)) => Err(ExecError::from("DivisionByZero")),
-            (Number::Integer(a), Number::Integer(b)) => Ok(vec![Atom::gnd(Number::Integer(a / b))]),
+            (Number::Integer(a), Number::Integer(b)) => a.checked_div(b)
+                .map(|res| vec![Atom::gnd(Number::Integer(res))])
+                .ok_or_else(|| ExecError::from("IntegerOverflow")),
             (Number::Float(a), Number::Float(b)) => Ok(vec![Atom::gnd(Number::Float(a / b))]),
             _ => panic!("Unexpected state")
         }
@@ -219,6 +231,105 @@ mod tests {
     fn div_errors() {
         assert_eq!(run_program(&format!("!(assertEqual (/ 5 0) (Error (/ 5 0) DivisionByZero))")), Ok(vec![vec![UNIT_ATOM]]));
         assert_eq!(run_program(&format!("!(assertEqual (let $div (/ 5.0 0.0) (isinf-math $div)) True)")), Ok(vec![vec![UNIT_ATOM]]));
+    }
+
+    #[test]
+    fn integer_add_overflow() {
+        for (a, b) in [(i64::MAX, 1), (i64::MIN, -1)] {
+            assert_eq!(SumOp{}.execute(&[Atom::gnd(Number::Integer(a)), Atom::gnd(Number::Integer(b))]),
+                Err(ExecError::from("IntegerOverflow")));
+        }
+    }
+
+    #[test]
+    fn integer_sub_overflow() {
+        for (a, b) in [(i64::MIN, 1), (i64::MAX, -1), (0, i64::MIN)] {
+            assert_eq!(SubOp{}.execute(&[Atom::gnd(Number::Integer(a)), Atom::gnd(Number::Integer(b))]),
+                Err(ExecError::from("IntegerOverflow")));
+        }
+    }
+
+    #[test]
+    fn integer_mul_overflow() {
+        for (a, b) in [(i64::MAX, 2), (i64::MIN, -1), (i64::MIN, 2)] {
+            assert_eq!(MulOp{}.execute(&[Atom::gnd(Number::Integer(a)), Atom::gnd(Number::Integer(b))]),
+                Err(ExecError::from("IntegerOverflow")));
+        }
+    }
+
+    #[test]
+    fn integer_div_overflow() {
+        assert_eq!(DivOp{}.execute(&[Atom::gnd(Number::Integer(i64::MIN)), Atom::gnd(Number::Integer(-1))]),
+            Err(ExecError::from("IntegerOverflow")));
+    }
+
+    #[test]
+    fn integer_arithmetic_boundaries() {
+        // An i128 oracle checks exact results on both sides of each i64 boundary.
+        let values = [i64::MIN, i64::MIN + 1, -4294967296, -3037000500, -2, -1,
+            0, 1, 2, 3037000499, 4294967296, i64::MAX - 1, i64::MAX];
+        for a in values {
+            for b in values {
+                let args = [Atom::gnd(Number::Integer(a)), Atom::gnd(Number::Integer(b))];
+                let (wide_a, wide_b) = (a as i128, b as i128);
+                let cases: [(&str, &dyn CustomExecute, i128); 3] = [
+                    ("+", &SumOp{}, wide_a + wide_b),
+                    ("-", &SubOp{}, wide_a - wide_b),
+                    ("*", &MulOp{}, wide_a * wide_b),
+                ];
+                let expected = |wide| i64::try_from(wide)
+                    .map(|n| vec![Atom::gnd(Number::Integer(n))])
+                    .map_err(|_| ExecError::from("IntegerOverflow"));
+                for (name, op, wide) in cases {
+                    let actual = op.execute(&args);
+                    assert_eq!(actual, expected(wide), "{a} {name} {b}");
+                    if let Ok(values) = actual {
+                        assert!(matches!(Number::from_atom(&values[0]), Some(Number::Integer(_))));
+                    }
+                }
+                let quotient = if b == 0 {
+                    Err(ExecError::from("DivisionByZero"))
+                } else {
+                    expected(wide_a / wide_b)
+                };
+                let actual = DivOp{}.execute(&args);
+                assert_eq!(actual, quotient, "{a} / {b}");
+                if let Ok(values) = actual {
+                    assert!(matches!(Number::from_atom(&values[0]), Some(Number::Integer(_))));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn integer_overflow_reaches_the_interpreter() {
+        for call in ["(+ 9223372036854775807 1)", "(- -9223372036854775808 1)",
+            "(* 9223372036854775807 2)", "(/ -9223372036854775808 -1)",
+            "(abs-math -9223372036854775808)"] {
+            assert_eq!(run_program(&format!(
+                "!(assertEqual {call} (Error {call} IntegerOverflow)) !(+ 2 3)")),
+                Ok(vec![vec![UNIT_ATOM], vec![Atom::gnd(Number::Integer(5))]]), "{call}");
+        }
+    }
+
+    #[test]
+    fn overflow_checks_preserve_float_arithmetic() {
+        let cases: [(&dyn CustomExecute, Number, Number, f64); 6] = [
+            (&SumOp{}, Number::Integer(i64::MAX), Number::Float(1.0), 9223372036854775808.0),
+            (&SubOp{}, Number::Float(-9223372036854775808.0), Number::Integer(1), -9223372036854775808.0),
+            (&MulOp{}, Number::Integer(i64::MIN), Number::Float(-1.0), 9223372036854775808.0),
+            (&DivOp{}, Number::Integer(i64::MIN), Number::Float(-1.0), 9223372036854775808.0),
+            (&SumOp{}, Number::Float(f64::MAX), Number::Float(f64::MAX), f64::INFINITY),
+            (&MulOp{}, Number::Float(f64::MAX), Number::Float(2.0), f64::INFINITY),
+        ];
+        for (op, a, b, expected) in cases {
+            let result = op.execute(&[Atom::gnd(a), Atom::gnd(b)]).unwrap();
+            assert_eq!(result.len(), 1);
+            match Number::from_atom(&result[0]) {
+                Some(Number::Float(value)) => assert_eq!(value.to_bits(), expected.to_bits()),
+                other => panic!("expected a float, got {other:?}"),
+            }
+        }
     }
 
     #[test]
