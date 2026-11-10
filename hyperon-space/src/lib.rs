@@ -311,7 +311,14 @@ impl core::fmt::Debug for DynSpace {
 
 impl Display for DynSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &*self.0.borrow())
+        // A space can be formatted (for a trace or an error atom) while it is being
+        // mutated, e.g. a grounded op that writes the space and whose own logging walks
+        // it. Display must not panic on that re-entrant borrow, so fall back to a stable
+        // placeholder when the cell is already borrowed.
+        match self.0.try_borrow() {
+            Ok(space) => write!(f, "{}", &*space),
+            Err(_) => write!(f, "<space>"),
+        }
     }
 }
 

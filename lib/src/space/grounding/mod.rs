@@ -251,6 +251,22 @@ mod test {
     use hyperon_common::assert_eq_no_order;
     use hyperon_space::SpaceObserver;
 
+    #[test]
+    fn dyn_space_display_while_mutably_borrowed() {
+        let space = DynSpace::new(GroundingSpace::new());
+        let ordinary = format!("{}", space);
+
+        let shared = space.borrow();
+        assert_eq!(format!("{}", space), ordinary);
+        drop(shared);
+
+        {
+            let _borrowed = space.borrow_mut();
+            assert_eq!(format!("{}", space), "<space>");
+        }
+        assert_eq!(format!("{}", space), ordinary);
+    }
+
     struct SpaceEventCollector {
         events: Vec<SpaceEvent>,
     }
