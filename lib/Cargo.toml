@@ -14,7 +14,7 @@ rand = "0.9.0"
 dyn-fmt = "0.4.0"
 itertools = "0.13.0"
 unicode_reader = "1.0.2"
-serde_json = { version="1.0.116", optional=true }
+serde_json = { version="1.0.116" }
 
 # pkg_mgmt deps
 xxhash-rust = { version="0.8.7", features=["xxh3"], optional=true }
@@ -44,12 +44,14 @@ crate-type = ["lib"]
 
 [features]
 default = ["pkg_mgmt", "das"]
+# Retain the feature name of the formerly optional dependency.
+serde_json = []
 # Add one of the features below into default list to enable.
 # See https://doc.rust-lang.org/cargo/reference/features.html#the-features-section
 variable_operation = [] # enables evaluation of the expressions which have
                         # a variable on the first position
 online-test = [] # includes tests which require internet access
 git = ["git2", "pkg_mgmt"]
-pkg_mgmt = ["xxhash-rust", "serde", "serde_json", "semver"]
+pkg_mgmt = ["xxhash-rust", "serde", "semver"]
 benchmark = []
 das = ["metta-bus-client"]
