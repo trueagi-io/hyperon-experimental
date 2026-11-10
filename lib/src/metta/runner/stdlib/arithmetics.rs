@@ -50,7 +50,6 @@ macro_rules! def_binary_number_op {
 def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, Number);
-def_binary_number_op!(ModOp, %, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(LessOp, <, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(GreaterOp, >, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(LessEqOp, <=, ATOM_TYPE_BOOL, Bool);
@@ -159,6 +158,42 @@ impl CustomExecute for DivOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct ModOp{}
+
+impl Display for ModOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "%")
+    }
+}
+
+impl Grounded for ModOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for ModOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::IncorrectArgument;
+        let a = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        let b = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?;
+
+        let (a, b) = Number::promote(a, b);
+        match (a, b) {
+            (Number::Integer(_), Number::Integer(0)) => Err(ExecError::from("DivisionByZero")),
+            // wrapping_rem returns 0 for i64::MIN % -1, which is the exact remainder
+            (Number::Integer(a), Number::Integer(b)) => Ok(vec![Atom::gnd(Number::Integer(a.wrapping_rem(b)))]),
+            (Number::Float(a), Number::Float(b)) => Ok(vec![Atom::gnd(Number::Float(a % b))]),
+            _ => panic!("Unexpected state"),
+        }
+    }
+}
+
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_fallible_token(regex(r"[\-\+]?\d+"),
         |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
@@ -219,6 +254,57 @@ mod tests {
     fn div_errors() {
         assert_eq!(run_program(&format!("!(assertEqual (/ 5 0) (Error (/ 5 0) DivisionByZero))")), Ok(vec![vec![UNIT_ATOM]]));
         assert_eq!(run_program(&format!("!(assertEqual (let $div (/ 5.0 0.0) (isinf-math $div)) True)")), Ok(vec![vec![UNIT_ATOM]]));
+    }
+
+    #[test]
+    fn mod_errors() {
+        assert_eq!(run_program(&format!("!(assertEqual (% 7 0) (Error (% 7 0) DivisionByZero))")), Ok(vec![vec![UNIT_ATOM]]));
+    }
+
+    #[test]
+    fn integer_remainder_boundaries() {
+        let values = [i64::MIN, i64::MIN + 1, -7, -2, -1, 0, 1, 2, 7,
+            i64::MAX - 1, i64::MAX];
+        for a in values {
+            for b in values {
+                let actual = ModOp{}.execute(&[Atom::gnd(Number::Integer(a)),
+                    Atom::gnd(Number::Integer(b))]);
+                if b == 0 {
+                    assert_eq!(actual, Err(ExecError::from("DivisionByZero")), "{a} % {b}");
+                    continue;
+                }
+                // i128 computes the mathematical remainder without i64's MIN % -1 exception.
+                let expected = ((a as i128) % (b as i128)) as i64;
+                let result = actual.unwrap_or_else(|e| panic!("{a} % {b} failed: {e:?}"));
+                assert_eq!(result.len(), 1);
+                match Number::from_atom(&result[0]) {
+                    Some(Number::Integer(value)) => assert_eq!(value, expected, "{a} % {b}"),
+                    other => panic!("expected an integer for {a} % {b}, got {other:?}"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn remainder_min_minus_one_reaches_interpreter() {
+        assert_eq!(run_program("!(% -9223372036854775808 -1) !(+ 2 3)"),
+            Ok(vec![vec![Atom::gnd(Number::Integer(0))],
+                vec![Atom::gnd(Number::Integer(5))]]));
+    }
+
+    #[test]
+    fn remainder_preserves_float_results() {
+        for (a, b, expected) in [
+            (Number::Integer(i64::MIN), Number::Float(-1.0), -0.0f64),
+            (Number::Float(-7.5), Number::Integer(2), -1.5f64),
+        ] {
+            let result = ModOp{}.execute(&[Atom::gnd(a), Atom::gnd(b)]).unwrap();
+            assert_eq!(result.len(), 1);
+            match Number::from_atom(&result[0]) {
+                Some(Number::Float(value)) => assert_eq!(value.to_bits(), expected.to_bits()),
+                other => panic!("expected a float, got {other:?}"),
+            }
+        }
     }
 
     #[test]
