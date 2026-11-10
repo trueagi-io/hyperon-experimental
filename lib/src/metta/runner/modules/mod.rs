@@ -122,7 +122,7 @@ impl MettaMod {
 
         // Add a new atom to the &self space, so we can access the dependent module
         let dep_space_atom = Atom::gnd(dep_space);
-        self.tokenizer.borrow_mut().register_token_with_regex_str(&new_space_token, move |_| { dep_space_atom.clone() });
+        self.tokenizer.borrow_mut().register_token_with_regex_str(&regex::escape(&new_space_token), move |_| { dep_space_atom.clone() });
 
         Ok(())
     }
@@ -723,6 +723,52 @@ mod test {
         let result = runner.run(SExprParser::new("!(import! &self outer:inner)"));
         assert_eq!(result, Ok(vec![vec![expr!()]]));
         let result = runner.run(SExprParser::new("!(match &self inner-module-test-atom found!)"));
+        assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
+    }
+
+    /// The names passed to `bind!` match only themselves, not regex lookalikes.
+    #[test]
+    fn bind_token_names_are_literal() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+
+        let result = runner.run(SExprParser::new("!(bind! a.c 5)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+        let result = runner.run(SExprParser::new("! abc"));
+        assert_eq!(result, Ok(vec![vec![sym!("abc")]]));
+        let result = runner.run(SExprParser::new("! a.c"));
+        assert_eq!(result, Ok(vec![vec![Atom::gnd(Number::Integer(5))]]));
+
+        let result = runner.run(SExprParser::new("!(bind! *star* 3)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+        let result = runner.run(SExprParser::new("! *star*"));
+        assert_eq!(result, Ok(vec![vec![Atom::gnd(Number::Integer(3))]]));
+    }
+
+    /// An import alias is a literal name even when it is also a valid regex.
+    #[test]
+    fn import_alias_is_literal() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        let _outer_mod_id = runner.load_module_direct(Box::new(OuterLoader), "outer").unwrap();
+
+        let result = runner.run(SExprParser::new("!(import! m.d outer)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+        let result = runner.run(SExprParser::new("! &mXd"));
+        assert_eq!(result, Ok(vec![vec![sym!("&mXd")]]));
+        let result = runner.run(SExprParser::new("!(match &m.d outer-module-test-atom found!)"));
+        assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
+    }
+
+    /// Regex metacharacters which are invalid as a pattern are valid in an alias.
+    #[test]
+    fn import_alias_with_invalid_regex_is_literal() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        let _outer_mod_id = runner.load_module_direct(Box::new(OuterLoader), "outer").unwrap();
+
+        let result = runner.run(SExprParser::new("!(import! m.d[ outer)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+        let result = runner.run(SExprParser::new("! &mXd["));
+        assert_eq!(result, Ok(vec![vec![sym!("&mXd[")]]));
+        let result = runner.run(SExprParser::new("!(match &m.d[ outer-module-test-atom found!)"));
         assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
     }
 

@@ -271,7 +271,8 @@ impl CustomExecute for BindOp {
         let token = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "bind! expects symbol atom as a token")?.name();
         let atom = args.get(1).ok_or_else(arg_error)?.clone();
 
-        let token_regex = Regex::new(token).map_err(|err| format!("Could convert token {} into regex: {}", token, err))?;
+        // The token is a name, so it matches only itself.
+        let token_regex = Regex::new(&regex::escape(token)).map_err(|err| format!("Could convert token {} into regex: {}", token, err))?;
         self.tokenizer.borrow_mut().register_token(token_regex, move |_| { atom.clone() });
         unit_result()
     }
@@ -301,6 +302,14 @@ pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, tokenizer:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_regex_registration_remains_regex() {
+        let mut tokenizer = Tokenizer::new();
+        tokenizer.register_token_with_regex_str(r"a.c", |_| sym!("pattern"));
+        let constr = tokenizer.find_token("abc").expect("explicit regex should match");
+        assert_eq!(constr("abc"), Ok(sym!("pattern")));
+    }
 
     #[test]
     fn bind_new_space_op() {
