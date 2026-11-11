@@ -26,6 +26,14 @@ pub(crate) struct ModNameNode {
     children: Option<HashMap<String, ModNameNode>>
 }
 
+/// One non-layered insertion made during module initialization. Owns the replaced
+/// subtree, if any; unchanged siblings are never copied.
+pub(super) struct ModNameUndo {
+    name: String,
+    previous: Option<ModNameNode>,
+    had_children: bool,
+}
+
 /// Returns `Some(path)`, with `path` being the relative portion following `self:`, if the name
 /// begins with "self:". Returns "" if the name exactly equals "self".  Otherwise returns None
 pub(crate) fn mod_name_relative_path(name: &str) -> Option<&str> {
@@ -200,6 +208,29 @@ impl ModNameNode {
     /// If an entry already exists at that name, the existing entry will be replaced
     pub fn add(&mut self, name: &str, mod_id: ModId) -> Result<(), String> {
         self.merge_subtree_into(name, Self::new(mod_id))
+    }
+
+    pub(super) fn add_with_undo(&mut self, name: &str, mod_id: ModId) -> Result<ModNameUndo, String> {
+        let (parent, child_name) = self.parse_parent_mut(name)?;
+        if child_name == TOP_MOD_NAME || child_name == SELF_MOD_NAME || child_name.len() == 0 {
+            return Err(format!("illegal module name: {name}"));
+        }
+        let had_children = parent.children.is_some();
+        let previous = parent.children.get_or_insert_with(HashMap::new)
+            .insert(child_name.to_string(), Self::new(mod_id));
+        Ok(ModNameUndo { name: name.to_string(), previous, had_children })
+    }
+
+    /// Replay in reverse mutation order so the original parent exists again.
+    pub(super) fn undo_add(&mut self, undo: ModNameUndo) {
+        let (parent, child_name) = self.parse_parent_mut(&undo.name).unwrap();
+        if let Some(previous) = undo.previous {
+            parent.children.as_mut().unwrap().insert(child_name.to_string(), previous);
+        } else if undo.had_children {
+            parent.children.as_mut().unwrap().remove(child_name);
+        } else {
+            parent.children = None;
+        }
     }
 
     /// Adds a single new node to a layered tree.  See [Self::resolve_layered] for details
@@ -651,5 +682,24 @@ fn module_name_layered_parse_test() {
     let (parent, _remaining_name) = ModNameNode::parse_parent_layered_mut(&mut top, &mut subtrees, "A:B:a:b:c:d:digits:1").unwrap();
     assert!(parent.add("1:one", ModId(1001)).is_ok());
     assert_eq!(ModNameNode::resolve_layered(&top, &subtrees, "A:B:a:b:c:d:digits:1:one").unwrap(), ModId(1001));
+}
+
+#[test]
+fn p08_name_undo_restores_absent_children_and_rejects_invalid_insertions() {
+    for children in [None, Some(HashMap::new())] {
+        let mut node = ModNameNode { mod_id: ModId::TOP, children };
+        let had_children = node.children.is_some();
+        for name in ["", "top", "self", "missing:child", "trailing:"] {
+            assert!(node.add_with_undo(name, ModId::INVALID).is_err());
+            assert_eq!(node.children.is_some(), had_children);
+        }
+        let undo = node.add_with_undo("branch", ModId::INVALID).unwrap();
+        let child_undo = node.add_with_undo("branch:leaf", ModId::TOP).unwrap();
+        node.undo_add(child_undo);
+        node.undo_add(undo);
+        assert_eq!(node.children.is_some(), had_children);
+        assert!(node.children.as_ref().map_or(true, |children| children.is_empty()));
+        assert_eq!(node.mod_id, ModId::TOP);
+    }
 }
 
