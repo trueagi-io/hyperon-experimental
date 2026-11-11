@@ -144,7 +144,9 @@ impl serial::Serializer for RustToCSerializer {
         self.call_serialize(self.api().serialize_double, v)
     }
     fn serialize_str(&mut self, v: &str) -> serial::Result {
-        self.call_serialize(self.api().serialize_str, str_as_cstr(v).as_ptr())
+        // This callback's protocol is NUL-terminated, not a byte-span protocol.
+        let text = std::ffi::CString::new(v).map_err(|_| serial::Error::NotSupported)?;
+        self.call_serialize(self.api().serialize_str, text.as_ptr())
     }
 }
 
@@ -160,4 +162,150 @@ impl RustToCSerializer {
             serialize(self.context, v).into()
         })
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hyperon_atom::{Atom, gnd::str::Str, serial::Serializer};
+    use std::ffi::CStr;
+
+    #[derive(Default)]
+    struct Received {
+        strings: Vec<Vec<u8>>,
+        stable: bool,
+        reject: bool,
+        primitives: Vec<String>,
+    }
+
+    extern "C" fn receive_str(context: *mut c_void, value: *const c_char) -> serial_result_t {
+        let received = unsafe { &mut *(context as *mut Received) };
+        let value = unsafe { CStr::from_ptr(value) };
+        let copy = value.to_bytes().to_vec();
+        // Read again after allocating/copying, while the synchronous callback is active.
+        received.stable = value.to_bytes() == copy.as_slice();
+        received.strings.push(copy);
+        if received.reject { serial_result_t::NOT_SUPPORTED } else { serial_result_t::OK }
+    }
+
+    extern "C" fn receive_bool(context: *mut c_void, value: bool) -> serial_result_t {
+        unsafe { &mut *(context as *mut Received) }.primitives.push(value.to_string());
+        serial_result_t::OK
+    }
+
+    extern "C" fn receive_i64(context: *mut c_void, value: c_longlong) -> serial_result_t {
+        unsafe { &mut *(context as *mut Received) }.primitives.push(value.to_string());
+        serial_result_t::NOT_SUPPORTED
+    }
+
+    extern "C" fn receive_f64(context: *mut c_void, value: c_double) -> serial_result_t {
+        unsafe { &mut *(context as *mut Received) }.primitives.push(value.to_string());
+        serial_result_t::OK
+    }
+
+    fn api() -> serializer_api_t {
+        serializer_api_t {
+            serialize_bool: Some(receive_bool),
+            serialize_longlong: Some(receive_i64),
+            serialize_double: Some(receive_f64),
+            serialize_str: Some(receive_str),
+        }
+    }
+
+    fn context(received: &mut Received) -> *mut c_void {
+        received as *mut Received as *mut c_void
+    }
+
+    #[test]
+    fn strings_preserve_bytes_and_callback_result() {
+        let api = api();
+        let mut received = Received::default();
+        let mut serializer = RustToCSerializer::new(&api, context(&mut received));
+        for value in ["", "ASCII", "žluťoučký 🦀", &"long λ".repeat(16384)] {
+            let before = received.strings.len();
+            assert_eq!(serializer.serialize_str(value), Ok(()));
+            assert_eq!(received.strings.len(), before + 1);
+            assert_eq!(received.strings.last().unwrap(), value.as_bytes());
+            assert!(received.stable);
+        }
+        received.reject = true;
+        assert_eq!(serializer.serialize_str("unsupported"), Err(serial::Error::NotSupported));
+        assert_eq!(received.strings.len(), 5);
+        received.reject = false;
+        assert_eq!(serializer.serialize_str("after callback rejection"), Ok(()));
+        assert_eq!(received.strings.len(), 6);
+    }
+
+    #[test]
+    fn nul_is_rejected_before_callback_and_serializer_is_reusable() {
+        let api = api();
+        let mut received = Received::default();
+        let mut serializer = RustToCSerializer::new(&api, context(&mut received));
+        let mut failures = Vec::new();
+        for value in ["\0start", "mid\0dle", "end\0", "\0\0"] {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                serializer.serialize_str(value)
+            }));
+            if !matches!(result, Ok(Err(serial::Error::NotSupported))) {
+                failures.push(value);
+            }
+            assert!(received.strings.is_empty());
+        }
+        assert!(failures.is_empty(), "did not return NotSupported: {failures:?}");
+        assert_eq!(serializer.serialize_str("after NUL rejection"), Ok(()));
+        assert_eq!(received.strings, vec![b"after NUL rejection".to_vec()]);
+    }
+
+    #[test]
+    fn missing_callbacks_return_not_supported() {
+        let api = serializer_api_t {
+            serialize_bool: None, serialize_longlong: None,
+            serialize_double: None, serialize_str: None,
+        };
+        let mut serializer = RustToCSerializer::new(&api, std::ptr::null_mut());
+        for value in ["", "ordinary", "\0", "mid\0dle"] {
+            assert_eq!(serializer.serialize_str(value), Err(serial::Error::NotSupported));
+        }
+        assert_eq!(serializer.serialize_bool(true), Err(serial::Error::NotSupported));
+        assert_eq!(serializer.serialize_i64(42), Err(serial::Error::NotSupported));
+        assert_eq!(serializer.serialize_f64(1.5), Err(serial::Error::NotSupported));
+    }
+
+    #[test]
+    fn primitive_callbacks_are_unchanged() {
+        let api = api();
+        let mut received = Received::default();
+        let mut serializer = RustToCSerializer::new(&api, context(&mut received));
+        assert_eq!(serializer.serialize_bool(true), Ok(()));
+        assert_eq!(serializer.serialize_i64(i64::MIN), Err(serial::Error::NotSupported));
+        assert_eq!(serializer.serialize_f64(1.5), Ok(()));
+        assert_eq!(received.primitives, ["true", "-9223372036854775808", "1.5"]);
+        assert!(received.strings.is_empty());
+    }
+
+    fn exported_rejection(value: &str) {
+        let api = api();
+        let mut received = Received::default();
+        let atom = Atom::gnd(Str::from_string(value.into()));
+        let atom_ref = crate::atom::atom_ref_t::from(&atom);
+        let result = crate::atom::atom_gnd_serialize(&atom_ref, &api, context(&mut received));
+        assert!(matches!(result, serial_result_t::NOT_SUPPORTED));
+        assert!(received.strings.is_empty());
+
+        let ordinary = Atom::gnd(Str::from_str("after exported rejection"));
+        let atom_ref = crate::atom::atom_ref_t::from(&ordinary);
+        let result = crate::atom::atom_gnd_serialize(&atom_ref, &api, context(&mut received));
+        assert!(matches!(result, serial_result_t::OK));
+        assert_eq!(received.strings, vec![b"after exported rejection".to_vec()]);
+        assert!(received.stable);
+    }
+
+    #[test]
+    fn exported_nul_beginning() { exported_rejection("\0start"); }
+    #[test]
+    fn exported_nul_middle() { exported_rejection("mid\0dle"); }
+    #[test]
+    fn exported_nul_end() { exported_rejection("end\0"); }
+    #[test]
+    fn exported_nul_repeated() { exported_rejection("\0\0"); }
 }
