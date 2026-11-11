@@ -312,6 +312,20 @@ pub(crate) enum ModuleInitState {
 pub(crate) struct ModuleInitStateInsides {
     frames: Vec<ModuleInitFrame>,
     module_descriptors: HashMap<ModuleDescriptor, ModId>,
+    // Successful nested mutations stay here until root publication: an ancestor
+    // can still fail. Checkpoints retain only offsets, not copies of metadata.
+    undo: Vec<ModuleInitUndo>,
+}
+
+struct ModuleInitCheckpoint {
+    frames: usize,
+    undo: usize,
+}
+
+enum ModuleInitUndo {
+    Name(usize, mod_names::ModNameUndo),
+    #[cfg(feature = "pkg_mgmt")]
+    Descriptor(ModuleDescriptor, Option<ModId>),
 }
 
 impl ModuleInitState {
@@ -322,6 +336,7 @@ impl ModuleInitState {
         let new_insides = ModuleInitStateInsides {
             frames: vec![ModuleInitFrame::new_with_name(mod_name)],
             module_descriptors: HashMap::new(),
+            undo: Vec::new(),
         };
         let init_state = Self::Root(Rc::new(RefCell::new(new_insides)));
         (init_state, ModId::new_relative(0))
@@ -361,6 +376,7 @@ impl ModuleInitState {
                 let mut insides_ref = cell.borrow_mut();
                 let frames = mem::take(&mut insides_ref.frames);
                 let descriptors = mem::take(&mut insides_ref.module_descriptors);
+                insides_ref.undo.clear();
                 (frames, descriptors)
             },
             _ => unreachable!()
@@ -413,8 +429,14 @@ impl ModuleInitState {
 
     pub fn add_module_to_name_tree(&self, runner: &Metta, frame_id: ModId, mod_name: &str, mod_id: ModId) -> Result<(), String> {
         match self {
-            Self::Root(_) |
-            Self::Child(_) => self.in_frame(frame_id, |frame| frame.add_module_to_name_tree(mod_name, mod_id)),
+            Self::Root(cell) |
+            Self::Child(cell) => {
+                let mut insides = cell.borrow_mut();
+                let idx = frame_id.get_idx_from_relative();
+                let undo = insides.frames[idx].add_module_to_name_tree(mod_name, mod_id)?;
+                insides.undo.push(ModuleInitUndo::Name(idx, undo));
+                Ok(())
+            },
             _ => runner.add_module_to_name_tree(mod_name, mod_id)
         }
     }
@@ -437,6 +459,62 @@ impl ModuleInitState {
     ///
     /// The init function will then call `context.init_self_module()` along with any other initialization code
     pub fn init_module(&mut self, runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
+        //If the new module fails to load, its transient metadata must not stay in the state,
+        // otherwise it could be merged into the runner with the next successfully loaded module
+        let checkpoint = self.checkpoint();
+        let result = self.init_module_internal(runner, mod_name, loader);
+        if result.is_err() {
+            self.restore_checkpoint(checkpoint);
+        }
+        result
+    }
+
+    /// Marks the frame and mutation suffix owned by the next initialization.
+    fn checkpoint(&self) -> Option<ModuleInitCheckpoint> {
+        match self {
+            Self::None => None,
+            Self::Root(cell) |
+            Self::Child(cell) => {
+                let insides_ref = cell.borrow();
+                Some(ModuleInitCheckpoint {
+                    frames: insides_ref.frames.len(),
+                    undo: insides_ref.undo.len(),
+                })
+            },
+        }
+    }
+
+    /// Rewinds only this attempt's mutations, including aliases written into earlier
+    /// surviving frames through `RunContext::in_mod_context`. No callback runs borrowed.
+    fn restore_checkpoint(&mut self, checkpoint: Option<ModuleInitCheckpoint>) {
+        match checkpoint {
+            None => *self = Self::None,
+            Some(checkpoint) => match self {
+                Self::None => {},
+                Self::Root(cell) |
+                Self::Child(cell) => {
+                    let mut insides_ref = cell.borrow_mut();
+                    while insides_ref.undo.len() > checkpoint.undo {
+                        match insides_ref.undo.pop().unwrap() {
+                            ModuleInitUndo::Name(idx, undo) => {
+                                insides_ref.frames[idx].sub_module_names.undo_add(undo);
+                            },
+                            #[cfg(feature = "pkg_mgmt")]
+                            ModuleInitUndo::Descriptor(descriptor, previous) => {
+                                match previous {
+                                    Some(id) => { insides_ref.module_descriptors.insert(descriptor, id); },
+                                    None => { insides_ref.module_descriptors.remove(&descriptor); },
+                                }
+                            },
+                        }
+                    }
+                    insides_ref.frames.truncate(checkpoint.frames);
+                },
+            },
+        }
+    }
+
+    fn init_module_internal(&mut self, runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
 
         //Give the prepare function a chance to run, in case it hasn't yet
         #[cfg(feature = "pkg_mgmt")]
@@ -488,7 +566,8 @@ impl ModuleInitState {
             Self::Root(cell) |
             Self::Child(cell) => {
                 let mut insides_ref = cell.borrow_mut();
-                insides_ref.module_descriptors.insert(descriptor, mod_id);
+                let previous = insides_ref.module_descriptors.insert(descriptor.clone(), mod_id);
+                insides_ref.undo.push(ModuleInitUndo::Descriptor(descriptor, previous));
             },
             Self::None => {
                 runner.add_module_descriptor(descriptor, mod_id);
@@ -527,6 +606,8 @@ impl ModuleInitFrame {
         let mod_name = self.new_mod_name.clone().unwrap();
         let new_mod = Rc::new(MettaMod::new_with_tokenizer(metta, mod_name, space, tokenizer, resource_dir, false));
         self.sub_module_names.update("top", self_mod_id).unwrap();
+        // Only the newly loading frame is initialized. Older contexts already
+        // have a mod_ptr and cannot reinitialize; failure discards this frame.
         new_mod
     }
     /// Adds a sub-module to this module's subtree
@@ -542,14 +623,14 @@ impl ModuleInitFrame {
     // that added it went on to fail loading, the sub-module wouldn't get cleaned up.  Same goes
     // for modules imported into the runner directly.  So the question of ownership over the module
     // name-space gets a lot trickier if modules are allowed to add sub-modules outside themselves
-    pub(crate) fn add_module_to_name_tree(&mut self, mod_name: &str, mod_id: ModId) -> Result<(), String> {
+    fn add_module_to_name_tree(&mut self, mod_name: &str, mod_id: ModId) -> Result<mod_names::ModNameUndo, String> {
         let self_mod_path = &self.new_mod_name.as_ref().unwrap();
         match mod_name_remove_prefix(mod_name, &self_mod_path) {
             Some(sub_mod_name) => {
                 if sub_mod_name.len() == 0 {
                     return Err(format!("Attempt to load {mod_name} recursively from within its own loader"));
                 }
-                self.sub_module_names.add(sub_mod_name, mod_id)
+                self.sub_module_names.add_with_undo(sub_mod_name, mod_id)
             },
             None => return Err(format!("Cannot load module {mod_name} from loader of {self_mod_path}.  Module loaders may only load sub-modules"))
         }
@@ -827,6 +908,656 @@ mod test {
         assert_eq!(result, Ok(vec![vec![expr!()]]));
 
         assert_eq!(*ISSUE_982_CALLED.lock().unwrap(), 6);
+    }
+
+    #[derive(Debug)]
+    struct P08ModuleLoader(&'static str);
+
+    impl ModuleLoader for P08ModuleLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            context.push_parser(Box::new(SExprParser::new(self.0)));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn p08_checkpoint_keeps_wide_metadata_in_place() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        let (mut state, root) = ModuleInitState::new("top:p08-wide".to_string());
+        for i in 0..16384 {
+            state.add_module_to_name_tree(&runner, root, &format!("top:p08-wide:a{i}"), ModId::TOP).unwrap();
+            #[cfg(feature = "pkg_mgmt")]
+            state.add_module_descriptor(&runner,
+                ModuleDescriptor::new(format!("p08-wide-{i}"), None, Some(i)), ModId::TOP);
+        }
+        assert_eq!(mem::size_of::<ModuleInitCheckpoint>(), 2 * mem::size_of::<usize>());
+        let cell = match &state { ModuleInitState::Root(cell) => cell.clone(), _ => unreachable!() };
+        let (node, entries) = {
+            let insides = cell.borrow();
+            (insides.frames[0].sub_module_names.name_to_node::<&ModNameNode>(&[], "a0").unwrap() as *const _,
+                insides.undo.len())
+        };
+        let checkpoint = state.checkpoint().unwrap();
+        assert_eq!(checkpoint.undo, entries);
+        assert_eq!(cell.borrow().undo.len(), entries);
+        assert_eq!(cell.borrow().frames[0].sub_module_names.name_to_node::<&ModNameNode>(&[], "a0").unwrap() as *const _, node);
+        state.add_module_to_name_tree(&runner, root, "top:p08-wide:one-more", ModId::TOP).unwrap();
+        let insides = cell.borrow();
+        assert_eq!(insides.undo.len(), entries + 1);
+        drop(insides);
+        state.restore_checkpoint(Some(checkpoint));
+        assert_eq!(cell.borrow().undo.len(), entries);
+        assert!(state.get_module_by_name(&runner, "top:p08-wide:one-more").is_err());
+    }
+
+    fn p08_journal_len(state: &ModuleInitState) -> usize {
+        match state {
+            ModuleInitState::Root(cell) | ModuleInitState::Child(cell) => cell.borrow().undo.len(),
+            ModuleInitState::None => 0,
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    fn p08_journal_descriptor() -> ModuleDescriptor {
+        ModuleDescriptor::new("p08-journal".to_string(), None, Some(809))
+    }
+
+    #[derive(Debug)]
+    struct P08JournalMutationLoader(bool);
+
+    impl ModuleLoader for P08JournalMutationLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            // Exercise the insertion primitive's overwrite contract, including
+            // descendants. Public aliases normally reject an existing name.
+            let root = ModId::new_relative(0);
+            context.init_state.add_module_to_name_tree(context.metta, root,
+                "top:p08-journal:branch", context.mod_id)?;
+            context.init_state.add_module_to_name_tree(context.metta, root,
+                "top:p08-journal:branch:new-leaf", context.mod_id)?;
+            #[cfg(feature = "pkg_mgmt")]
+            context.init_state.add_module_descriptor(context.metta, p08_journal_descriptor(), context.mod_id);
+            if self.0 { Err(P08_ORIGINAL_ERROR.to_string()) } else { Ok(()) }
+        }
+    }
+
+    #[derive(Debug)]
+    struct P08JournalAncestorLoader;
+
+    impl ModuleLoader for P08JournalAncestorLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let child = context.load_module_direct(Box::new(P08JournalMutationLoader(false)), "self:success")?;
+            let entries = p08_journal_len(context.init_state);
+            for _ in 0..2 {
+                assert_eq!(context.load_module_direct(Box::new(P08JournalMutationLoader(true)), "self:retry"),
+                    Err(P08_ORIGINAL_ERROR.to_string()));
+                assert_eq!(p08_journal_len(context.init_state), entries);
+                assert_eq!(context.get_module_by_name("top:p08-journal:branch"), Ok(child));
+                assert_eq!(context.get_module_by_name("top:p08-journal:branch:new-leaf"), Ok(child));
+                #[cfg(feature = "pkg_mgmt")]
+                assert_eq!(context.init_state.get_module_with_descriptor(context.metta, &p08_journal_descriptor()), Some(child));
+            }
+            Err(P08_ORIGINAL_ERROR.to_string())
+        }
+    }
+
+    #[derive(Debug)]
+    struct P08JournalParentLoader;
+
+    impl ModuleLoader for P08JournalParentLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            context.load_module_alias("self:branch", ModId::TOP)?;
+            context.load_module_alias("self:branch:old-leaf", ModId::TOP)?;
+            #[cfg(feature = "pkg_mgmt")]
+            context.init_state.add_module_descriptor(context.metta, p08_journal_descriptor(), ModId::TOP);
+            let entries = p08_journal_len(context.init_state);
+            for _ in 0..2 {
+                assert_eq!(context.load_module_direct(Box::new(P08JournalAncestorLoader), "self:attempt"),
+                    Err(P08_ORIGINAL_ERROR.to_string()));
+                assert_eq!(p08_journal_len(context.init_state), entries);
+                assert_eq!(context.get_module_by_name("self:branch"), Ok(ModId::TOP));
+                assert_eq!(context.get_module_by_name("self:branch:old-leaf"), Ok(ModId::TOP));
+                assert!(context.get_module_by_name("self:branch:new-leaf").is_err());
+                assert!(context.get_module_by_name("self:attempt").is_err());
+                #[cfg(feature = "pkg_mgmt")]
+                assert_eq!(context.init_state.get_module_with_descriptor(context.metta, &p08_journal_descriptor()), Some(ModId::TOP));
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn p08_journal_restores_overwrites_across_nested_success_failure_and_retry() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        runner.load_module_direct(Box::new(P08JournalParentLoader), "p08-journal").unwrap();
+        assert_eq!(runner.get_module_by_name("p08-journal:branch:old-leaf"), Ok(ModId::TOP));
+        assert!(runner.get_module_by_name("p08-journal:branch:new-leaf").is_err());
+        #[cfg(feature = "pkg_mgmt")]
+        assert_eq!(runner.get_module_with_descriptor(&p08_journal_descriptor()), Some(ModId::TOP));
+    }
+
+    fn p08_assert_module_value(runner: &Metta, mod_name: &str, value_name: &str, expected: i64) {
+        let import = format!("!(import! &self {mod_name})");
+        assert_eq!(runner.run(SExprParser::new(&import)), Ok(vec![vec![expr!()]]));
+        let query = format!("!(match &self ({value_name} $x) $x)");
+        assert_eq!(runner.run(SExprParser::new(&query)),
+            Ok(vec![vec![Atom::gnd(Number::Integer(expected))]]));
+    }
+
+    const P08_ORIGINAL_ERROR: &str = "p08 original failure";
+
+    #[derive(Debug)]
+    struct P08ErrorLoader;
+
+    impl ModuleLoader for P08ErrorLoader {
+        fn load(&self, _context: &mut RunContext) -> Result<(), String> {
+            Err(P08_ORIGINAL_ERROR.to_string())
+        }
+    }
+
+    #[derive(Debug)]
+    struct P08RetryParentLoader;
+
+    impl ModuleLoader for P08RetryParentLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let keep_id = context.load_module_direct(
+                Box::new(P08ModuleLoader("(p08-keep-value 11)")), "self:keep")?;
+
+            let error = context.load_module_direct(Box::new(P08ErrorLoader), "self:retry")
+                .unwrap_err();
+            assert_eq!(error, P08_ORIGINAL_ERROR);
+            assert_eq!(context.get_module_by_name("self:keep"), Ok(keep_id));
+
+            let retry_id = context.load_module_direct(
+                Box::new(P08ModuleLoader("(p08-retry-value 22)")), "self:retry")?;
+            let last_id = context.load_module_direct(
+                Box::new(P08ModuleLoader("(p08-last-value 33)")), "self:last")?;
+            assert_eq!(context.get_module_by_name("self:keep"), Ok(keep_id));
+            assert_eq!(context.get_module_by_name("self:retry"), Ok(retry_id));
+            assert_eq!(context.get_module_by_name("self:last"), Ok(last_id));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn p08_failure_before_init_preserves_siblings_and_allows_retry() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        runner.load_module_direct(Box::new(P08RetryParentLoader), "p08-parent").unwrap();
+
+        assert!(runner.get_module_by_name("p08-parent:retry").is_ok());
+        p08_assert_module_value(&runner, "p08-parent:keep", "p08-keep-value", 11);
+        p08_assert_module_value(&runner, "p08-parent:retry", "p08-retry-value", 22);
+        p08_assert_module_value(&runner, "p08-parent:last", "p08-last-value", 33);
+    }
+
+    #[derive(Debug)]
+    struct P08NestedLoader {
+        fail: bool,
+    }
+
+    impl ModuleLoader for P08NestedLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let child_source = if self.fail {
+                "(p08-generation 1)"
+            } else {
+                "(p08-generation 2)"
+            };
+            context.load_module_direct(Box::new(P08ModuleLoader(child_source)), "self:grandchild")?;
+            if self.fail {
+                Err(P08_ORIGINAL_ERROR.to_string())
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct P08NestedRetryParentLoader;
+
+    impl ModuleLoader for P08NestedRetryParentLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let error = context.load_module_direct(
+                Box::new(P08NestedLoader { fail: true }), "self:retry").unwrap_err();
+            assert_eq!(error, P08_ORIGINAL_ERROR);
+            context.load_module_direct(
+                Box::new(P08NestedLoader { fail: false }), "self:retry")?;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn p08_initialized_ancestor_failure_discards_child_and_allows_retry() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        runner.load_module_direct(Box::new(P08NestedRetryParentLoader), "p08-nested-parent").unwrap();
+
+        p08_assert_module_value(&runner, "p08-nested-parent:retry:grandchild", "p08-generation", 2);
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum P08LateFailure {
+        Parser,
+        Function,
+        Finalize,
+        ErrorAtom,
+    }
+
+    impl P08LateFailure {
+        fn error(self) -> &'static str {
+            match self {
+                Self::Parser => "p08 parser failure",
+                Self::Function => "p08 function failure",
+                Self::Finalize => "Module loader finished without running RunContext::init_self_module",
+                Self::ErrorAtom => "p08 error atom failure",
+            }
+        }
+    }
+
+    struct P08ErrorAtomParser(u8);
+
+    impl Parser for P08ErrorAtomParser {
+        fn next_atom(&mut self, _tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+            let atom = match self.0 {
+                0 => EXEC_SYMBOL,
+                1 => error_atom(None, None, P08LateFailure::ErrorAtom.error().to_string()),
+                _ => return Ok(None),
+            };
+            self.0 += 1;
+            Ok(Some(atom))
+        }
+    }
+
+    struct P08ErrorParser;
+
+    impl Parser for P08ErrorParser {
+        fn next_atom(&mut self, _tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+            Err(P08LateFailure::Parser.error().to_string())
+        }
+    }
+
+    #[derive(Debug)]
+    struct P08LateFailureLoader(P08LateFailure);
+
+    impl ModuleLoader for P08LateFailureLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            match self.0 {
+                P08LateFailure::Parser => {
+                    context.init_self_module(GroundingSpace::new().into(), None);
+                    context.push_parser(Box::new(P08ErrorParser));
+                },
+                P08LateFailure::Function => {
+                    context.init_self_module(GroundingSpace::new().into(), None);
+                    context.push_func(|_context| Err(P08LateFailure::Function.error().to_string()));
+                },
+                P08LateFailure::Finalize => {},
+                P08LateFailure::ErrorAtom => {
+                    context.init_self_module(GroundingSpace::new().into(), None);
+                    context.push_parser(Box::new(P08ErrorAtomParser(0)));
+                },
+            }
+            Ok(())
+        }
+    }
+
+    #[derive(Debug)]
+    struct P08LateFailureParentLoader(P08LateFailure);
+
+    impl ModuleLoader for P08LateFailureParentLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let error = context.load_module_direct(
+                Box::new(P08LateFailureLoader(self.0)), "self:retry").unwrap_err();
+            assert_eq!(error, self.0.error());
+            context.load_module_direct(
+                Box::new(P08ModuleLoader("(p08-late-value 44)")), "self:retry")?;
+            Ok(())
+        }
+    }
+
+    fn p08_test_late_failure(failure: P08LateFailure, mod_name: &str) {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        runner.load_module_direct(Box::new(P08LateFailureParentLoader(failure)), mod_name).unwrap();
+        p08_assert_module_value(&runner, &format!("{mod_name}:retry"), "p08-late-value", 44);
+    }
+
+    #[test]
+    fn p08_parser_step_failure_preserves_error_and_allows_retry() {
+        p08_test_late_failure(P08LateFailure::Parser, "p08-parser-parent");
+    }
+
+    #[test]
+    fn p08_function_step_failure_preserves_error_and_allows_retry() {
+        p08_test_late_failure(P08LateFailure::Function, "p08-function-parent");
+    }
+
+    #[test]
+    fn p08_finalization_failure_preserves_error_and_allows_retry() {
+        p08_test_late_failure(P08LateFailure::Finalize, "p08-finalize-parent");
+    }
+
+    #[test]
+    fn p08_error_atom_finalization_failure_preserves_error_and_allows_retry() {
+        p08_test_late_failure(P08LateFailure::ErrorAtom, "p08-error-atom-parent");
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[derive(Debug)]
+    struct P08PrepareFailureLoader;
+
+    #[cfg(feature = "pkg_mgmt")]
+    impl ModuleLoader for P08PrepareFailureLoader {
+        fn load(&self, _context: &mut RunContext) -> Result<(), String> {
+            Err("p08 loader called after failed preparation".to_string())
+        }
+
+        fn prepare(&self, _local_dir: Option<&Path>, _update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
+            Err(P08_ORIGINAL_ERROR.to_string())
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[derive(Debug)]
+    struct P08PrepareFailureParentLoader;
+
+    #[cfg(feature = "pkg_mgmt")]
+    impl ModuleLoader for P08PrepareFailureParentLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let error = context.load_module_direct(
+                Box::new(P08PrepareFailureLoader), "self:retry").unwrap_err();
+            assert_eq!(error, P08_ORIGINAL_ERROR);
+            context.load_module_direct(
+                Box::new(P08ModuleLoader("(p08-prepare-value 55)")), "self:retry")?;
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[test]
+    fn p08_prepare_failure_preserves_error_and_existing_state() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        runner.load_module_direct(Box::new(P08PrepareFailureParentLoader), "p08-prepare-parent").unwrap();
+        p08_assert_module_value(&runner, "p08-prepare-parent:retry", "p08-prepare-value", 55);
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[derive(Debug)]
+    struct P08DescriptorLoader {
+        child_descriptor: ModuleDescriptor,
+        fail: bool,
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    impl ModuleLoader for P08DescriptorLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let child_name = context.normalize_module_name("self:child")?;
+            let child_source = if self.fail {
+                "(p08-descriptor-generation 1)"
+            } else {
+                "(p08-descriptor-generation 2)"
+            };
+            context.get_or_init_module_with_descriptor(&child_name, self.child_descriptor.clone(),
+                Box::new(P08ModuleLoader(child_source)))?;
+            if self.fail {
+                Err(P08_ORIGINAL_ERROR.to_string())
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[derive(Debug)]
+    struct P08DescriptorParentLoader {
+        keep: ModuleDescriptor,
+        retry: ModuleDescriptor,
+        child: ModuleDescriptor,
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    impl P08DescriptorParentLoader {
+        fn assert_descriptor_count(&self, state: &ModuleInitState, expected: usize) {
+            match state {
+                ModuleInitState::Root(cell) | ModuleInitState::Child(cell) => {
+                    assert_eq!(cell.borrow().module_descriptors.len(), expected);
+                },
+                ModuleInitState::None => panic!("parent initialization state is missing"),
+            }
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    impl ModuleLoader for P08DescriptorParentLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let keep_name = context.normalize_module_name("self:keep")?;
+            let keep_id = context.get_or_init_module_with_descriptor(&keep_name, self.keep.clone(),
+                Box::new(P08ModuleLoader("(p08-descriptor-keep 66)")))?;
+            let retry_name = context.normalize_module_name("self:retry")?;
+
+            for _ in 0..2 {
+                let error = context.get_or_init_module_with_descriptor(&retry_name, self.retry.clone(),
+                    Box::new(P08DescriptorLoader { child_descriptor: self.child.clone(), fail: true }))
+                    .unwrap_err();
+                assert_eq!(error, P08_ORIGINAL_ERROR);
+                assert_eq!(context.init_state.get_module_with_descriptor(context.metta, &self.keep),
+                    Some(keep_id));
+                assert_eq!(context.init_state.get_module_with_descriptor(context.metta, &self.retry), None);
+                assert_eq!(context.init_state.get_module_with_descriptor(context.metta, &self.child), None);
+                self.assert_descriptor_count(context.init_state, 1);
+            }
+
+            context.get_or_init_module_with_descriptor(&retry_name, self.retry.clone(),
+                Box::new(P08DescriptorLoader { child_descriptor: self.child.clone(), fail: false }))?;
+            assert_eq!(context.init_state.get_module_with_descriptor(context.metta, &self.keep),
+                Some(keep_id));
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[test]
+    fn p08_repeated_descriptor_failure_discards_only_failed_mappings() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        let keep = ModuleDescriptor::new("p08-keep".to_string(), None, Some(801));
+        let retry = ModuleDescriptor::new("p08-retry".to_string(), None, Some(802));
+        let child = ModuleDescriptor::new("p08-child".to_string(), None, Some(803));
+        runner.load_module_direct(Box::new(P08DescriptorParentLoader {
+            keep: keep.clone(),
+            retry: retry.clone(),
+            child: child.clone(),
+        }), "p08-descriptor-parent").unwrap();
+
+        let keep_id = runner.get_module_by_name("p08-descriptor-parent:keep").unwrap();
+        let retry_id = runner.get_module_by_name("p08-descriptor-parent:retry").unwrap();
+        let child_id = runner.get_module_by_name("p08-descriptor-parent:retry:child").unwrap();
+        assert_eq!(runner.get_module_with_descriptor(&keep), Some(keep_id));
+        assert_eq!(runner.get_module_with_descriptor(&retry), Some(retry_id));
+        assert_eq!(runner.get_module_with_descriptor(&child), Some(child_id));
+        p08_assert_module_value(&runner, "p08-descriptor-parent:keep", "p08-descriptor-keep", 66);
+        p08_assert_module_value(&runner, "p08-descriptor-parent:retry:child", "p08-descriptor-generation", 2);
+    }
+
+    #[derive(Debug)]
+    struct P08SuccessfulParentLoader;
+
+    impl ModuleLoader for P08SuccessfulParentLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let first = context.load_module_direct(
+                Box::new(P08ModuleLoader("(p08-first-value 77)")), "self:first")?;
+            let second = context.load_module_direct(
+                Box::new(P08ModuleLoader("(p08-second-value 88)")), "self:second")?;
+            assert_eq!(first.get_idx_from_relative(), 1);
+            assert_eq!(second.get_idx_from_relative(), 2);
+            assert_eq!(context.get_module_by_name("self:first"), Ok(first));
+            assert_eq!(context.get_module_by_name("self:second"), Ok(second));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn p08_successful_nested_loading_preserves_order_identity_and_results() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        let parent = runner.load_module_direct(Box::new(P08SuccessfulParentLoader), "p08-success-parent").unwrap();
+        let first = runner.get_module_by_name("p08-success-parent:first").unwrap();
+        let second = runner.get_module_by_name("p08-success-parent:second").unwrap();
+        assert_eq!(first, ModId(parent.0 + 1));
+        assert_eq!(second, ModId(parent.0 + 2));
+        p08_assert_module_value(&runner, "p08-success-parent:first", "p08-first-value", 77);
+        p08_assert_module_value(&runner, "p08-success-parent:second", "p08-second-value", 88);
+    }
+
+    #[test]
+    fn p08_top_level_failure_restores_none_for_same_runner_retry() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+        let mut state = RunnerState::new(&runner);
+        state.run_in_context(|context| {
+            let error = context.load_module_direct(Box::new(P08ErrorLoader), "p08-root-retry")
+                .unwrap_err();
+            assert_eq!(error, P08_ORIGINAL_ERROR);
+            context.load_module_direct(
+                Box::new(P08ModuleLoader("(p08-root-value 99)")), "p08-root-retry")
+        }).unwrap();
+        p08_assert_module_value(&runner, "p08-root-retry", "p08-root-value", 99);
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[derive(Debug)]
+    struct P08AliasCatalog;
+
+    #[cfg(feature = "pkg_mgmt")]
+    impl P08AliasCatalog {
+        fn descriptor() -> ModuleDescriptor {
+            ModuleDescriptor::new("shared".to_string(), None, Some(808))
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    impl ModuleCatalog for P08AliasCatalog {
+        fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
+            if name == "shared" {
+                vec![Self::descriptor()]
+            } else {
+                vec![]
+            }
+        }
+
+        fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
+            assert_eq!(descriptor, &Self::descriptor());
+            Ok(Box::new(P08ModuleLoader("(p08-catalog-shared 100)")))
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[derive(Clone, Copy, Debug)]
+    enum P08AliasCase {
+        Dangling,
+        Remapped,
+        Existing,
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[derive(Debug)]
+    struct P08AliasAttemptLoader {
+        parent_name: &'static str,
+        load_shared: bool,
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    impl ModuleLoader for P08AliasAttemptLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            if self.load_shared {
+                context.load_module("self:shared")?;
+            }
+            let alias = format!("top:{}:keep:shared", self.parent_name);
+            context.load_module(&alias)?;
+            Err(P08_ORIGINAL_ERROR.to_string())
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[derive(Debug)]
+    struct P08AliasParentLoader {
+        name: &'static str,
+        case: P08AliasCase,
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    impl ModuleLoader for P08AliasParentLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            if matches!(self.case, P08AliasCase::Existing) {
+                context.load_module("self:shared")?;
+            }
+            context.load_module_direct(
+                Box::new(P08ModuleLoader("(p08-alias-keep 101)")), "self:keep")?;
+            let error = context.load_module_direct(Box::new(P08AliasAttemptLoader {
+                parent_name: self.name,
+                load_shared: !matches!(self.case, P08AliasCase::Existing),
+            }), "self:attempt").unwrap_err();
+            assert_eq!(error, P08_ORIGINAL_ERROR);
+
+            if matches!(self.case, P08AliasCase::Remapped) {
+                context.load_module_direct(
+                    Box::new(P08ModuleLoader("(p08-sib1-value 102)")), "self:sib1")?;
+                context.load_module_direct(
+                    Box::new(P08ModuleLoader("(p08-sib2-value 103)")), "self:sib2")?;
+            }
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    fn p08_alias_runner(parent_name: &'static str, case: P08AliasCase) -> Metta {
+        let runner = Metta::new(Some(EnvBuilder::test_env().push_module_catalog(P08AliasCatalog)));
+        runner.load_module_direct(Box::new(P08AliasParentLoader {
+            name: parent_name,
+            case,
+        }), parent_name).unwrap();
+        runner
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[test]
+    fn p08_failed_attempt_does_not_leave_dangling_sibling_alias() {
+        let runner = p08_alias_runner("p08-alias-dangling", P08AliasCase::Dangling);
+        assert!(runner.get_module_by_name("p08-alias-dangling:keep:shared").is_err());
+        p08_assert_module_value(&runner, "p08-alias-dangling:keep:shared", "p08-catalog-shared", 100);
+        p08_assert_module_value(&runner, "p08-alias-dangling:keep", "p08-alias-keep", 101);
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[test]
+    fn p08_failed_attempt_alias_cannot_be_remapped_to_later_sibling() {
+        let runner = p08_alias_runner("p08-alias-remapped", P08AliasCase::Remapped);
+        let sibling = runner.get_module_by_name("p08-alias-remapped:sib2").unwrap();
+        if let Ok(alias) = runner.get_module_by_name("p08-alias-remapped:keep:shared") {
+            assert_ne!(alias, sibling, "discarded relative ID was remapped to an unrelated sibling");
+            panic!("failed-attempt alias survived cleanup");
+        }
+        p08_assert_module_value(&runner, "p08-alias-remapped:keep", "p08-alias-keep", 101);
+        p08_assert_module_value(&runner, "p08-alias-remapped:sib2", "p08-sib2-value", 103);
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    #[test]
+    fn p08_failed_attempt_removes_alias_to_existing_module() {
+        let runner = p08_alias_runner("p08-alias-existing", P08AliasCase::Existing);
+        let existing = runner.get_module_by_name("p08-alias-existing:shared").unwrap();
+        if let Ok(alias) = runner.get_module_by_name("p08-alias-existing:keep:shared") {
+            assert_ne!(alias, existing, "failed attempt retained an alias to a pre-existing module");
+            panic!("failed-attempt alias survived cleanup");
+        }
+        p08_assert_module_value(&runner, "p08-alias-existing:shared", "p08-catalog-shared", 100);
+        p08_assert_module_value(&runner, "p08-alias-existing:keep", "p08-alias-keep", 101);
     }
 
 
