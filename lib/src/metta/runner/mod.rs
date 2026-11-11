@@ -628,20 +628,12 @@ impl<'m, 'input> RunnerState<'m, 'input> {
             i_wrapper: &mut self.i_wrapper,
         };
 
-        //TODO-HACK: This is a terrible horrible ugly hack that should be cleaned up ASAP.  It will cause
-        // UB when we have multiple runner threads that execute concurrently.
-        //Push the RunContext so the MeTTa Ops can access it.  The context ought to be passed as an argument
-        // to the execute functions, in the absence of the hack
-        self.metta.0.context.lock().unwrap().push(Arc::new(Mutex::new( unsafe{ std::mem::transmute(&mut context) } )));
-        //END HORRIBLE HACK
+        // SAFETY: The later-declared guard is dropped before `context` on both
+        // normal and unwind paths, and nested entries use the same LIFO guard.
+        let context_guard = unsafe { ScopedRunContextGuard::new(self.metta, &mut context) };
 
-        // Call our function
         let result = f(&mut context);
-
-        //TODO-HACK: This is a terrible horrible ugly hack that should be cleaned up ASAP.
-        //pop the context in the runner
-        self.metta.0.context.lock().unwrap().pop();
-        //END HORRIBLE HACK
+        drop(context_guard);
 
         result
     }
@@ -679,6 +671,43 @@ pub struct RunContext<'a, 'input> {
     mod_ptr: &'a mut Option<Rc<MettaMod>>,
     init_state: &'a mut ModuleInitState,
     i_wrapper: &'a mut InterpreterWrapper<'input>
+}
+
+/// Owns one lifetime-erased entry in a runner's shared context stack.
+///
+/// This guard scopes cleanup only. It does not resolve the representation's
+/// mutable-reference aliasing or make concurrent execution on one runner safe.
+struct ScopedRunContextGuard {
+    stack: Arc<Mutex<Vec<Arc<Mutex<&'static mut RunContext<'static, 'static>>>>>>,
+    entry: Arc<Mutex<&'static mut RunContext<'static, 'static>>>,
+}
+
+impl ScopedRunContextGuard {
+    /// # Safety
+    ///
+    /// The guard must be declared after `context` and dropped before `context`
+    /// is destroyed or moved. Every entry above it must use scoped LIFO cleanup.
+    unsafe fn new(metta: &Metta, context: &mut RunContext<'_, '_>) -> Self {
+        // SAFETY: The caller keeps `context` alive and stationary until this
+        // guard removes the stack entry, so the erased lifetime cannot escape
+        // the context's actual scope.
+        let context = unsafe {
+            std::mem::transmute::<&mut RunContext<'_, '_>, &'static mut RunContext<'static, 'static>>(context)
+        };
+        let entry = Arc::new(Mutex::new(context));
+        let stack = metta.0.context.clone();
+        stack.lock().unwrap().push(entry.clone());
+        Self { stack, entry }
+    }
+}
+
+impl Drop for ScopedRunContextGuard {
+    fn drop(&mut self) {
+        let mut stack = self.stack.lock().unwrap();
+        let top = stack.last().expect("context stack is missing its active entry");
+        assert!(Arc::ptr_eq(top, &self.entry), "contexts must be removed in stack order");
+        stack.pop();
+    }
 }
 
 impl std::fmt::Debug for RunContext<'_, '_> {
@@ -742,17 +771,24 @@ impl<'input> RunContext<'_, 'input> {
             init_state: self.init_state,
         };
 
+        // SAFETY: The later-declared guard is dropped before `new_context` on
+        // both normal and unwind paths, and nested entries use the same LIFO guard.
+        let context_guard = unsafe { ScopedRunContextGuard::new(new_context.metta, &mut new_context) };
+
         let mut err = None;
         match f(&mut new_context) {
             Ok(_) => {
                 while new_context.i_wrapper.mode != MettaRunnerMode::TERMINATE {
-                    if new_context.step().is_err() {
+                    if let Err(e) = new_context.step() {
+                        err = Some(e);
                         break;
                     }
                 }
             },
             Err(e) => err = Some(e)
         }
+
+        drop(context_guard);
 
         match err {
             None => Ok(new_interpreter.results),
@@ -1233,6 +1269,287 @@ mod tests {
     use super::*;
     use hyperon_atom::gnd::bool::Bool;
     use hyperon_macros::metta;
+
+    #[test]
+    fn run_inline_success_restores_outer_context() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut state = RunnerState::new(&metta);
+        state.run_in_context(|context| {
+            let outer = context.metta.0.context.lock().unwrap().last().unwrap().clone();
+            let result = context.run_inline(|inline| {
+                let stack = context.metta.0.context.lock().unwrap();
+                assert_eq!(stack.len(), 2);
+                assert!(!Arc::ptr_eq(stack.last().unwrap(), &outer));
+                drop(stack);
+                inline.push_parser(Box::new(SExprParser::new("!(+ 40 2)")));
+                Ok(())
+            });
+            assert_eq!(result, Ok(vec![vec![Atom::gnd(Number::Integer(42))]]));
+
+            let stack = context.metta.0.context.lock().unwrap();
+            assert_eq!(stack.len(), 1);
+            assert!(Arc::ptr_eq(stack.last().unwrap(), &outer));
+            Ok(())
+        }).unwrap();
+    }
+
+    #[test]
+    fn run_inline_callback_error_restores_outer_context() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut state = RunnerState::new(&metta);
+        state.run_in_context(|context| {
+            let outer = context.metta.0.context.lock().unwrap().last().unwrap().clone();
+            let result = context.run_inline(|_| Err("inline callback sentinel".into()));
+            assert_eq!(result, Err("inline callback sentinel".into()));
+
+            let stack = context.metta.0.context.lock().unwrap();
+            assert_eq!(stack.len(), 1);
+            assert!(Arc::ptr_eq(stack.last().unwrap(), &outer));
+            Ok(())
+        }).unwrap();
+    }
+
+    #[test]
+    fn run_inline_step_error_is_propagated_and_retry_succeeds() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut state = RunnerState::new(&metta);
+        state.run_in_context(|context| {
+            let outer = context.metta.0.context.lock().unwrap().last().unwrap().clone();
+            let result = context.run_inline(|inline| {
+                inline.push_func(|_| Err("inline step sentinel".into()));
+                Ok(())
+            });
+            assert_eq!(result, Err("inline step sentinel".into()));
+
+            {
+                let stack = context.metta.0.context.lock().unwrap();
+                assert_eq!(stack.len(), 1);
+                assert!(Arc::ptr_eq(stack.last().unwrap(), &outer));
+            }
+
+            let retry = context.run_inline(|inline| {
+                inline.push_parser(Box::new(SExprParser::new("!(+ 20 22)")));
+                Ok(())
+            });
+            assert_eq!(retry, Ok(vec![vec![Atom::gnd(Number::Integer(42))]]));
+            let stack = context.metta.0.context.lock().unwrap();
+            assert_eq!(stack.len(), 1);
+            assert!(Arc::ptr_eq(stack.last().unwrap(), &outer));
+            Ok(())
+        }).unwrap();
+    }
+
+    #[test]
+    fn nested_run_inline_restores_each_parent_context() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut state = RunnerState::new(&metta);
+        state.run_in_context(|context| {
+            let outer = context.metta.0.context.lock().unwrap().last().unwrap().clone();
+            let result = context.run_inline(|inline| {
+                let parent = context.metta.0.context.lock().unwrap().last().unwrap().clone();
+                let nested = inline.run_inline(|nested| {
+                    assert_eq!(context.metta.0.context.lock().unwrap().len(), 3);
+                    nested.push_parser(Box::new(SExprParser::new("!(+ 1 2)")));
+                    Ok(())
+                })?;
+                assert_eq!(nested, vec![vec![Atom::gnd(Number::Integer(3))]]);
+                {
+                    let stack = context.metta.0.context.lock().unwrap();
+                    assert_eq!(stack.len(), 2);
+                    assert!(Arc::ptr_eq(stack.last().unwrap(), &parent));
+                }
+                inline.push_parser(Box::new(SExprParser::new("!(+ 3 4)")));
+                Ok(())
+            });
+            assert_eq!(result, Ok(vec![vec![Atom::gnd(Number::Integer(7))]]));
+
+            let stack = context.metta.0.context.lock().unwrap();
+            assert_eq!(stack.len(), 1);
+            assert!(Arc::ptr_eq(stack.last().unwrap(), &outer));
+            Ok(())
+        }).unwrap();
+    }
+
+    #[test]
+    fn run_inline_unwind_restores_outer_context_and_allows_reuse() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut state = RunnerState::new(&metta);
+        state.run_in_context(|context| {
+            let outer = context.metta.0.context.lock().unwrap().last().unwrap().clone();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                context.run_inline(|_| panic!("inline unwind sentinel"))
+            }));
+            let payload = result.expect_err("the inline callback did not panic");
+            assert_eq!(payload.downcast_ref::<&str>(), Some(&"inline unwind sentinel"));
+
+            {
+                let stack = context.metta.0.context.lock().unwrap();
+                assert_eq!(stack.len(), 1);
+                assert!(Arc::ptr_eq(stack.last().unwrap(), &outer));
+            }
+
+            let retry = context.run_inline(|inline| {
+                inline.push_parser(Box::new(SExprParser::new("!(+ 19 23)")));
+                Ok(())
+            });
+            assert_eq!(retry, Ok(vec![vec![Atom::gnd(Number::Integer(42))]]));
+            let stack = context.metta.0.context.lock().unwrap();
+            assert_eq!(stack.len(), 1);
+            assert!(Arc::ptr_eq(stack.last().unwrap(), &outer));
+            Ok(())
+        }).unwrap();
+    }
+
+    #[derive(Debug)]
+    struct InlineResourceLoader(&'static str);
+
+    impl ModuleLoader for InlineResourceLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            Ok(())
+        }
+
+        fn get_resource(&self, res_key: ResourceKey) -> Result<Resource, String> {
+            match res_key {
+                ResourceKey::MainMettaSrc => Ok(self.0.as_bytes().to_vec().into()),
+                _ => Err("unsupported test resource".into()),
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_include_succeeds() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        metta.load_module_direct(
+            Box::new(InlineResourceLoader("(= (included-answer) 42)")),
+            "included",
+        ).unwrap();
+
+        let result = metta.run(SExprParser::new("!(include included) !(included-answer)"));
+        assert_eq!(result, Ok(vec![vec![], vec![Atom::gnd(Number::Integer(42))]]));
+        assert!(metta.0.context.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn nested_include_uses_inline_context() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        metta.load_module_direct(
+            Box::new(InlineResourceLoader("(= (inner-answer) 42)")),
+            "inner",
+        ).unwrap();
+        metta.load_module_direct(
+            Box::new(InlineResourceLoader("!(include inner) (= (outer-answer) (inner-answer))")),
+            "outer",
+        ).unwrap();
+
+        let result = metta.run(SExprParser::new("!(include outer) !(outer-answer)"));
+        assert_eq!(result, Ok(vec![vec![], vec![Atom::gnd(Number::Integer(42))]]));
+        assert!(metta.0.context.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn include_step_error_is_visible_and_runner_can_be_reused() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        metta.load_module_direct(
+            Box::new(InlineResourceLoader(")")),
+            "broken",
+        ).unwrap();
+
+        let result = metta.run(SExprParser::new("!(include broken)"))
+            .expect("an inline parse error should be returned as an error atom");
+        assert!(format!("{result:?}").contains("Unexpected right bracket"), "{result:?}");
+        assert!(metta.0.context.lock().unwrap().is_empty());
+
+        let retry = metta.run(SExprParser::new("!(+ 20 22)"));
+        assert_eq!(retry, Ok(vec![vec![Atom::gnd(Number::Integer(42))]]));
+        assert!(metta.0.context.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn run_inline_step_panic_is_caught_and_retry_works() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut state = RunnerState::new(&metta);
+        state.run_in_context(|context| {
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                context.run_inline(|inline| {
+                    inline.push_func(|_| panic!("review inline step panic"));
+                    Ok(())
+                })
+            }));
+            let payload = caught.expect_err("the inline step did not panic");
+            assert_eq!(payload.downcast_ref::<&str>(), Some(&"review inline step panic"));
+            assert_eq!(metta.0.context.lock().unwrap().len(), 1);
+
+            let answer = context.run_inline(|inline| {
+                inline.push_parser(Box::new(SExprParser::new("!(+ 20 22)")));
+                Ok(())
+            })?;
+            assert_eq!(answer, vec![vec![Atom::gnd(Number::Integer(42))]]);
+            assert_eq!(metta.0.context.lock().unwrap().len(), 1);
+            Ok(())
+        }).unwrap();
+    }
+
+    #[test]
+    fn nested_run_inline_step_error_restores_parent_and_allows_progress() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut state = RunnerState::new(&metta);
+        state.run_in_context(|context| {
+            let answer = context.run_inline(|outer| {
+                let error = outer.run_inline(|inner| {
+                    inner.push_func(|_| Err("review nested step error".into()));
+                    Ok(())
+                });
+                assert_eq!(error, Err("review nested step error".into()));
+                assert_eq!(metta.0.context.lock().unwrap().len(), 2);
+
+                outer.push_parser(Box::new(SExprParser::new("!(+ 19 23)")));
+                Ok(())
+            })?;
+            assert_eq!(answer, vec![vec![Atom::gnd(Number::Integer(42))]]);
+            assert_eq!(metta.0.context.lock().unwrap().len(), 1);
+            Ok(())
+        }).unwrap();
+    }
+
+    #[derive(Debug)]
+    struct InnerPanicLoader;
+
+    impl ModuleLoader for InnerPanicLoader {
+        fn load(&self, _context: &mut RunContext) -> Result<(), String> {
+            panic!("review public nested-loader panic");
+        }
+    }
+
+    #[derive(Debug)]
+    struct OuterCatchingLoader;
+
+    impl ModuleLoader for OuterCatchingLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            context.init_self_module(GroundingSpace::new().into(), None);
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                context.run_inline(|inline| {
+                    inline.load_module_direct(Box::new(InnerPanicLoader), "self:panickingchild")?;
+                    Ok(())
+                })
+            }));
+            let payload = caught.expect_err("the nested loader panic was not caught");
+            assert_eq!(payload.downcast_ref::<&str>(), Some(&"review public nested-loader panic"));
+            Err("review caught public nested-loader panic".into())
+        }
+    }
+
+    #[test]
+    fn public_api_nested_loader_panic_is_catchable() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let result = metta.load_module_direct(Box::new(OuterCatchingLoader), "reviewouter");
+        assert_eq!(result, Err("review caught public nested-loader panic".into()));
+        assert!(metta.0.context.lock().unwrap().is_empty());
+
+        let answer = metta.run(SExprParser::new("!(+ 20 22)"));
+        assert_eq!(answer, Ok(vec![vec![Atom::gnd(Number::Integer(42))]]));
+        assert!(metta.0.context.lock().unwrap().is_empty());
+    }
 
     #[test]
     fn test_space() {
